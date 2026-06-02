@@ -759,6 +759,50 @@ actions.appendChild(statusSelect);
 actions.appendChild(statusBtn);
 parent.appendChild(actions);
 
+  var customerEditorWrap = el("div");
+customerEditorWrap.style.marginBottom = "18px";
+customerEditorWrap.style.padding = "14px";
+customerEditorWrap.style.border = "1px solid #e5e7eb";
+customerEditorWrap.style.borderRadius = "12px";
+customerEditorWrap.style.background = "#f9fafb";
+
+var customerEditorTitle = el("div", "Kundeinfo");
+customerEditorTitle.style.fontWeight = "800";
+customerEditorTitle.style.marginBottom = "10px";
+
+var customerGrid = el("div");
+customerGrid.style.display = "grid";
+customerGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+customerGrid.style.gap = "12px";
+
+var editCustomerName = el("input");
+editCustomerName.type = "text";
+editCustomerName.placeholder = "Kundenavn";
+
+var editCustomerEmail = el("input");
+editCustomerEmail.type = "email";
+editCustomerEmail.placeholder = "kunde@eksempel.no";
+
+var editCustomerPhone = el("input");
+editCustomerPhone.type = "text";
+editCustomerPhone.placeholder = "Telefon";
+
+var editCustomerCompany = el("input");
+editCustomerCompany.type = "text";
+editCustomerCompany.placeholder = "Klubb / firma";
+
+addField(customerGrid, "Kundenavn", editCustomerName);
+addField(customerGrid, "E-post", editCustomerEmail);
+addField(customerGrid, "Telefon", editCustomerPhone);
+addField(customerGrid, "Klubb / firma", editCustomerCompany);
+
+var saveCustomerBtn = createButton("Lagre kundeinfo");
+saveCustomerBtn.style.marginTop = "10px";
+
+customerEditorWrap.appendChild(customerEditorTitle);
+customerEditorWrap.appendChild(customerGrid);
+customerEditorWrap.appendChild(saveCustomerBtn);
+parent.appendChild(customerEditorWrap);
   var textEditorWrap = el("div");
 textEditorWrap.style.marginBottom = "18px";
 textEditorWrap.style.padding = "14px";
@@ -839,6 +883,10 @@ parent.appendChild(textEditorWrap);
       return;
     }
     textEditor.value = quote.customer_offer_text || "";
+    editCustomerName.value = quote.customer_name || "";
+editCustomerEmail.value = quote.customer_email || "";
+editCustomerPhone.value = quote.customer_phone || "";
+editCustomerCompany.value = quote.customer_company || "";
 
     var contact = getOfferContact(quote);
     var quoteItems = selectedItems(quote.quote_id);
@@ -1069,6 +1117,43 @@ parent.appendChild(textEditorWrap);
     window.print();
   };
 
+  saveCustomerBtn.onclick = function () {
+  var quote = selectedQuote();
+
+  if (!quote) {
+    alert("Velg tilbud først.");
+    return;
+  }
+
+  var customerName = editCustomerName.value.trim();
+
+  if (!customerName) {
+    alert("Kundenavn må fylles ut.");
+    return;
+  }
+
+  saveCustomerBtn.disabled = true;
+  saveCustomerBtn.textContent = "Lagrer...";
+
+  sb.rpc("internal_update_quote_customer_info", {
+    p_quote_id: quote.quote_id,
+    p_customer_name: customerName,
+    p_customer_email: editCustomerEmail.value.trim() || null,
+    p_customer_phone: editCustomerPhone.value.trim() || null,
+    p_customer_company: editCustomerCompany.value.trim() || null
+  }).then(function (result) {
+    saveCustomerBtn.disabled = false;
+    saveCustomerBtn.textContent = "Lagre kundeinfo";
+
+    if (result.error) {
+      alert("Kunne ikke lagre kundeinfo: " + result.error.message);
+      return;
+    }
+
+    alert("Kundeinfo lagret.");
+    window.location.reload();
+  });
+};
   saveTextBtn.onclick = function () {
   var quote = selectedQuote();
 
