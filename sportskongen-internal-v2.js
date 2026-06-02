@@ -1022,23 +1022,97 @@ ensureOfferPrintStyle();
   };
 
   copyBtn.onclick = function () {
-    var quote = selectedQuote();
+  var quote = selectedQuote();
 
-    if (!quote) {
-      alert("Velg tilbud først.");
-      return;
-    }
+  if (!quote) {
+    alert("Velg tilbud først.");
+    return;
+  }
 
-    var text =
-      "Tilbud " + quote.quote_number + "\n" +
-      "Kunde: " + (quote.customer_name || "") + "\n" +
-      "Total inkl. mva: " + money(quote.total_sales_inc_vat) + " kr\n\n" +
-      (quote.customer_offer_text || "");
+  var settings = settingsMap(data.settings);
+  var contact = getOfferContact(quote);
+  var quoteItems = selectedItems(quote.quote_id);
 
-    navigator.clipboard.writeText(text).then(function () {
-      alert("Tilbudstekst kopiert.");
-    });
-  };
+  var validDays = Number(settings.quote_valid_days || 14);
+  var createdDate = new Date(quote.created_at);
+  var validTo = new Date(createdDate.getTime());
+  validTo.setDate(validTo.getDate() + validDays);
+
+  var lines = [];
+
+  lines.push("Hei!");
+  lines.push("");
+  lines.push("Takk for forespørselen. Her er vårt tilbud:");
+  lines.push("");
+  lines.push("Tilbudsnummer: " + quote.quote_number);
+  lines.push("Dato: " + formatDateNorwegian(quote.created_at));
+  lines.push("Gyldig til: " + validTo.toLocaleDateString("no-NO"));
+  lines.push("");
+  lines.push("Kunde: " + (quote.customer_name || "-"));
+
+  if (quote.customer_company) {
+    lines.push("Klubb/firma: " + quote.customer_company);
+  }
+
+  if (quote.customer_email) {
+    lines.push("E-post: " + quote.customer_email);
+  }
+
+  lines.push("");
+  lines.push("Tilbudslinjer:");
+
+  quoteItems.forEach(function (item) {
+    lines.push(
+      "- " +
+      money(item.quantity) +
+      " stk " +
+      (item.name || "-") +
+      " à " +
+      money(item.unit_sales_price_inc_vat) +
+      " kr inkl. mva = " +
+      money(item.line_sales_price_inc_vat) +
+      " kr inkl. mva"
+    );
+  });
+
+  lines.push("");
+  lines.push("Sum eks. mva: " + money(quote.total_sales_ex_vat) + " kr");
+  lines.push("MVA: " + money(quote.total_vat_amount) + " kr");
+  lines.push("Total inkl. mva: " + money(quote.total_sales_inc_vat) + " kr");
+  lines.push("");
+
+  if (quote.customer_offer_text) {
+    lines.push(quote.customer_offer_text);
+    lines.push("");
+  }
+
+  if (settings.quote_footer_custom_stamp) {
+    lines.push(settings.quote_footer_custom_stamp);
+    lines.push("");
+  }
+
+  lines.push("Med vennlig hilsen");
+  lines.push(contact.name);
+  lines.push(settings.company_display_name || "Golfkongen.no / Sportskongen AS");
+
+  if (contact.email) {
+    lines.push(contact.email);
+  }
+
+  if (contact.phone) {
+    lines.push(contact.phone);
+  }
+
+  lines.push("");
+  lines.push(settings.company_address || "");
+  lines.push("Org.nr: " + (settings.company_org_number || ""));
+
+  navigator.clipboard.writeText(lines.join("\n")).then(function () {
+    alert("Tilbudstekst kopiert.");
+  }).catch(function () {
+    alert("Kunne ikke kopiere teksten automatisk.");
+  });
+};
 
   renderDocument();
 }
