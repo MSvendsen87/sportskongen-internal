@@ -360,7 +360,7 @@
     select.appendChild(opt);
   }
 
-  function renderCustomStamp(parent, data) {
+  function renderCustomStamp(parent, data, sb) {
     var h2 = el("h2", "Custom stamp-kalkulator");
     h2.style.marginTop = "0";
     parent.appendChild(h2);
@@ -380,6 +380,17 @@
     grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(230px, 1fr))";
     grid.style.gap = "14px";
 
+    var customerNameInput = el("input");
+customerNameInput.type = "text";
+customerNameInput.placeholder = "Kundenavn";
+
+var customerEmailInput = el("input");
+customerEmailInput.type = "email";
+customerEmailInput.placeholder = "kunde@eksempel.no";
+
+var customerCompanyInput = el("input");
+customerCompanyInput.type = "text";
+customerCompanyInput.placeholder = "Klubb / firma";
     var supplierSelect = el("select");
     var productSelect = el("select");
     var qtyInput = el("input");
@@ -408,6 +419,9 @@
     manualInput.type = "number";
     manualInput.placeholder = "Valgfritt";
 
+    addField(grid, "Kundenavn", customerNameInput);
+addField(grid, "Kunde e-post", customerEmailInput);
+addField(grid, "Kunde / klubb / firma", customerCompanyInput);
     addField(grid, "Leverandør", supplierSelect);
     addField(grid, "Produkt", productSelect);
     addField(grid, "Antall", qtyInput);
@@ -427,6 +441,10 @@
     result.style.borderRadius = "14px";
     panel.appendChild(result);
 
+    var saveButton = createPrimaryButton("Lagre kalkyle");
+saveButton.style.marginTop = "16px";
+
+panel.appendChild(saveButton);
     parent.appendChild(panel);
 
     var suppliers = {};
@@ -526,6 +544,55 @@
     extraInput.oninput = calculate;
     marginSelect.onchange = calculate;
     manualInput.oninput = calculate;
+    saveButton.onclick = function () {
+  var product = getProduct();
+
+  if (!product) {
+    alert("Velg produkt først.");
+    return;
+  }
+
+  var customerName = customerNameInput.value.trim();
+
+  if (!customerName) {
+    alert("Skriv inn kundenavn først.");
+    return;
+  }
+
+  saveButton.disabled = true;
+  saveButton.textContent = "Lagrer...";
+
+  sb.rpc("internal_save_custom_stamp_quote", {
+    p_customer_name: customerName,
+    p_customer_email: customerEmailInput.value.trim() || null,
+    p_customer_company: customerCompanyInput.value.trim() || null,
+    p_product_id: product.id,
+    p_quantity: Number(qtyInput.value || 0),
+    p_shipping_ex_vat: Number(shippingInput.value || 0),
+    p_setup_ex_vat: Number(setupInput.value || 0),
+    p_extra_ex_vat: Number(extraInput.value || 0),
+    p_margin_percent: Number(marginSelect.value || 25),
+    p_manual_total_inc_vat: manualInput.value ? Number(manualInput.value) : null
+  }).then(function (result) {
+    saveButton.disabled = false;
+    saveButton.textContent = "Lagre kalkyle";
+
+    if (result.error) {
+      alert("Kunne ikke lagre kalkyle: " + result.error.message);
+      return;
+    }
+
+    var saved = result.data && result.data[0];
+
+    if (saved && saved.quote_number) {
+      alert("Kalkyle lagret: " + saved.quote_number);
+    } else {
+      alert("Kalkyle lagret.");
+    }
+
+    window.location.reload();
+  });
+};
 
     var supplierIds = Object.keys(suppliers);
     if (supplierIds.length > 0) {
@@ -564,7 +631,7 @@
       custom: {
         label: "Custom stamp",
         render: function (parent) {
-          renderCustomStamp(parent, data);
+          renderCustomStamp(parent, data, sb);
         }
       },
       products: {
