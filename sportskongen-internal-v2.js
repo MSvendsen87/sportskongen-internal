@@ -759,6 +759,36 @@ actions.appendChild(statusSelect);
 actions.appendChild(statusBtn);
 parent.appendChild(actions);
 
+  var textEditorWrap = el("div");
+textEditorWrap.style.marginBottom = "18px";
+textEditorWrap.style.padding = "14px";
+textEditorWrap.style.border = "1px solid #e5e7eb";
+textEditorWrap.style.borderRadius = "12px";
+textEditorWrap.style.background = "#f9fafb";
+
+var textEditorLabel = el("label", "Tilbudstekst til kunde");
+textEditorLabel.style.display = "block";
+textEditorLabel.style.fontWeight = "700";
+textEditorLabel.style.marginBottom = "8px";
+
+var textEditor = el("textarea");
+textEditor.style.width = "100%";
+textEditor.style.minHeight = "110px";
+textEditor.style.padding = "12px";
+textEditor.style.border = "1px solid #d1d5db";
+textEditor.style.borderRadius = "10px";
+textEditor.style.boxSizing = "border-box";
+textEditor.style.fontFamily = "Arial, sans-serif";
+textEditor.style.fontSize = "14px";
+textEditor.style.lineHeight = "1.5";
+
+var saveTextBtn = createButton("Lagre tilbudstekst");
+saveTextBtn.style.marginTop = "10px";
+
+textEditorWrap.appendChild(textEditorLabel);
+textEditorWrap.appendChild(textEditor);
+textEditorWrap.appendChild(saveTextBtn);
+parent.appendChild(textEditorWrap);
   var docWrap = el("div");
   parent.appendChild(docWrap);
 
@@ -808,6 +838,7 @@ parent.appendChild(actions);
       docWrap.appendChild(el("p", "Velg et tilbud."));
       return;
     }
+    textEditor.value = quote.customer_offer_text || "";
 
     var contact = getOfferContact(quote);
     var quoteItems = selectedItems(quote.quote_id);
@@ -1038,6 +1069,33 @@ parent.appendChild(actions);
     window.print();
   };
 
+  saveTextBtn.onclick = function () {
+  var quote = selectedQuote();
+
+  if (!quote) {
+    alert("Velg tilbud først.");
+    return;
+  }
+
+  saveTextBtn.disabled = true;
+  saveTextBtn.textContent = "Lagrer...";
+
+  sb.rpc("internal_update_quote_customer_text", {
+    p_quote_id: quote.quote_id,
+    p_customer_offer_text: textEditor.value
+  }).then(function (result) {
+    saveTextBtn.disabled = false;
+    saveTextBtn.textContent = "Lagre tilbudstekst";
+
+    if (result.error) {
+      alert("Kunne ikke lagre tilbudstekst: " + result.error.message);
+      return;
+    }
+
+    alert("Tilbudstekst lagret.");
+    window.location.reload();
+  });
+};
   statusBtn.onclick = function () {
   var quote = selectedQuote();
 
