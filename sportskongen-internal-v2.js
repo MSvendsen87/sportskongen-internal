@@ -603,6 +603,407 @@ panel.appendChild(saveButton);
     calculate();
   }
 
+  function settingsMap(settings) {
+  var map = {};
+
+  (settings || []).forEach(function (s) {
+    map[s.setting_key] = s.setting_value;
+  });
+
+  return map;
+}
+
+function getOfferContact(quote) {
+  var email = String(quote.created_by_email || "").toLowerCase();
+  var name = String(quote.created_by_name || "").toLowerCase();
+
+  if (email.indexOf("alejandro") >= 0 || email.indexOf("aaruffo") >= 0 || name.indexOf("alejandro") >= 0) {
+    return {
+      name: "Alejandro Ruffo",
+      email: "alejandro@golfkongen.no",
+      phone: "+47 45797598"
+    };
+  }
+
+  if (email.indexOf("kristoffer") >= 0 || name.indexOf("kristoffer") >= 0) {
+    return {
+      name: "Kristoffer M. Svendsen",
+      email: "kristoffer@golfkongen.no",
+      phone: "+47 97482583"
+    };
+  }
+
+  return {
+    name: quote.created_by_name || "Golfkongen.no",
+    email: "post@golfkongen.no",
+    phone: ""
+  };
+}
+
+function formatDateNorwegian(value) {
+  if (!value) {
+    return "-";
+  }
+
+  var d = new Date(value);
+
+  if (isNaN(d.getTime())) {
+    return "-";
+  }
+
+  return d.toLocaleDateString("no-NO");
+}
+
+function renderCustomerOffer(parent, data) {
+  var settings = settingsMap(data.settings);
+  var quotes = data.customerQuotes || [];
+  var items = data.customerQuoteItems || [];
+
+  var h2 = el("h2", "Kundetilbud");
+  h2.style.marginTop = "0";
+  parent.appendChild(h2);
+
+  var intro = el("p", "Velg et lagret tilbud for å vise et rent kundedokument uten innkjøpspris, margin eller interne notater.");
+  intro.style.color = "#6b7280";
+  parent.appendChild(intro);
+
+  if (!quotes.length) {
+    parent.appendChild(el("p", "Ingen kundetilbud funnet."));
+    return;
+  }
+
+  var select = el("select");
+  select.style.width = "100%";
+  select.style.maxWidth = "420px";
+  select.style.padding = "10px";
+  select.style.border = "1px solid #d1d5db";
+  select.style.borderRadius = "10px";
+  select.style.marginBottom = "18px";
+
+  quotes.forEach(function (q) {
+    var label = q.quote_number + " – " + (q.customer_name || "Ukjent kunde");
+
+    if (q.customer_company) {
+      label += " / " + q.customer_company;
+    }
+
+    addOption(select, q.quote_id, label);
+  });
+
+  parent.appendChild(select);
+
+  var actions = el("div");
+  actions.style.display = "flex";
+  actions.style.gap = "10px";
+  actions.style.flexWrap = "wrap";
+  actions.style.marginBottom = "18px";
+
+  var printBtn = createPrimaryButton("Skriv ut tilbud");
+  var copyBtn = createButton("Kopier tilbudstekst");
+
+  actions.appendChild(printBtn);
+  actions.appendChild(copyBtn);
+  parent.appendChild(actions);
+
+  var docWrap = el("div");
+  parent.appendChild(docWrap);
+
+  function selectedQuote() {
+    var found = null;
+
+    quotes.forEach(function (q) {
+      if (q.quote_id === select.value) {
+        found = q;
+      }
+    });
+
+    return found;
+  }
+
+  function selectedItems(quoteId) {
+    var list = [];
+
+    items.forEach(function (item) {
+      if (item.quote_id === quoteId) {
+        list.push(item);
+      }
+    });
+
+    return list;
+  }
+
+  function addDocText(parentNode, label, value) {
+    var row = el("div");
+    row.style.marginBottom = "4px";
+
+    var strong = el("strong", label + ": ");
+    var span = el("span", value || "-");
+
+    row.appendChild(strong);
+    row.appendChild(span);
+    parentNode.appendChild(row);
+  }
+
+  function renderDocument() {
+    clear(docWrap);
+
+    var quote = selectedQuote();
+
+    if (!quote) {
+      docWrap.appendChild(el("p", "Velg et tilbud."));
+      return;
+    }
+
+    var contact = getOfferContact(quote);
+    var quoteItems = selectedItems(quote.quote_id);
+
+    var validDays = Number(settings.quote_valid_days || 14);
+    var createdDate = new Date(quote.created_at);
+    var validTo = new Date(createdDate.getTime());
+    validTo.setDate(validTo.getDate() + validDays);
+
+    var documentBox = el("div");
+    documentBox.id = "sk-customer-offer-document";
+    documentBox.style.background = "#fff";
+    documentBox.style.color = "#111827";
+    documentBox.style.border = "1px solid #e5e7eb";
+    documentBox.style.borderRadius = "16px";
+    documentBox.style.padding = "28px";
+    documentBox.style.maxWidth = "900px";
+    documentBox.style.boxShadow = "0 8px 24px rgba(0,0,0,0.04)";
+
+    var header = el("div");
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.gap = "24px";
+    header.style.alignItems = "flex-start";
+    header.style.borderBottom = "2px solid #111827";
+    header.style.paddingBottom = "18px";
+    header.style.marginBottom = "22px";
+    header.style.flexWrap = "wrap";
+
+    var left = el("div");
+
+    var logo = el("img");
+    logo.src = settings.company_logo_url || "";
+    logo.alt = settings.company_display_name || "Golfkongen.no";
+    logo.style.maxWidth = "120px";
+    logo.style.height = "auto";
+    logo.style.marginBottom = "12px";
+
+    left.appendChild(logo);
+
+    var companyName = el("div", settings.company_display_name || "Golfkongen.no / Sportskongen AS");
+    companyName.style.fontWeight = "800";
+    companyName.style.fontSize = "18px";
+    left.appendChild(companyName);
+
+    var address = el("div", settings.company_address || "");
+    address.style.color = "#4b5563";
+    address.style.marginTop = "4px";
+    left.appendChild(address);
+
+    var org = el("div", "Org.nr: " + (settings.company_org_number || "-"));
+    org.style.color = "#4b5563";
+    left.appendChild(org);
+
+    var right = el("div");
+    right.style.textAlign = "right";
+
+    var title = el("div", "TILBUD");
+    title.style.fontSize = "30px";
+    title.style.fontWeight = "900";
+    title.style.letterSpacing = "1px";
+    right.appendChild(title);
+
+    addDocText(right, "Tilbudsnummer", quote.quote_number);
+    addDocText(right, "Dato", formatDateNorwegian(quote.created_at));
+    addDocText(right, "Gyldig til", validTo.toLocaleDateString("no-NO"));
+
+    header.appendChild(left);
+    header.appendChild(right);
+    documentBox.appendChild(header);
+
+    var customerGrid = el("div");
+    customerGrid.style.display = "grid";
+    customerGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(260px, 1fr))";
+    customerGrid.style.gap = "18px";
+    customerGrid.style.marginBottom = "24px";
+
+    var customerBox = el("div");
+    customerBox.style.padding = "14px";
+    customerBox.style.background = "#f9fafb";
+    customerBox.style.borderRadius = "12px";
+    customerBox.style.border = "1px solid #e5e7eb";
+
+    var customerTitle = el("strong", "Kunde");
+    customerBox.appendChild(customerTitle);
+    customerBox.appendChild(el("div", quote.customer_name || "-"));
+    customerBox.appendChild(el("div", quote.customer_company || ""));
+    customerBox.appendChild(el("div", quote.customer_email || ""));
+
+    var contactBox = el("div");
+    contactBox.style.padding = "14px";
+    contactBox.style.background = "#f9fafb";
+    contactBox.style.borderRadius = "12px";
+    contactBox.style.border = "1px solid #e5e7eb";
+
+    var contactTitle = el("strong", "Kontaktperson");
+    contactBox.appendChild(contactTitle);
+    contactBox.appendChild(el("div", contact.name));
+    contactBox.appendChild(el("div", contact.email));
+    contactBox.appendChild(el("div", contact.phone));
+
+    customerGrid.appendChild(customerBox);
+    customerGrid.appendChild(contactBox);
+    documentBox.appendChild(customerGrid);
+
+    var tableWrap = el("div");
+    tableWrap.style.overflowX = "auto";
+    tableWrap.style.border = "1px solid #e5e7eb";
+    tableWrap.style.borderRadius = "12px";
+    tableWrap.style.marginBottom = "20px";
+
+    var table = el("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.fontSize = "14px";
+
+    var thead = el("thead");
+    var trh = el("tr");
+
+    ["Beskrivelse", "Antall", "Pris/stk inkl.", "Sum inkl."].forEach(function (label) {
+      var th = el("th", label);
+      th.style.textAlign = label === "Beskrivelse" ? "left" : "right";
+      th.style.padding = "12px";
+      th.style.background = "#f9fafb";
+      th.style.borderBottom = "1px solid #e5e7eb";
+      trh.appendChild(th);
+    });
+
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    var tbody = el("tbody");
+
+    quoteItems.forEach(function (item) {
+      var tr = el("tr");
+
+      var desc = el("td");
+      desc.style.padding = "12px";
+      desc.style.borderBottom = "1px solid #f3f4f6";
+
+      var name = el("strong", item.name || "-");
+      var meta = el("div", (item.brand || "") + (item.category ? " · " + item.category : ""));
+      meta.style.color = "#6b7280";
+      meta.style.fontSize = "13px";
+      meta.style.marginTop = "3px";
+
+      desc.appendChild(name);
+      desc.appendChild(meta);
+
+      var qty = el("td", money(item.quantity));
+      var unit = el("td", money(item.unit_sales_price_inc_vat) + " kr");
+      var line = el("td", money(item.line_sales_price_inc_vat) + " kr");
+
+      [qty, unit, line].forEach(function (td) {
+        td.style.padding = "12px";
+        td.style.borderBottom = "1px solid #f3f4f6";
+        td.style.textAlign = "right";
+        td.style.whiteSpace = "nowrap";
+      });
+
+      tr.appendChild(desc);
+      tr.appendChild(qty);
+      tr.appendChild(unit);
+      tr.appendChild(line);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+    documentBox.appendChild(tableWrap);
+
+    var totals = el("div");
+    totals.style.marginLeft = "auto";
+    totals.style.maxWidth = "360px";
+    totals.style.marginBottom = "24px";
+
+    function totalRow(label, value, strong) {
+      var row = el("div");
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.gap = "18px";
+      row.style.padding = "7px 0";
+      row.style.borderBottom = "1px solid #e5e7eb";
+
+      var l = el(strong ? "strong" : "span", label);
+      var v = el(strong ? "strong" : "span", value);
+
+      row.appendChild(l);
+      row.appendChild(v);
+      totals.appendChild(row);
+    }
+
+    totalRow("Sum eks. mva", money(quote.total_sales_ex_vat) + " kr", false);
+    totalRow("MVA", money(quote.total_vat_amount) + " kr", false);
+    totalRow("Total inkl. mva", money(quote.total_sales_inc_vat) + " kr", true);
+
+    documentBox.appendChild(totals);
+
+    var offerText = el("p", quote.customer_offer_text || "");
+    offerText.style.lineHeight = "1.6";
+    documentBox.appendChild(offerText);
+
+    var footerText = settings.quote_footer_custom_stamp || "";
+    if (footerText) {
+      var footer = el("p", footerText);
+      footer.style.marginTop = "18px";
+      footer.style.paddingTop = "14px";
+      footer.style.borderTop = "1px solid #e5e7eb";
+      footer.style.color = "#4b5563";
+      footer.style.fontSize = "13px";
+      footer.style.lineHeight = "1.5";
+      documentBox.appendChild(footer);
+    }
+
+    var signature = el("div");
+    signature.style.marginTop = "24px";
+    signature.appendChild(el("div", "Med vennlig hilsen"));
+    signature.appendChild(el("strong", contact.name));
+    signature.appendChild(el("div", settings.company_display_name || "Golfkongen.no / Sportskongen AS"));
+    documentBox.appendChild(signature);
+
+    docWrap.appendChild(documentBox);
+  }
+
+  select.onchange = renderDocument;
+
+  printBtn.onclick = function () {
+    window.print();
+  };
+
+  copyBtn.onclick = function () {
+    var quote = selectedQuote();
+
+    if (!quote) {
+      alert("Velg tilbud først.");
+      return;
+    }
+
+    var text =
+      "Tilbud " + quote.quote_number + "\n" +
+      "Kunde: " + (quote.customer_name || "") + "\n" +
+      "Total inkl. mva: " + money(quote.total_sales_inc_vat) + " kr\n\n" +
+      (quote.customer_offer_text || "");
+
+    navigator.clipboard.writeText(text).then(function () {
+      alert("Tilbudstekst kopiert.");
+    });
+  };
+
+  renderDocument();
+}
   function renderPortal(sb, user, data) {
     var app = renderShell(
       "Intern Sportskongen-portal",
@@ -679,17 +1080,11 @@ panel.appendChild(saveButton);
         }
       },
       customer: {
-        label: "Kundetilbud",
-        render: function (parent) {
-          var h2 = el("h2", "Kundetilbud");
-          h2.style.marginTop = "0";
-          parent.appendChild(h2);
-
-          var p = el("p", "Her skal vi lage rent tilbudsdokument uten innkjøpspris, margin og interne notater.");
-          p.style.color = "#6b7280";
-          parent.appendChild(p);
-        }
-      },
+  label: "Kundetilbud",
+  render: function (parent) {
+    renderCustomerOffer(parent, data);
+  }
+},
       settings: {
         label: "Innstillinger",
         render: function (parent) {
@@ -724,31 +1119,52 @@ panel.appendChild(saveButton);
 
   function loadPortalData(sb, user) {
     Promise.all([
-      sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
-      sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
-      sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false })
-    ]).then(function (results) {
-      if (results[0].error) {
-        renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
-        return;
-      }
+  sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
+  sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
+  sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
+  sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
+  sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
+  sb.from("internal_settings_view").select("*")
+]).then(function (results) {
+  if (results[0].error) {
+    renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
+    return;
+  }
 
-      if (results[1].error) {
-        renderError("Kunne ikke hente produkter: " + results[1].error.message);
-        return;
-      }
+  if (results[1].error) {
+    renderError("Kunne ikke hente produkter: " + results[1].error.message);
+    return;
+  }
 
-      if (results[2].error) {
-        renderError("Kunne ikke hente kalkyler: " + results[2].error.message);
-        return;
-      }
+  if (results[2].error) {
+    renderError("Kunne ikke hente kalkyler: " + results[2].error.message);
+    return;
+  }
 
-      renderPortal(sb, user, {
-        addons: results[0].data || [],
-        products: results[1].data || [],
-        quotes: results[2].data || []
-      });
-    });
+  if (results[3].error) {
+    renderError("Kunne ikke hente kundetilbud: " + results[3].error.message);
+    return;
+  }
+
+  if (results[4].error) {
+    renderError("Kunne ikke hente tilbudslinjer: " + results[4].error.message);
+    return;
+  }
+
+  if (results[5].error) {
+    renderError("Kunne ikke hente innstillinger: " + results[5].error.message);
+    return;
+  }
+
+  renderPortal(sb, user, {
+    addons: results[0].data || [],
+    products: results[1].data || [],
+    quotes: results[2].data || [],
+    customerQuotes: results[3].data || [],
+    customerQuoteItems: results[4].data || [],
+    settings: results[5].data || []
+  });
+});
   }
 
   function startPortal() {
