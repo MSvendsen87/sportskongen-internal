@@ -690,7 +690,7 @@ function formatDateNorwegian(value) {
 
   document.head.appendChild(style);
 }
-function renderCustomerOffer(parent, data) {
+function renderCustomerOffer(parent, data, sb) {
 ensureOfferPrintStyle();
   
   var settings = settingsMap(data.settings);
@@ -731,17 +731,33 @@ ensureOfferPrintStyle();
   parent.appendChild(select);
 
   var actions = el("div");
-  actions.style.display = "flex";
-  actions.style.gap = "10px";
-  actions.style.flexWrap = "wrap";
-  actions.style.marginBottom = "18px";
+actions.style.display = "flex";
+actions.style.gap = "10px";
+actions.style.flexWrap = "wrap";
+actions.style.alignItems = "center";
+actions.style.marginBottom = "18px";
 
-  var printBtn = createPrimaryButton("Skriv ut tilbud");
-  var copyBtn = createButton("Kopier tilbudstekst");
+var printBtn = createPrimaryButton("Skriv ut tilbud");
+var copyBtn = createButton("Kopier tilbudstekst");
 
-  actions.appendChild(printBtn);
-  actions.appendChild(copyBtn);
-  parent.appendChild(actions);
+var statusSelect = el("select");
+statusSelect.style.padding = "10px";
+statusSelect.style.border = "1px solid #d1d5db";
+statusSelect.style.borderRadius = "10px";
+
+addOption(statusSelect, "draft", "Utkast");
+addOption(statusSelect, "sent", "Sendt");
+addOption(statusSelect, "accepted", "Akseptert");
+addOption(statusSelect, "declined", "Avslått");
+addOption(statusSelect, "expired", "Utløpt");
+
+var statusBtn = createButton("Oppdater status");
+
+actions.appendChild(printBtn);
+actions.appendChild(copyBtn);
+actions.appendChild(statusSelect);
+actions.appendChild(statusBtn);
+parent.appendChild(actions);
 
   var docWrap = el("div");
   parent.appendChild(docWrap);
@@ -786,6 +802,7 @@ ensureOfferPrintStyle();
     clear(docWrap);
 
     var quote = selectedQuote();
+    statusSelect.value = quote.status || "draft";
 
     if (!quote) {
       docWrap.appendChild(el("p", "Velg et tilbud."));
@@ -1021,6 +1038,34 @@ ensureOfferPrintStyle();
     window.print();
   };
 
+  statusBtn.onclick = function () {
+  var quote = selectedQuote();
+
+  if (!quote) {
+    alert("Velg tilbud først.");
+    return;
+  }
+
+  statusBtn.disabled = true;
+  statusBtn.textContent = "Oppdaterer...";
+
+  sb.rpc("internal_update_quote_status", {
+    p_quote_id: quote.quote_id,
+    p_status: statusSelect.value
+  }).then(function (result) {
+    statusBtn.disabled = false;
+    statusBtn.textContent = "Oppdater status";
+
+    if (result.error) {
+      alert("Kunne ikke oppdatere status: " + result.error.message);
+      return;
+    }
+
+    alert("Status oppdatert.");
+
+    window.location.reload();
+  });
+};
   copyBtn.onclick = function () {
   var quote = selectedQuote();
 
@@ -1194,7 +1239,7 @@ ensureOfferPrintStyle();
       customer: {
   label: "Kundetilbud",
   render: function (parent) {
-    renderCustomerOffer(parent, data);
+    renderCustomerOffer(parent, data, sb);
   }
 },
       settings: {
