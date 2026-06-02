@@ -654,7 +654,45 @@ function formatDateNorwegian(value) {
   return d.toLocaleDateString("no-NO");
 }
 
+  function ensureOfferPrintStyle() {
+  if (document.getElementById("sk-offer-print-style")) {
+    return;
+  }
+
+  var style = document.createElement("style");
+  style.id = "sk-offer-print-style";
+
+  style.textContent =
+    "@media print {" +
+    "  body * {" +
+    "    visibility: hidden !important;" +
+    "  }" +
+    "  #sk-customer-offer-document, #sk-customer-offer-document * {" +
+    "    visibility: visible !important;" +
+    "  }" +
+    "  #sk-customer-offer-document {" +
+    "    position: absolute !important;" +
+    "    left: 0 !important;" +
+    "    top: 0 !important;" +
+    "    width: 100% !important;" +
+    "    max-width: none !important;" +
+    "    margin: 0 !important;" +
+    "    padding: 24px !important;" +
+    "    border: none !important;" +
+    "    box-shadow: none !important;" +
+    "    border-radius: 0 !important;" +
+    "  }" +
+    "  @page {" +
+    "    size: A4;" +
+    "    margin: 12mm;" +
+    "  }" +
+    "}";
+
+  document.head.appendChild(style);
+}
 function renderCustomerOffer(parent, data) {
+ensureOfferPrintStyle();
+  
   var settings = settingsMap(data.settings);
   var quotes = data.customerQuotes || [];
   var items = data.customerQuoteItems || [];
