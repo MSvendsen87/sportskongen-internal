@@ -1768,7 +1768,7 @@ savePriceBtn.onclick = function () {
   render();
 }
 
-  function renderProductSyncBox(parent, sb) {
+function renderProductSyncBox(parent, sb) {
   var section = createCollapsibleSection(
     "🔄 Oppdater fra nettbutikken",
     "Henter produkter, priser, innpris, lager og status fra Quickbutik/GolfKongen.no.",
@@ -1783,47 +1783,56 @@ savePriceBtn.onclick = function () {
   box.appendChild(info);
 
   var controls = el("div");
-  controls.style.display = "flex";
-  controls.style.gap = "10px";
-  controls.style.flexWrap = "wrap";
-  controls.style.alignItems = "center";
+  controls.style.display = "grid";
+  controls.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  controls.style.gap = "12px";
+  controls.style.alignItems = "end";
 
   var limitInput = el("input");
   limitInput.type = "number";
   limitInput.value = "20";
   limitInput.min = "1";
   limitInput.max = "100";
-  limitInput.style.width = "110px";
-  limitInput.style.padding = "10px";
-  limitInput.style.border = "1px solid #d1d5db";
-  limitInput.style.borderRadius = "10px";
 
   var offsetInput = el("input");
   offsetInput.type = "number";
   offsetInput.value = "0";
   offsetInput.min = "0";
-  offsetInput.style.width = "110px";
-  offsetInput.style.padding = "10px";
-  offsetInput.style.border = "1px solid #d1d5db";
-  offsetInput.style.borderRadius = "10px";
 
   var dryRunSelect = el("select");
-  dryRunSelect.style.padding = "10px";
-  dryRunSelect.style.border = "1px solid #d1d5db";
-  dryRunSelect.style.borderRadius = "10px";
   addOption(dryRunSelect, "true", "Test først");
   addOption(dryRunSelect, "false", "Oppdater faktisk");
 
-  var runBtn = createPrimaryButton("Kjør oppdatering");
-
-  controls.appendChild(el("span", "Antall:"));
-  controls.appendChild(limitInput);
-  controls.appendChild(el("span", "Start fra:"));
-  controls.appendChild(offsetInput);
-  controls.appendChild(dryRunSelect);
-  controls.appendChild(runBtn);
+  addField(controls, "Antall per pulje", limitInput);
+  addField(controls, "Start fra offset", offsetInput);
+  addField(controls, "Modus", dryRunSelect);
 
   box.appendChild(controls);
+
+  var buttonRow = el("div");
+  buttonRow.style.display = "flex";
+  buttonRow.style.gap = "10px";
+  buttonRow.style.flexWrap = "wrap";
+  buttonRow.style.marginTop = "10px";
+
+  var runBtn = createPrimaryButton("Kjør én pulje");
+  var runAllBtn = createPrimaryButton("Synk alle produkter");
+  var stopBtn = createButton("Stopp");
+  stopBtn.disabled = true;
+
+  buttonRow.appendChild(runBtn);
+  buttonRow.appendChild(runAllBtn);
+  buttonRow.appendChild(stopBtn);
+  box.appendChild(buttonRow);
+
+  var progressBox = el("div");
+  progressBox.style.marginTop = "14px";
+  progressBox.style.padding = "12px";
+  progressBox.style.background = "#f9fafb";
+  progressBox.style.border = "1px solid #e5e7eb";
+  progressBox.style.borderRadius = "12px";
+  progressBox.style.display = "none";
+  box.appendChild(progressBox);
 
   var resultBox = el("pre");
   resultBox.style.marginTop = "14px";
@@ -1836,63 +1845,243 @@ savePriceBtn.onclick = function () {
   resultBox.style.display = "none";
   box.appendChild(resultBox);
 
-  runBtn.onclick = function () {
-    runBtn.disabled = true;
-    runBtn.textContent = "Oppdaterer...";
-    resultBox.style.display = "block";
-    resultBox.textContent = "Kjører...";
+  var shouldStop = false;
 
-    sb.auth.getSession().then(function (sessionResult) {
+  function setRunning(isRunning) {
+    runBtn.disabled = isRunning;
+    runAllBtn.disabled = isRunning;
+    stopBtn.disabled = !isRunning;
+
+    runBtn.textContent = isRunning ? "Kjører..." : "Kjør én pulje";
+    runAllBtn.textContent = isRunning ? "Synker..." : "Synk alle produkter";
+  }
+
+  function showProgress(text) {
+    progressBox.style.display = "block";
+    progressBox.textContent = text;
+  }
+
+  function showResult(data) {
+    resultBox.style.display = "block";
+    resultBox.textContent = JSON.stringify(data, null, 2);
+  }
+
+  function getToken() {
+    return sb.auth.getSession().then(function (sessionResult) {
       var session = sessionResult.data && sessionResult.data.session;
       var token = session && session.access_token;
 
       if (!token) {
-        runBtn.disabled = false;
-        runBtn.textContent = "Kjør oppdatering";
-        resultBox.textContent = "Feil: Fant ikke innlogget Supabase-session.";
-        return;
+        throw new Error("Fant ikke innlogget Supabase-session.");
       }
 
+      return token;
+    });
+  }
+
+  function runSyncBatch(token, limit, offset, dryRun) {
+    var url =
+      "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-products" +
+      "?limit=" + encodeURIComponent(limit) +
+      "&offset=" + encodeURIComponent(offset) +
+      "&dryRun=" + encodeURIComponent(dryRun ? "true" : "false");
+
+    return fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": "Bearer " + token
+      }
+    }).then(function (response) {
+      return response.json();
+    });
+  }
+
+  runBtn.onclick = function () {
+    shouldStop = false;
+    setRunning(true);
+    showProgress("Kjører én pulje...");
+    resultBox.style.display = "none";
+
+    getToken().then(function (token) {
       var limit = Number(limitInput.value || 20);
       var offset = Number(offsetInput.value || 0);
       var dryRun = dryRunSelect.value !== "false";
 
-      var url =
-        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-products" +
-        "?limit=" + encodeURIComponent(limit) +
-        "&offset=" + encodeURIComponent(offset) +
-        "&dryRun=" + encodeURIComponent(dryRun ? "true" : "false");
+      return runSyncBatch(token, limit, offset, dryRun);
+    }).then(function (data) {
+      setRunning(false);
+      showResult(data);
 
-      fetch(url, {
-        method: "GET",
-        headers: {
-          "Authorization": "Bearer " + token
-        }
-      }).then(function (response) {
-        return response.json();
-      }).then(function (data) {
-        runBtn.disabled = false;
-        runBtn.textContent = "Kjør oppdatering";
+      if (data.ok && data.dryRun === false) {
+        showProgress(
+          "Ferdig. Opprettet: " +
+          (data.created || 0) +
+          " · Oppdatert: " +
+          (data.updated || 0) +
+          " · Feil: " +
+          (data.failed || 0)
+        );
 
-        resultBox.textContent = JSON.stringify(data, null, 2);
-
-        if (data.ok && data.dryRun === false) {
+        if (confirm("Oppdatering ferdig. Vil du laste siden på nytt for å se endringene?")) {
           localStorage.setItem("sk_internal_active_tab", "products");
-
-          if (confirm("Oppdatering ferdig. Vil du laste siden på nytt for å se endringene?")) {
-            window.location.reload();
-          }
+          window.location.reload();
         }
-      }).catch(function (error) {
-        runBtn.disabled = false;
-        runBtn.textContent = "Kjør oppdatering";
-        resultBox.textContent = "Feil: " + (error.message || String(error));
-      });
+      } else {
+        showProgress("Pulje ferdig.");
+      }
+    }).catch(function (error) {
+      setRunning(false);
+      showProgress("Feil.");
+      resultBox.style.display = "block";
+      resultBox.textContent = "Feil: " + (error.message || String(error));
     });
+  };
+
+  runAllBtn.onclick = function () {
+    var dryRun = dryRunSelect.value !== "false";
+
+    if (dryRun) {
+      alert("Velg 'Oppdater faktisk' før du bruker Synk alle produkter.");
+      return;
+    }
+
+    var confirmAll = confirm(
+      "Dette vil synke alle produkter fra nettbutikken i puljer. Det kan ta litt tid. Vil du fortsette?"
+    );
+
+    if (!confirmAll) {
+      return;
+    }
+
+    shouldStop = false;
+    setRunning(true);
+    resultBox.style.display = "none";
+
+    var limit = Number(limitInput.value || 20);
+    var offset = Number(offsetInput.value || 0);
+
+    var totalCreated = 0;
+    var totalUpdated = 0;
+    var totalFailed = 0;
+    var totalProcessed = 0;
+    var batches = 0;
+    var lastResult = null;
+
+    getToken().then(function (token) {
+      function nextBatch() {
+        if (shouldStop) {
+          return Promise.resolve({
+            stopped: true
+          });
+        }
+
+        batches += 1;
+
+        showProgress(
+          "Synker produkter..." +
+          "\nPulje: " + batches +
+          "\nOffset: " + offset +
+          "\nBehandlet så langt: " + totalProcessed +
+          "\nOpprettet: " + totalCreated +
+          "\nOppdatert: " + totalUpdated +
+          "\nFeil: " + totalFailed
+        );
+
+        return runSyncBatch(token, limit, offset, false).then(function (data) {
+          lastResult = data;
+
+          if (!data.ok) {
+            throw new Error("Sync feilet ved offset " + offset + ": " + JSON.stringify(data));
+          }
+
+          totalCreated += Number(data.created || 0);
+          totalUpdated += Number(data.updated || 0);
+          totalFailed += Number(data.failed || 0);
+          totalProcessed += Number(data.count || 0);
+
+          showResult({
+            siste_pulje: data,
+            totalt: {
+              puljer: batches,
+              behandlet: totalProcessed,
+              opprettet: totalCreated,
+              oppdatert: totalUpdated,
+              feil: totalFailed
+            }
+          });
+
+          if (Number(data.count || 0) === 0 || Number(data.count || 0) < limit) {
+            return {
+              done: true
+            };
+          }
+
+          offset += limit;
+          offsetInput.value = String(offset);
+
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve(nextBatch());
+            }, 500);
+          });
+        });
+      }
+
+      return nextBatch();
+    }).then(function (finalState) {
+      setRunning(false);
+
+      if (finalState && finalState.stopped) {
+        showProgress(
+          "Synk stoppet av bruker." +
+          "\nBehandlet: " + totalProcessed +
+          "\nOpprettet: " + totalCreated +
+          "\nOppdatert: " + totalUpdated +
+          "\nFeil: " + totalFailed
+        );
+        return;
+      }
+
+      showProgress(
+        "Synk ferdig ✅" +
+        "\nPuljer: " + batches +
+        "\nBehandlet: " + totalProcessed +
+        "\nOpprettet: " + totalCreated +
+        "\nOppdatert: " + totalUpdated +
+        "\nFeil: " + totalFailed
+      );
+
+      showResult({
+        ok: totalFailed === 0,
+        ferdig: true,
+        behandlet: totalProcessed,
+        opprettet: totalCreated,
+        oppdatert: totalUpdated,
+        feil: totalFailed,
+        siste_pulje: lastResult
+      });
+
+      if (confirm("Alle produkter er synket. Vil du laste siden på nytt nå?")) {
+        localStorage.setItem("sk_internal_active_tab", "products");
+        window.location.reload();
+      }
+    }).catch(function (error) {
+      setRunning(false);
+      showProgress("Sync stoppet på grunn av feil.");
+      resultBox.style.display = "block";
+      resultBox.textContent = "Feil: " + (error.message || String(error));
+    });
+  };
+
+  stopBtn.onclick = function () {
+    shouldStop = true;
+    stopBtn.disabled = true;
+    showProgress("Stopper etter pågående pulje...");
   };
 
   parent.appendChild(section.wrap);
 }
+  
   function renderProductsManager(parent, data, sb) {
   var h2 = el("h2", "Produkter");
   h2.style.marginTop = "0";
