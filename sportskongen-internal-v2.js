@@ -1875,7 +1875,7 @@ createBtn.onclick = function () {
   function round2(value) {
     return Math.round(Number(value || 0) * 100) / 100;
   }
-    function createCollapsibleBox(title, description, defaultOpen) {
+    function createCollapsibleSection(title, description, defaultOpen) {
   var wrap = el("div");
   wrap.style.marginBottom = "14px";
   wrap.style.border = "1px solid #e5e7eb";
@@ -2270,11 +2270,13 @@ parent.appendChild(editSection.wrap);
     });
   };
 
-  var suppliersTitle = el("h3", "Leverandører");
-  suppliersTitle.style.marginTop = "24px";
-  parent.appendChild(suppliersTitle);
+  var suppliersSection = createCollapsibleSection(
+  "🏢 Leverandører",
+  "Oversikt over leverandører, valuta, MOQ, setup og leveringstid.",
+  false
+);
 
-  addTable(parent, [
+addTable(suppliersSection.body, [
     { key: "name", label: "Leverandør" },
     { key: "brand_group", label: "Merkegruppe" },
     { key: "currency", label: "Valuta" },
@@ -2284,12 +2286,15 @@ parent.appendChild(editSection.wrap);
     { key: "typical_lead_time", label: "Leveringstid" },
     { key: "is_active", label: "Aktiv" }
   ], data.suppliers || [], "Ingen leverandører funnet.");
+    parent.appendChild(suppliersSection.wrap);
 
-  var addonsTitle = el("h3", "Tilleggskostnader");
-  addonsTitle.style.marginTop = "24px";
-  parent.appendChild(addonsTitle);
+  var addonsSection = createCollapsibleSection(
+  "💰 Tilleggskostnader",
+  "Oversikt over frakt, oppstart, trykk, designkost, montering og andre tillegg.",
+  true
+);
 
-  addTable(parent, [
+addTable(addonsSection.body, [
     { key: "supplier_name", label: "Leverandør" },
     { key: "addon_name", label: "Tillegg" },
     { key: "addon_type", label: "Type" },
@@ -2300,6 +2305,75 @@ parent.appendChild(editSection.wrap);
     { key: "cost_locked", label: "Låst" },
     { key: "addon_is_active", label: "Aktiv" }
   ], data.addons || [], "Ingen tillegg funnet.");
+    parent.appendChild(addonsSection.wrap);
+}
+  function createCollapsibleSection(title, description, defaultOpen) {
+  var wrap = el("div");
+  wrap.style.marginBottom = "14px";
+  wrap.style.border = "1px solid #e5e7eb";
+  wrap.style.borderRadius = "14px";
+  wrap.style.background = "#ffffff";
+  wrap.style.overflow = "hidden";
+  wrap.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)";
+
+  var header = el("button");
+  header.type = "button";
+  header.style.width = "100%";
+  header.style.border = "0";
+  header.style.background = "#f9fafb";
+  header.style.padding = "14px 16px";
+  header.style.display = "flex";
+  header.style.justifyContent = "space-between";
+  header.style.alignItems = "center";
+  header.style.cursor = "pointer";
+  header.style.textAlign = "left";
+
+  var left = el("div");
+
+  var titleEl = el("div", title);
+  titleEl.style.fontWeight = "900";
+  titleEl.style.fontSize = "15px";
+  titleEl.style.color = "#111827";
+
+  var descEl = el("div", description || "");
+  descEl.style.marginTop = "3px";
+  descEl.style.fontSize = "13px";
+  descEl.style.color = "#6b7280";
+
+  left.appendChild(titleEl);
+
+  if (description) {
+    left.appendChild(descEl);
+  }
+
+  var icon = el("div", defaultOpen ? "−" : "+");
+  icon.style.fontSize = "22px";
+  icon.style.fontWeight = "900";
+  icon.style.color = "#111827";
+  icon.style.lineHeight = "1";
+  icon.style.minWidth = "24px";
+  icon.style.textAlign = "right";
+
+  header.appendChild(left);
+  header.appendChild(icon);
+
+  var body = el("div");
+  body.style.padding = "14px";
+  body.style.display = defaultOpen ? "block" : "none";
+
+  header.onclick = function () {
+    var isOpen = body.style.display !== "none";
+    body.style.display = isOpen ? "none" : "block";
+    icon.textContent = isOpen ? "+" : "−";
+  };
+
+  wrap.appendChild(header);
+  wrap.appendChild(body);
+
+  return {
+    wrap: wrap,
+    body: body
+  };
 }
   function renderPortal(sb, user, data) {
     var app = renderShell(
