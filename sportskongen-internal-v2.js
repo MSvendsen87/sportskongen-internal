@@ -1465,6 +1465,129 @@ savePriceBtn.onclick = function () {
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
 
+    var createWrap = el("div");
+createWrap.style.marginBottom = "22px";
+createWrap.style.padding = "14px";
+createWrap.style.border = "1px solid #e5e7eb";
+createWrap.style.borderRadius = "12px";
+createWrap.style.background = "#f9fafb";
+
+var createTitle = el("div", "Nytt produkt");
+createTitle.style.fontWeight = "800";
+createTitle.style.marginBottom = "10px";
+
+var createGrid = el("div");
+createGrid.style.display = "grid";
+createGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+createGrid.style.gap = "12px";
+
+var newName = el("input");
+newName.type = "text";
+newName.placeholder = "Produktnavn";
+
+var newBrand = el("input");
+newBrand.type = "text";
+newBrand.placeholder = "Merke";
+
+var newCategory = el("select");
+addOption(newCategory, "butikkprodukt", "Butikkprodukt");
+addOption(newCategory, "custom_stamp", "Custom stamp");
+addOption(newCategory, "banebygging", "Banebygging");
+addOption(newCategory, "kurv", "Kurv");
+addOption(newCategory, "tee_skilt", "Tee-skilt");
+addOption(newCategory, "utkastplate", "Utkastplate");
+addOption(newCategory, "annet", "Annet");
+
+var newSupplier = el("select");
+addOption(newSupplier, "", "Ingen / ukjent leverandør");
+
+var supplierMap = {};
+
+(data.addons || []).forEach(function (row) {
+  if (row.supplier_id && !supplierMap[row.supplier_id]) {
+    supplierMap[row.supplier_id] = row.supplier_name || "Ukjent";
+  }
+});
+
+(data.products || []).forEach(function (p) {
+  if (p.supplier_id && !supplierMap[p.supplier_id]) {
+    supplierMap[p.supplier_id] = p.supplier_name || "Ukjent";
+  }
+});
+
+Object.keys(supplierMap).forEach(function (id) {
+  addOption(newSupplier, id, supplierMap[id]);
+});
+
+var newSalesInc = el("input");
+newSalesInc.type = "number";
+newSalesInc.step = "0.01";
+newSalesInc.placeholder = "Utsalgspris inkl. mva";
+
+var newPurchaseEx = el("input");
+newPurchaseEx.type = "number";
+newPurchaseEx.step = "0.01";
+newPurchaseEx.placeholder = "Innpris eks. mva";
+
+var newPurchaseInc = el("input");
+newPurchaseInc.type = "number";
+newPurchaseInc.step = "0.01";
+newPurchaseInc.placeholder = "Innpris inkl. mva";
+
+var newCurrency = el("select");
+addOption(newCurrency, "NOK", "NOK");
+addOption(newCurrency, "USD", "USD");
+addOption(newCurrency, "EUR", "EUR");
+addOption(newCurrency, "SEK", "SEK");
+
+var newVat = el("input");
+newVat.type = "number";
+newVat.step = "0.01";
+newVat.value = "25";
+
+var newLocked = el("select");
+addOption(newLocked, "false", "🔓 Åpen");
+addOption(newLocked, "true", "🔒 Låst");
+
+var newUrl = el("input");
+newUrl.type = "text";
+newUrl.placeholder = "Produktlink";
+
+var newImage = el("input");
+newImage.type = "text";
+newImage.placeholder = "Bildelink";
+
+var newNotes = el("textarea");
+newNotes.style.minHeight = "80px";
+newNotes.style.fontFamily = "Arial, sans-serif";
+newNotes.placeholder = "Intern kommentar";
+
+addField(createGrid, "Produktnavn", newName);
+addField(createGrid, "Merke", newBrand);
+addField(createGrid, "Kategori", newCategory);
+addField(createGrid, "Leverandør", newSupplier);
+addField(createGrid, "Utsalgspris inkl. mva", newSalesInc);
+addField(createGrid, "Innpris eks. mva", newPurchaseEx);
+addField(createGrid, "Innpris inkl. mva", newPurchaseInc);
+addField(createGrid, "Valuta", newCurrency);
+addField(createGrid, "MVA %", newVat);
+addField(createGrid, "Kostnad", newLocked);
+addField(createGrid, "Produktlink", newUrl);
+addField(createGrid, "Bildelink", newImage);
+addField(createGrid, "Intern kommentar", newNotes);
+
+var createBtn = createPrimaryButton("Opprett produkt");
+createBtn.style.marginTop = "12px";
+
+var calcNewBtn = createButton("Regn inkl./eks. mva");
+calcNewBtn.style.marginTop = "12px";
+calcNewBtn.style.marginLeft = "8px";
+
+createWrap.appendChild(createTitle);
+createWrap.appendChild(createGrid);
+createWrap.appendChild(createBtn);
+createWrap.appendChild(calcNewBtn);
+parent.appendChild(createWrap);
   var editor = el("div");
   editor.style.marginBottom = "22px";
   editor.style.padding = "14px";
@@ -1532,6 +1655,60 @@ savePriceBtn.onclick = function () {
   editor.appendChild(calcBtn);
   parent.appendChild(editor);
 
+    calcNewBtn.onclick = function () {
+  var vat = Number(newVat.value || 0);
+  var ex = Number(newPurchaseEx.value || 0);
+  var inc = Number(newPurchaseInc.value || 0);
+
+  if (ex > 0) {
+    newPurchaseInc.value = Math.round((ex * (1 + vat / 100)) * 100) / 100;
+    return;
+  }
+
+  if (inc > 0) {
+    newPurchaseEx.value = Math.round((inc / (1 + vat / 100)) * 100) / 100;
+  }
+};
+
+createBtn.onclick = function () {
+  var name = newName.value.trim();
+
+  if (!name) {
+    alert("Produktnavn må fylles ut.");
+    return;
+  }
+
+  createBtn.disabled = true;
+  createBtn.textContent = "Oppretter...";
+
+  sb.rpc("internal_create_product", {
+    p_name: name,
+    p_brand: newBrand.value.trim() || null,
+    p_category: newCategory.value || "butikkprodukt",
+    p_supplier_id: newSupplier.value || null,
+    p_product_url: newUrl.value.trim() || null,
+    p_image_url: newImage.value.trim() || null,
+    p_sales_price_inc_vat: newSalesInc.value ? Number(newSalesInc.value) : null,
+    p_purchase_price_ex_vat: Number(newPurchaseEx.value || 0),
+    p_purchase_price_inc_vat: Number(newPurchaseInc.value || 0),
+    p_currency: newCurrency.value || "NOK",
+    p_vat_rate: Number(newVat.value || 25),
+    p_cost_locked: newLocked.value === "true",
+    p_internal_notes: newNotes.value || null
+  }).then(function (result) {
+    createBtn.disabled = false;
+    createBtn.textContent = "Opprett produkt";
+
+    if (result.error) {
+      alert("Kunne ikke opprette produkt: " + result.error.message);
+      return;
+    }
+
+    localStorage.setItem("sk_internal_active_tab", "products");
+    alert("Produkt opprettet.");
+    window.location.reload();
+  });
+};
   function getSelectedProduct() {
     var found = null;
 
