@@ -1458,10 +1458,11 @@ savePriceBtn.onclick = function () {
 
   function renderProductsSmartTable(parent, products) {
   var state = {
-    search: "",
-    sortKey: "name",
-    sortDir: "asc"
-  };
+  search: "",
+  sortKey: "name",
+  sortDir: "asc",
+  filter: "all"
+};
 
   var controls = el("div");
   controls.style.display = "grid";
@@ -1512,6 +1513,50 @@ savePriceBtn.onclick = function () {
   controls.appendChild(sortSelect);
   controls.appendChild(dirSelect);
   parent.appendChild(controls);
+    var filterRow = el("div");
+filterRow.style.display = "flex";
+filterRow.style.gap = "8px";
+filterRow.style.flexWrap = "wrap";
+filterRow.style.marginBottom = "14px";
+
+function createFilterButton(key, label) {
+  var btn = createButton(label);
+
+  btn.onclick = function () {
+    state.filter = key;
+    updateFilterButtons();
+    render();
+  };
+
+  btn.setActive = function (active) {
+    btn.style.background = active ? "#111827" : "#fff";
+    btn.style.color = active ? "#fff" : "#111827";
+    btn.style.borderColor = active ? "#111827" : "#d1d5db";
+  };
+
+  filterRow.appendChild(btn);
+  return btn;
+}
+
+var filterButtons = {
+  all: createFilterButton("all", "Alle"),
+  lowProfit: createFilterButton("lowProfit", "Under 20 %"),
+  missingCost: createFilterButton("missingCost", "Mangler innpris"),
+  unlocked: createFilterButton("unlocked", "Ikke låst"),
+  quickbutik: createFilterButton("quickbutik", "Synket fra Quickbutik"),
+  hidden: createFilterButton("hidden", "Skjult i nettbutikk"),
+  outOfStock: createFilterButton("outOfStock", "Tomt lager")
+};
+
+function updateFilterButtons() {
+  Object.keys(filterButtons).forEach(function (key) {
+    filterButtons[key].setActive(state.filter === key);
+  });
+}
+
+updateFilterButtons();
+
+parent.appendChild(filterRow);
 
   var summary = el("div");
   summary.style.marginBottom = "10px";
@@ -1621,29 +1666,73 @@ savePriceBtn.onclick = function () {
 
     return 0;
   }
+function productMatchesFilter(p) {
+  var margin = Number(p.profit_margin_percent || 0);
+  var purchaseEx = Number(p.purchase_price_ex_vat || 0);
+  var purchaseInc = Number(p.purchase_price_inc_vat || 0);
+  var stock = p.stock_quantity;
+  var status = String(p.quickbutik_status || "").toLowerCase();
+  var source = String(p.sync_source || "").toLowerCase();
 
+  if (state.filter === "lowProfit") {
+    return p.low_profit_warning === true || margin < 20;
+  }
+
+  if (state.filter === "missingCost") {
+    return purchaseEx <= 0 && purchaseInc <= 0;
+  }
+
+  if (state.filter === "unlocked") {
+    return p.cost_locked !== true;
+  }
+
+  if (state.filter === "quickbutik") {
+    return source === "quickbutik";
+  }
+
+  if (state.filter === "hidden") {
+    return status === "hidden";
+  }
+
+  if (state.filter === "outOfStock") {
+    return stock !== null && stock !== undefined && Number(stock) <= 0;
+  }
+
+  return true;
+}
+    function filterLabel(key) {
+  if (key === "lowProfit") return "Under 20 %";
+  if (key === "missingCost") return "Mangler innpris";
+  if (key === "unlocked") return "Ikke låst";
+  if (key === "quickbutik") return "Synket fra Quickbutik";
+  if (key === "hidden") return "Skjult i nettbutikk";
+  if (key === "outOfStock") return "Tomt lager";
+  return "Alle";
+}
   function render() {
     clear(tableTarget);
 
     var query = normalize(state.search);
 
     var rows = (products || [])
-      .filter(function (p) {
-        return productMatchesSearch(p, query);
-      })
-      .sort(compareRows);
+  .filter(function (p) {
+    return productMatchesSearch(p, query) && productMatchesFilter(p);
+  })
+  .sort(compareRows);
 
     var lowProfitCount = rows.filter(function (p) {
       return p.low_profit_warning === true || Number(p.profit_margin_percent || 0) < 20;
     }).length;
 
     summary.textContent =
-      "Viser " +
-      rows.length +
-      " av " +
-      (products || []).length +
-      " produkter" +
-      (lowProfitCount > 0 ? " · " + lowProfitCount + " med under 20 % fortjeneste" : "");
+  "Viser " +
+  rows.length +
+  " av " +
+  (products || []).length +
+  " produkter" +
+  " · Filter: " +
+  filterLabel(state.filter) +
+  (lowProfitCount > 0 ? " · " + lowProfitCount + " med under 20 % fortjeneste" : "");
 
     if (!rows.length) {
       var empty = el("p", "Ingen produkter matcher søket.");
