@@ -1455,6 +1455,193 @@ savePriceBtn.onclick = function () {
 
   renderDocument();
 }
+
+  function renderProductsManager(parent, data, sb) {
+  var h2 = el("h2", "Produkter");
+  h2.style.marginTop = "0";
+  parent.appendChild(h2);
+
+  var intro = el("p", "Her kan du oppdatere innkjøpspris og låse/åpne kostnad på interne produkter.");
+  intro.style.color = "#6b7280";
+  parent.appendChild(intro);
+
+  var editor = el("div");
+  editor.style.marginBottom = "22px";
+  editor.style.padding = "14px";
+  editor.style.border = "1px solid #e5e7eb";
+  editor.style.borderRadius = "12px";
+  editor.style.background = "#f9fafb";
+
+  var grid = el("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  grid.style.gap = "12px";
+
+  var productSelect = el("select");
+  var priceExInput = el("input");
+  priceExInput.type = "number";
+  priceExInput.step = "0.01";
+
+  var priceIncInput = el("input");
+  priceIncInput.type = "number";
+  priceIncInput.step = "0.01";
+
+  var currencySelect = el("select");
+  addOption(currencySelect, "NOK", "NOK");
+  addOption(currencySelect, "USD", "USD");
+  addOption(currencySelect, "EUR", "EUR");
+  addOption(currencySelect, "SEK", "SEK");
+
+  var vatInput = el("input");
+  vatInput.type = "number";
+  vatInput.step = "0.01";
+  vatInput.value = "25";
+
+  var lockedSelect = el("select");
+  addOption(lockedSelect, "true", "🔒 Låst");
+  addOption(lockedSelect, "false", "🔓 Åpen");
+
+  var notesInput = el("textarea");
+  notesInput.style.minHeight = "80px";
+  notesInput.style.fontFamily = "Arial, sans-serif";
+
+  addOption(productSelect, "", "Velg produkt");
+
+  (data.products || []).forEach(function (p) {
+    var label = (p.brand ? p.brand + " – " : "") + p.name;
+    addOption(productSelect, p.id, label);
+  });
+
+  addField(grid, "Produkt", productSelect);
+  addField(grid, "Innpris eks. mva", priceExInput);
+  addField(grid, "Innpris inkl. mva", priceIncInput);
+  addField(grid, "Valuta", currencySelect);
+  addField(grid, "MVA %", vatInput);
+  addField(grid, "Kostnad", lockedSelect);
+  addField(grid, "Intern kommentar", notesInput);
+
+  var saveBtn = createPrimaryButton("Lagre produktkostnad");
+  saveBtn.style.marginTop = "12px";
+
+  var calcBtn = createButton("Regn inkl./eks. mva");
+  calcBtn.style.marginTop = "12px";
+  calcBtn.style.marginLeft = "8px";
+
+  editor.appendChild(grid);
+  editor.appendChild(saveBtn);
+  editor.appendChild(calcBtn);
+  parent.appendChild(editor);
+
+  function getSelectedProduct() {
+    var found = null;
+
+    (data.products || []).forEach(function (p) {
+      if (p.id === productSelect.value) {
+        found = p;
+      }
+    });
+
+    return found;
+  }
+
+  function fillEditor() {
+    var p = getSelectedProduct();
+
+    if (!p) {
+      priceExInput.value = "";
+      priceIncInput.value = "";
+      currencySelect.value = "NOK";
+      vatInput.value = "25";
+      lockedSelect.value = "true";
+      notesInput.value = "";
+      return;
+    }
+
+    priceExInput.value = p.purchase_price_ex_vat || "";
+    priceIncInput.value = p.purchase_price_inc_vat || "";
+    currencySelect.value = p.currency || "NOK";
+    vatInput.value = p.vat_rate || 25;
+    lockedSelect.value = p.cost_locked ? "true" : "false";
+    notesInput.value = p.internal_notes || "";
+  }
+
+  function calculateVatFields() {
+    var vat = Number(vatInput.value || 0);
+    var ex = Number(priceExInput.value || 0);
+    var inc = Number(priceIncInput.value || 0);
+
+    if (ex > 0) {
+      priceIncInput.value = Math.round((ex * (1 + vat / 100)) * 100) / 100;
+      return;
+    }
+
+    if (inc > 0) {
+      priceExInput.value = Math.round((inc / (1 + vat / 100)) * 100) / 100;
+    }
+  }
+
+  productSelect.onchange = fillEditor;
+  calcBtn.onclick = calculateVatFields;
+
+  saveBtn.onclick = function () {
+    var p = getSelectedProduct();
+
+    if (!p) {
+      alert("Velg produkt først.");
+      return;
+    }
+
+    var ex = Number(priceExInput.value || 0);
+    var inc = Number(priceIncInput.value || 0);
+    var vat = Number(vatInput.value || 25);
+
+    if (ex < 0 || inc < 0) {
+      alert("Pris kan ikke være negativ.");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Lagrer...";
+
+    sb.rpc("internal_update_product_cost", {
+      p_product_id: p.id,
+      p_purchase_price_ex_vat: ex,
+      p_purchase_price_inc_vat: inc,
+      p_currency: currencySelect.value,
+      p_vat_rate: vat,
+      p_cost_locked: lockedSelect.value === "true",
+      p_internal_notes: notesInput.value || null
+    }).then(function (result) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Lagre produktkostnad";
+
+      if (result.error) {
+        alert("Kunne ikke lagre produktkostnad: " + result.error.message);
+        return;
+      }
+
+      localStorage.setItem("sk_internal_active_tab", "products");
+      alert("Produktkostnad lagret.");
+      window.location.reload();
+    });
+  };
+
+  var tableTitle = el("h3", "Produktliste");
+  tableTitle.style.marginTop = "24px";
+  parent.appendChild(tableTitle);
+
+  addTable(parent, [
+    { key: "name", label: "Produkt" },
+    { key: "brand", label: "Merke" },
+    { key: "category", label: "Kategori" },
+    { key: "supplier_name", label: "Leverandør" },
+    { key: "purchase_price_ex_vat", label: "Innpris eks.", format: "money" },
+    { key: "purchase_price_inc_vat", label: "Innpris inkl.", format: "money" },
+    { key: "currency", label: "Valuta" },
+    { key: "cost_locked", label: "Låst" }
+  ], data.products, "Ingen produkter funnet.");
+}
+  
   function renderPortal(sb, user, data) {
     var app = renderShell(
       "Intern Sportskongen-portal",
@@ -1487,20 +1674,11 @@ savePriceBtn.onclick = function () {
         }
       },
       products: {
-        label: "Produkter",
-        render: function (parent) {
-          addTable(parent, [
-            { key: "name", label: "Produkt" },
-            { key: "brand", label: "Merke" },
-            { key: "category", label: "Kategori" },
-            { key: "supplier_name", label: "Leverandør" },
-            { key: "purchase_price_ex_vat", label: "Innpris eks.", format: "money" },
-            { key: "purchase_price_inc_vat", label: "Innpris inkl.", format: "money" },
-            { key: "currency", label: "Valuta" },
-            { key: "cost_locked", label: "Låst" }
-          ], data.products, "Ingen produkter funnet.");
-        }
-      },
+  label: "Produkter",
+  render: function (parent) {
+    renderProductsManager(parent, data, sb);
+  }
+},
       suppliers: {
         label: "Leverandører / tillegg",
         render: function (parent) {
