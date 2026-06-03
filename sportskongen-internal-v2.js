@@ -747,6 +747,7 @@ actions.style.marginBottom = "18px";
 
 var printBtn = createPrimaryButton("Skriv ut tilbud");
 var copyBtn = createButton("Kopier tilbudstekst");
+  var duplicateBtn = createButton("Dupliser tilbud");
 
 var statusSelect = el("select");
 statusSelect.style.padding = "10px";
@@ -763,6 +764,7 @@ var statusBtn = createButton("Oppdater status");
 
 actions.appendChild(printBtn);
 actions.appendChild(copyBtn);
+actions.appendChild(duplicateBtn);
 actions.appendChild(statusSelect);
 actions.appendChild(statusBtn);
 parent.appendChild(actions);
@@ -1133,6 +1135,50 @@ if (savedQuoteId) {
     window.print();
   };
 
+duplicateBtn.onclick = function () {
+  var quote = selectedQuote();
+
+  if (!quote) {
+    alert("Velg tilbud først.");
+    return;
+  }
+
+  var confirmDuplicate = confirm(
+    "Vil du duplisere tilbud " + quote.quote_number + "?"
+  );
+
+  if (!confirmDuplicate) {
+    return;
+  }
+
+  duplicateBtn.disabled = true;
+  duplicateBtn.textContent = "Dupliserer...";
+
+  sb.rpc("internal_duplicate_quote", {
+    p_quote_id: quote.quote_id
+  }).then(function (result) {
+    duplicateBtn.disabled = false;
+    duplicateBtn.textContent = "Dupliser tilbud";
+
+    if (result.error) {
+      alert("Kunne ikke duplisere tilbud: " + result.error.message);
+      return;
+    }
+
+    var duplicated = result.data && result.data[0];
+
+    if (duplicated && duplicated.quote_number) {
+      localStorage.setItem("sk_internal_active_tab", "customer");
+      localStorage.setItem("sk_internal_selected_quote_id", duplicated.quote_id);
+      alert("Tilbud duplisert: " + duplicated.quote_number);
+    } else {
+      alert("Tilbud duplisert.");
+    }
+
+    window.location.reload();
+  });
+};
+  
   saveCustomerBtn.onclick = function () {
   var quote = selectedQuote();
 
