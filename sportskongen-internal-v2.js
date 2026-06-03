@@ -1875,6 +1875,71 @@ createBtn.onclick = function () {
   function round2(value) {
     return Math.round(Number(value || 0) * 100) / 100;
   }
+    function createCollapsibleBox(title, description, defaultOpen) {
+  var wrap = el("div");
+  wrap.style.marginBottom = "14px";
+  wrap.style.border = "1px solid #e5e7eb";
+  wrap.style.borderRadius = "14px";
+  wrap.style.background = "#ffffff";
+  wrap.style.overflow = "hidden";
+
+  var header = el("button");
+  header.type = "button";
+  header.style.width = "100%";
+  header.style.border = "0";
+  header.style.background = "#f9fafb";
+  header.style.padding = "14px 16px";
+  header.style.display = "flex";
+  header.style.justifyContent = "space-between";
+  header.style.alignItems = "center";
+  header.style.cursor = "pointer";
+  header.style.textAlign = "left";
+
+  var left = el("div");
+
+  var titleEl = el("div", title);
+  titleEl.style.fontWeight = "900";
+  titleEl.style.fontSize = "15px";
+  titleEl.style.color = "#111827";
+
+  var descEl = el("div", description || "");
+  descEl.style.marginTop = "3px";
+  descEl.style.fontSize = "13px";
+  descEl.style.color = "#6b7280";
+
+  left.appendChild(titleEl);
+
+  if (description) {
+    left.appendChild(descEl);
+  }
+
+  var icon = el("div", defaultOpen ? "−" : "+");
+  icon.style.fontSize = "22px";
+  icon.style.fontWeight = "900";
+  icon.style.color = "#111827";
+  icon.style.lineHeight = "1";
+
+  header.appendChild(left);
+  header.appendChild(icon);
+
+  var body = el("div");
+  body.style.padding = "14px";
+  body.style.display = defaultOpen ? "block" : "none";
+
+  header.onclick = function () {
+    var isOpen = body.style.display !== "none";
+    body.style.display = isOpen ? "none" : "block";
+    icon.textContent = isOpen ? "+" : "−";
+  };
+
+  wrap.appendChild(header);
+  wrap.appendChild(body);
+
+  return {
+    wrap: wrap,
+    body: body
+  };
+}
 
   function calcIncFromEx(exInput, incInput, vatInput) {
     var ex = Number(exInput.value || 0);
@@ -1894,16 +1959,13 @@ createBtn.onclick = function () {
     }
   }
 
-  var createWrap = el("div");
-  createWrap.style.marginBottom = "22px";
-  createWrap.style.padding = "14px";
-  createWrap.style.border = "1px solid #e5e7eb";
-  createWrap.style.borderRadius = "12px";
-  createWrap.style.background = "#f9fafb";
+  var createSection = createCollapsibleBox(
+  "➕ Nytt tillegg",
+  "Opprett frakt, oppstart, trykk, designkost, montering eller andre tillegg.",
+  false
+);
 
-  var createTitle = el("div", "Nytt tillegg");
-  createTitle.style.fontWeight = "800";
-  createTitle.style.marginBottom = "10px";
+var createWrap = createSection.body;
 
   var createGrid = el("div");
   createGrid.style.display = "grid";
@@ -1969,12 +2031,11 @@ createBtn.onclick = function () {
   calcNewExBtn.style.marginTop = "12px";
   calcNewExBtn.style.marginLeft = "8px";
 
-  createWrap.appendChild(createTitle);
   createWrap.appendChild(createGrid);
-  createWrap.appendChild(createBtn);
-  createWrap.appendChild(calcNewIncBtn);
-  createWrap.appendChild(calcNewExBtn);
-  parent.appendChild(createWrap);
+createWrap.appendChild(createBtn);
+createWrap.appendChild(calcNewIncBtn);
+createWrap.appendChild(calcNewExBtn);
+parent.appendChild(createSection.wrap);
 
   calcNewIncBtn.onclick = function () {
     calcIncFromEx(newAmountEx, newAmountInc, newVat);
@@ -2021,16 +2082,13 @@ createBtn.onclick = function () {
     });
   };
 
-  var editWrap = el("div");
-  editWrap.style.marginBottom = "22px";
-  editWrap.style.padding = "14px";
-  editWrap.style.border = "1px solid #e5e7eb";
-  editWrap.style.borderRadius = "12px";
-  editWrap.style.background = "#f9fafb";
+  var editSection = createCollapsibleBox(
+  "✏️ Rediger tillegg",
+  "Velg et eksisterende tillegg og endre pris, leverandør, status eller notat.",
+  false
+);
 
-  var editTitle = el("div", "Rediger tillegg");
-  editTitle.style.fontWeight = "800";
-  editTitle.style.marginBottom = "10px";
+var editWrap = editSection.body;
 
   var editGrid = el("div");
   editGrid.style.display = "grid";
@@ -2107,12 +2165,11 @@ createBtn.onclick = function () {
   calcEditExBtn.style.marginTop = "12px";
   calcEditExBtn.style.marginLeft = "8px";
 
-  editWrap.appendChild(editTitle);
   editWrap.appendChild(editGrid);
-  editWrap.appendChild(saveBtn);
-  editWrap.appendChild(calcEditIncBtn);
-  editWrap.appendChild(calcEditExBtn);
-  parent.appendChild(editWrap);
+editWrap.appendChild(saveBtn);
+editWrap.appendChild(calcEditIncBtn);
+editWrap.appendChild(calcEditExBtn);
+parent.appendChild(editSection.wrap);
 
   function getSelectedAddon() {
     var found = null;
