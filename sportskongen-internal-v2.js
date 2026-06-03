@@ -3102,6 +3102,377 @@ addTable(addonsSection.body, [
     body: body
   };
 }
+
+  function renderStandardQuoteBuilder(parent, data, sb) {
+  var h2 = el("h2", "Vanlig tilbudsbygger");
+  h2.style.marginTop = "0";
+  parent.appendChild(h2);
+
+  var intro = el("p", "Lag tilbud med flere produktlinjer fra produktregisteret.");
+  intro.style.color = "#6b7280";
+  parent.appendChild(intro);
+
+  var customerSection = createCollapsibleSection(
+    "👤 Kundeinfo",
+    "Legg inn kunde, firma/klubb, e-post og telefon.",
+    true
+  );
+
+  var customerGrid = el("div");
+  customerGrid.style.display = "grid";
+  customerGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  customerGrid.style.gap = "12px";
+
+  var customerName = el("input");
+  customerName.type = "text";
+  customerName.placeholder = "Kundenavn";
+
+  var customerEmail = el("input");
+  customerEmail.type = "email";
+  customerEmail.placeholder = "kunde@eksempel.no";
+
+  var customerPhone = el("input");
+  customerPhone.type = "text";
+  customerPhone.placeholder = "Telefon";
+
+  var customerCompany = el("input");
+  customerCompany.type = "text";
+  customerCompany.placeholder = "Klubb / firma";
+
+  addField(customerGrid, "Kundenavn", customerName);
+  addField(customerGrid, "E-post", customerEmail);
+  addField(customerGrid, "Telefon", customerPhone);
+  addField(customerGrid, "Klubb / firma", customerCompany);
+
+  customerSection.body.appendChild(customerGrid);
+  parent.appendChild(customerSection.wrap);
+
+  var linesSection = createCollapsibleSection(
+    "📦 Produktlinjer",
+    "Legg til produkter, antall og eventuelt manuell kundepris.",
+    true
+  );
+
+  var lineList = el("div");
+  linesSection.body.appendChild(lineList);
+
+  var addLineBtn = createPrimaryButton("Legg til produktlinje");
+  addLineBtn.style.marginTop = "10px";
+  linesSection.body.appendChild(addLineBtn);
+
+  parent.appendChild(linesSection.wrap);
+
+  var summarySection = createCollapsibleSection(
+    "📊 Oppsummering",
+    "Se totalsum, kost og fortjeneste før du lagrer tilbudet.",
+    true
+  );
+
+  var summaryBox = el("div");
+  summarySection.body.appendChild(summaryBox);
+
+  var offerTextLabel = el("label", "Tilbudstekst til kunde");
+  offerTextLabel.style.display = "block";
+  offerTextLabel.style.fontWeight = "700";
+  offerTextLabel.style.marginTop = "14px";
+  offerTextLabel.style.marginBottom = "6px";
+
+  var offerText = el("textarea");
+  offerText.style.width = "100%";
+  offerText.style.minHeight = "100px";
+  offerText.style.padding = "12px";
+  offerText.style.border = "1px solid #d1d5db";
+  offerText.style.borderRadius = "10px";
+  offerText.style.boxSizing = "border-box";
+  offerText.style.fontFamily = "Arial, sans-serif";
+  offerText.value = "Takk for forespørselen. Her er vårt tilbud basert på produktene vi har valgt ut.";
+
+  var internalNotesLabel = el("label", "Interne notater");
+  internalNotesLabel.style.display = "block";
+  internalNotesLabel.style.fontWeight = "700";
+  internalNotesLabel.style.marginTop = "14px";
+  internalNotesLabel.style.marginBottom = "6px";
+
+  var internalNotes = el("textarea");
+  internalNotes.style.width = "100%";
+  internalNotes.style.minHeight = "70px";
+  internalNotes.style.padding = "12px";
+  internalNotes.style.border = "1px solid #d1d5db";
+  internalNotes.style.borderRadius = "10px";
+  internalNotes.style.boxSizing = "border-box";
+  internalNotes.style.fontFamily = "Arial, sans-serif";
+
+  var saveBtn = createPrimaryButton("Lagre tilbud");
+  saveBtn.style.marginTop = "14px";
+
+  summarySection.body.appendChild(offerTextLabel);
+  summarySection.body.appendChild(offerText);
+  summarySection.body.appendChild(internalNotesLabel);
+  summarySection.body.appendChild(internalNotes);
+  summarySection.body.appendChild(saveBtn);
+
+  parent.appendChild(summarySection.wrap);
+
+  var lines = [];
+
+  function productOptions(select) {
+    addOption(select, "", "Velg produkt");
+
+    (data.products || []).forEach(function (p) {
+      var label = (p.brand ? p.brand + " – " : "") + p.name;
+
+      if (p.sales_price_inc_vat) {
+        label += " – " + money(p.sales_price_inc_vat) + " kr";
+      }
+
+      addOption(select, p.id, label);
+    });
+  }
+
+  function getProduct(productId) {
+    var found = null;
+
+    (data.products || []).forEach(function (p) {
+      if (p.id === productId) {
+        found = p;
+      }
+    });
+
+    return found;
+  }
+
+  function createLine() {
+    var line = {
+      productSelect: el("select"),
+      qtyInput: el("input"),
+      priceInput: el("input"),
+      info: el("div"),
+      wrap: el("div")
+    };
+
+    line.wrap.style.padding = "14px";
+    line.wrap.style.border = "1px solid #e5e7eb";
+    line.wrap.style.borderRadius = "12px";
+    line.wrap.style.background = "#f9fafb";
+    line.wrap.style.marginBottom = "12px";
+
+    var grid = el("div");
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "minmax(260px, 2fr) minmax(100px, 0.6fr) minmax(160px, 1fr) auto";
+    grid.style.gap = "10px";
+    grid.style.alignItems = "end";
+
+    productOptions(line.productSelect);
+
+    line.qtyInput.type = "number";
+    line.qtyInput.min = "1";
+    line.qtyInput.step = "1";
+    line.qtyInput.value = "1";
+
+    line.priceInput.type = "number";
+    line.priceInput.step = "0.01";
+    line.priceInput.placeholder = "Valgfritt";
+
+    var removeBtn = createButton("Fjern");
+
+    addField(grid, "Produkt", line.productSelect);
+    addField(grid, "Antall", line.qtyInput);
+    addField(grid, "Manuell pris/stk inkl. mva", line.priceInput);
+
+    var removeWrap = el("div");
+    removeWrap.appendChild(removeBtn);
+    grid.appendChild(removeWrap);
+
+    line.info.style.marginTop = "10px";
+    line.info.style.color = "#6b7280";
+    line.info.style.fontSize = "13px";
+
+    line.wrap.appendChild(grid);
+    line.wrap.appendChild(line.info);
+
+    line.productSelect.onchange = updateSummary;
+    line.qtyInput.oninput = updateSummary;
+    line.priceInput.oninput = updateSummary;
+
+    removeBtn.onclick = function () {
+      var next = [];
+
+      lines.forEach(function (l) {
+        if (l !== line) {
+          next.push(l);
+        }
+      });
+
+      lines = next;
+      line.wrap.parentNode.removeChild(line.wrap);
+      updateSummary();
+    };
+
+    lines.push(line);
+    lineList.appendChild(line.wrap);
+
+    updateSummary();
+  }
+
+  function lineData(line) {
+    var product = getProduct(line.productSelect.value);
+    var qty = Number(line.qtyInput.value || 0);
+
+    if (!product || qty <= 0) {
+      return null;
+    }
+
+    var manualInc = line.priceInput.value ? Number(line.priceInput.value) : null;
+    var unitSalesInc = manualInc || Number(product.sales_price_inc_vat || 0);
+    var vat = Number(product.vat_rate || 25);
+    var unitSalesEx = unitSalesInc / (1 + vat / 100);
+    var unitCostEx = Number(product.purchase_price_ex_vat || 0);
+
+    var lineSalesInc = unitSalesInc * qty;
+    var lineSalesEx = unitSalesEx * qty;
+    var lineCostEx = unitCostEx * qty;
+    var profitEx = lineSalesEx - lineCostEx;
+    var margin = lineSalesEx > 0 ? (profitEx / lineSalesEx) * 100 : 0;
+
+    return {
+      product: product,
+      quantity: qty,
+      manualUnitSalesInc: manualInc,
+      unitSalesInc: unitSalesInc,
+      unitCostEx: unitCostEx,
+      lineSalesInc: lineSalesInc,
+      lineCostEx: lineCostEx,
+      profitEx: profitEx,
+      margin: margin
+    };
+  }
+
+  function updateSummary() {
+    clear(summaryBox);
+
+    var totalSalesInc = 0;
+    var totalCostEx = 0;
+    var totalProfitEx = 0;
+    var validLines = 0;
+
+    lines.forEach(function (line) {
+      var d = lineData(line);
+
+      if (!d) {
+        line.info.textContent = "Velg produkt og antall.";
+        return;
+      }
+
+      validLines += 1;
+      totalSalesInc += d.lineSalesInc;
+      totalCostEx += d.lineCostEx;
+      totalProfitEx += d.profitEx;
+
+      line.info.textContent =
+        "Pris/stk inkl: " +
+        money(d.unitSalesInc) +
+        " kr · Innpris/stk eks: " +
+        money(d.unitCostEx) +
+        " kr · Linje inkl: " +
+        money(d.lineSalesInc) +
+        " kr · Fortjeneste: " +
+        money(d.profitEx) +
+        " kr / " +
+        money(d.margin) +
+        " %";
+
+      if (d.margin < 20) {
+        line.wrap.style.background = "#fee2e2";
+        line.info.style.color = "#991b1b";
+        line.info.style.fontWeight = "800";
+      } else {
+        line.wrap.style.background = "#f9fafb";
+        line.info.style.color = "#6b7280";
+        line.info.style.fontWeight = "400";
+      }
+    });
+
+    var totalSalesEx = totalSalesInc / 1.25;
+    var totalMargin = totalSalesEx > 0 ? (totalProfitEx / totalSalesEx) * 100 : 0;
+
+    addStatGrid(summaryBox, [
+      { label: "Produktlinjer", value: String(validLines) },
+      { label: "Salg inkl. mva", value: money(totalSalesInc) + " kr" },
+      { label: "Kost eks. mva", value: money(totalCostEx) + " kr" },
+      { label: "Fortjeneste eks.", value: money(totalProfitEx) + " kr" },
+      { label: "Fortjeneste %", value: money(totalMargin) + " %" }
+    ]);
+  }
+
+  addLineBtn.onclick = function () {
+    createLine();
+  };
+
+  saveBtn.onclick = function () {
+    var customer = customerName.value.trim();
+
+    if (!customer) {
+      alert("Kundenavn må fylles ut.");
+      return;
+    }
+
+    var items = [];
+
+    lines.forEach(function (line) {
+      var d = lineData(line);
+
+      if (d) {
+        items.push({
+          product_id: d.product.id,
+          quantity: d.quantity,
+          unit_sales_price_inc_vat: d.manualUnitSalesInc,
+          internal_notes: null
+        });
+      }
+    });
+
+    if (!items.length) {
+      alert("Legg til minst én produktlinje.");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Lagrer...";
+
+    sb.rpc("internal_create_standard_quote", {
+      p_customer_name: customer,
+      p_customer_email: customerEmail.value.trim() || null,
+      p_customer_phone: customerPhone.value.trim() || null,
+      p_customer_company: customerCompany.value.trim() || null,
+      p_items: items,
+      p_customer_offer_text: offerText.value || null,
+      p_internal_notes: internalNotes.value || null
+    }).then(function (result) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Lagre tilbud";
+
+      if (result.error) {
+        alert("Kunne ikke lagre tilbud: " + result.error.message);
+        return;
+      }
+
+      var saved = result.data && result.data[0];
+
+      if (saved && saved.quote_number) {
+        localStorage.setItem("sk_internal_active_tab", "customer");
+        localStorage.setItem("sk_internal_selected_quote_id", saved.quote_id);
+        alert("Tilbud lagret: " + saved.quote_number);
+      } else {
+        alert("Tilbud lagret.");
+      }
+
+      window.location.reload();
+    });
+  };
+
+  createLine();
+  updateSummary();
+}
   function renderPortal(sb, user, data) {
     var app = renderShell(
       "Intern Sportskongen-portal",
@@ -3134,6 +3505,12 @@ addTable(addonsSection.body, [
           renderCustomStamp(parent, data, sb);
         }
       },
+      standardQuote: {
+  label: "Tilbudsbygger",
+  render: function (parent) {
+    renderStandardQuoteBuilder(parent, data, sb);
+  }
+},
       products: {
   label: "Produkter",
   render: function (parent) {
