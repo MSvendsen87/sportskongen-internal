@@ -3698,14 +3698,15 @@ addTable(addonsSection.body, [
 
   function loadPortalData(sb, user) {
   Promise.all([
-    sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
-    sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
-    sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
-    sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
-    sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
-    sb.from("internal_settings_view").select("*"),
-    sb.from("internal_suppliers_view").select("*").order("name", { ascending: true })
-  ]).then(function (results) {
+  sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
+  sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
+  sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
+  sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
+  sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
+  sb.from("internal_settings_view").select("*"),
+  sb.from("internal_suppliers_view").select("*").order("name", { ascending: true }),
+  sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false })
+]).then(function (results) {
     if (results[0].error) {
       renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
       return;
@@ -3741,15 +3742,21 @@ addTable(addonsSection.body, [
       return;
     }
 
+    if (results[7].error) {
+  renderError("Kunne ikke hente kunder: " + results[7].error.message);
+  return;
+}
+
     renderPortal(sb, user, {
-      addons: results[0].data || [],
-      products: results[1].data || [],
-      quotes: results[2].data || [],
-      customerQuotes: results[3].data || [],
-      customerQuoteItems: results[4].data || [],
-      settings: results[5].data || [],
-      suppliers: results[6].data || []
-    });
+  addons: results[0].data || [],
+  products: results[1].data || [],
+  quotes: results[2].data || [],
+  customerQuotes: results[3].data || [],
+  customerQuoteItems: results[4].data || [],
+  settings: results[5].data || [],
+  suppliers: results[6].data || [],
+  customers: results[7].data || []
+});
   });
 }
 
