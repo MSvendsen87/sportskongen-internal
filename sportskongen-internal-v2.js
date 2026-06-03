@@ -1465,16 +1465,13 @@ savePriceBtn.onclick = function () {
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
 
-    var createWrap = el("div");
-createWrap.style.marginBottom = "22px";
-createWrap.style.padding = "14px";
-createWrap.style.border = "1px solid #e5e7eb";
-createWrap.style.borderRadius = "12px";
-createWrap.style.background = "#f9fafb";
+    var createSection = createCollapsibleSection(
+  "➕ Nytt produkt",
+  "Opprett nye produkter med innpris, valuta, kategori og leverandør.",
+  false
+);
 
-var createTitle = el("div", "Nytt produkt");
-createTitle.style.fontWeight = "800";
-createTitle.style.marginBottom = "10px";
+var createWrap = createSection.body;
 
 var createGrid = el("div");
 createGrid.style.display = "grid";
@@ -1583,17 +1580,16 @@ var calcNewBtn = createButton("Regn inkl./eks. mva");
 calcNewBtn.style.marginTop = "12px";
 calcNewBtn.style.marginLeft = "8px";
 
-createWrap.appendChild(createTitle);
 createWrap.appendChild(createGrid);
 createWrap.appendChild(createBtn);
-createWrap.appendChild(calcNewBtn);
-parent.appendChild(createWrap);
-  var editor = el("div");
-  editor.style.marginBottom = "22px";
-  editor.style.padding = "14px";
-  editor.style.border = "1px solid #e5e7eb";
-  editor.style.borderRadius = "12px";
-  editor.style.background = "#f9fafb";
+parent.appendChild(createSection.wrap);
+  var editSection = createCollapsibleSection(
+  "✏️ Rediger innpris / lås kostnad",
+  "Endre innpris, mva, valuta og om kostnaden skal være låst.",
+  false
+);
+
+var editor = editSection.body;
 
   var grid = el("div");
   grid.style.display = "grid";
@@ -1653,7 +1649,7 @@ parent.appendChild(createWrap);
   editor.appendChild(grid);
   editor.appendChild(saveBtn);
   editor.appendChild(calcBtn);
-  parent.appendChild(editor);
+  parent.appendChild(editSection.wrap);
 
     calcNewBtn.onclick = function () {
   var vat = Number(newVat.value || 0);
@@ -1803,11 +1799,13 @@ createBtn.onclick = function () {
     });
   };
 
-  var tableTitle = el("h3", "Produktliste");
-  tableTitle.style.marginTop = "24px";
-  parent.appendChild(tableTitle);
+  var productListSection = createCollapsibleSection(
+  "📦 Produktoversikt",
+  "Alle produkter, innpriser, valuta, kategori og låsestatus.",
+  true
+);
 
-  addTable(parent, [
+addTable(productListSection.body, [
     { key: "name", label: "Produkt" },
     { key: "brand", label: "Merke" },
     { key: "category", label: "Kategori" },
@@ -1817,6 +1815,7 @@ createBtn.onclick = function () {
     { key: "currency", label: "Valuta" },
     { key: "cost_locked", label: "Låst" }
   ], data.products, "Ingen produkter funnet.");
+    parent.appendChild(productListSection.wrap);
 }
   function renderSuppliersAddonsManager(parent, data, sb) {
   var h2 = el("h2", "Leverandører / tillegg");
