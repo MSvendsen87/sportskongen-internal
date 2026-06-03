@@ -1833,6 +1833,7 @@ createBtn.onclick = function () {
         render: function (parent) {
           addStatGrid(parent, [
             { label: "Produkter", value: String(data.products.length) },
+            { label: "Leverandører", value: String((data.suppliers || []).length) },
             { label: "Tillegg", value: String(data.addons.length) },
             { label: "Kalkyler", value: String(data.quotes.length) },
             { label: "Status", value: "OK" }
@@ -1925,12 +1926,14 @@ createBtn.onclick = function () {
 
   function loadPortalData(sb, user) {
     Promise.all([
+  Promise.all([
   sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
   sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
   sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
   sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
   sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
-  sb.from("internal_settings_view").select("*")
+  sb.from("internal_settings_view").select("*"),
+  sb.from("internal_suppliers_view").select("*").order("name", { ascending: true })
 ]).then(function (results) {
   if (results[0].error) {
     renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
@@ -1962,14 +1965,20 @@ createBtn.onclick = function () {
     return;
   }
 
+    if (results[6].error) {
+  renderError("Kunne ikke hente leverandører: " + results[6].error.message);
+  return;
+}
+
   renderPortal(sb, user, {
-    addons: results[0].data || [],
-    products: results[1].data || [],
-    quotes: results[2].data || [],
-    customerQuotes: results[3].data || [],
-    customerQuoteItems: results[4].data || [],
-    settings: results[5].data || []
-  });
+  addons: results[0].data || [],
+  products: results[1].data || [],
+  quotes: results[2].data || [],
+  customerQuotes: results[3].data || [],
+  customerQuoteItems: results[4].data || [],
+  settings: results[5].data || [],
+  suppliers: results[6].data || []
+});
 });
   }
 
