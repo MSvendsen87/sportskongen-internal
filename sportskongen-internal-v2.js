@@ -3123,6 +3123,27 @@ addTable(addonsSection.body, [
   customerGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
   customerGrid.style.gap = "12px";
 
+var existingCustomerSelect = el("select");
+addOption(existingCustomerSelect, "", "Ny kunde / velg tidligere kunde");
+
+(data.customers || []).forEach(function (c) {
+  var label = c.customer_name || "Ukjent kunde";
+
+  if (c.customer_company) {
+    label += " / " + c.customer_company;
+  }
+
+  if (c.customer_email) {
+    label += " – " + c.customer_email;
+  }
+
+  if (c.quote_count) {
+    label += " (" + c.quote_count + " tilbud)";
+  }
+
+  addOption(existingCustomerSelect, c.customer_key, label);
+});
+    
   var customerName = el("input");
   customerName.type = "text";
   customerName.placeholder = "Kundenavn";
@@ -3139,13 +3160,38 @@ addTable(addonsSection.body, [
   customerCompany.type = "text";
   customerCompany.placeholder = "Klubb / firma";
 
-  addField(customerGrid, "Kundenavn", customerName);
-  addField(customerGrid, "E-post", customerEmail);
-  addField(customerGrid, "Telefon", customerPhone);
-  addField(customerGrid, "Klubb / firma", customerCompany);
+  addField(customerGrid, "Velg tidligere kunde", existingCustomerSelect);
+addField(customerGrid, "Kundenavn", customerName);
+addField(customerGrid, "E-post", customerEmail);
+addField(customerGrid, "Telefon", customerPhone);
+addField(customerGrid, "Klubb / firma", customerCompany);
 
   customerSection.body.appendChild(customerGrid);
   parent.appendChild(customerSection.wrap);
+    function getSelectedCustomer() {
+  var found = null;
+
+  (data.customers || []).forEach(function (c) {
+    if (c.customer_key === existingCustomerSelect.value) {
+      found = c;
+    }
+  });
+
+  return found;
+}
+
+existingCustomerSelect.onchange = function () {
+  var c = getSelectedCustomer();
+
+  if (!c) {
+    return;
+  }
+
+  customerName.value = c.customer_name || "";
+  customerEmail.value = c.customer_email || "";
+  customerPhone.value = c.customer_phone || "";
+  customerCompany.value = c.customer_company || "";
+};
 
   var linesSection = createCollapsibleSection(
     "📦 Produktlinjer",
