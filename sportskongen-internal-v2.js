@@ -1767,6 +1767,132 @@ savePriceBtn.onclick = function () {
 
   render();
 }
+
+  function renderProductSyncBox(parent, sb) {
+  var section = createCollapsibleSection(
+    "🔄 Oppdater fra nettbutikken",
+    "Henter produkter, priser, innpris, lager og status fra Quickbutik/GolfKongen.no.",
+    false
+  );
+
+  var box = section.body;
+
+  var info = el("p", "Denne oppdateringen bruker innloggingen din og kan bare kjøres av godkjente admin-brukere.");
+  info.style.color = "#6b7280";
+  info.style.marginTop = "0";
+  box.appendChild(info);
+
+  var controls = el("div");
+  controls.style.display = "flex";
+  controls.style.gap = "10px";
+  controls.style.flexWrap = "wrap";
+  controls.style.alignItems = "center";
+
+  var limitInput = el("input");
+  limitInput.type = "number";
+  limitInput.value = "20";
+  limitInput.min = "1";
+  limitInput.max = "100";
+  limitInput.style.width = "110px";
+  limitInput.style.padding = "10px";
+  limitInput.style.border = "1px solid #d1d5db";
+  limitInput.style.borderRadius = "10px";
+
+  var offsetInput = el("input");
+  offsetInput.type = "number";
+  offsetInput.value = "0";
+  offsetInput.min = "0";
+  offsetInput.style.width = "110px";
+  offsetInput.style.padding = "10px";
+  offsetInput.style.border = "1px solid #d1d5db";
+  offsetInput.style.borderRadius = "10px";
+
+  var dryRunSelect = el("select");
+  dryRunSelect.style.padding = "10px";
+  dryRunSelect.style.border = "1px solid #d1d5db";
+  dryRunSelect.style.borderRadius = "10px";
+  addOption(dryRunSelect, "true", "Test først");
+  addOption(dryRunSelect, "false", "Oppdater faktisk");
+
+  var runBtn = createPrimaryButton("Kjør oppdatering");
+
+  controls.appendChild(el("span", "Antall:"));
+  controls.appendChild(limitInput);
+  controls.appendChild(el("span", "Start fra:"));
+  controls.appendChild(offsetInput);
+  controls.appendChild(dryRunSelect);
+  controls.appendChild(runBtn);
+
+  box.appendChild(controls);
+
+  var resultBox = el("pre");
+  resultBox.style.marginTop = "14px";
+  resultBox.style.padding = "12px";
+  resultBox.style.background = "#111827";
+  resultBox.style.color = "#f9fafb";
+  resultBox.style.borderRadius = "12px";
+  resultBox.style.overflowX = "auto";
+  resultBox.style.whiteSpace = "pre-wrap";
+  resultBox.style.display = "none";
+  box.appendChild(resultBox);
+
+  runBtn.onclick = function () {
+    runBtn.disabled = true;
+    runBtn.textContent = "Oppdaterer...";
+    resultBox.style.display = "block";
+    resultBox.textContent = "Kjører...";
+
+    sb.auth.getSession().then(function (sessionResult) {
+      var session = sessionResult.data && sessionResult.data.session;
+      var token = session && session.access_token;
+
+      if (!token) {
+        runBtn.disabled = false;
+        runBtn.textContent = "Kjør oppdatering";
+        resultBox.textContent = "Feil: Fant ikke innlogget Supabase-session.";
+        return;
+      }
+
+      var limit = Number(limitInput.value || 20);
+      var offset = Number(offsetInput.value || 0);
+      var dryRun = dryRunSelect.value !== "false";
+
+      var url =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-products" +
+        "?limit=" + encodeURIComponent(limit) +
+        "&offset=" + encodeURIComponent(offset) +
+        "&dryRun=" + encodeURIComponent(dryRun ? "true" : "false");
+
+      fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }).then(function (response) {
+        return response.json();
+      }).then(function (data) {
+        runBtn.disabled = false;
+        runBtn.textContent = "Kjør oppdatering";
+
+        resultBox.textContent = JSON.stringify(data, null, 2);
+
+        if (data.ok && data.dryRun === false) {
+          localStorage.setItem("sk_internal_active_tab", "products");
+
+          if (confirm("Oppdatering ferdig. Vil du laste siden på nytt for å se endringene?")) {
+            window.location.reload();
+          }
+        }
+      }).catch(function (error) {
+        runBtn.disabled = false;
+        runBtn.textContent = "Kjør oppdatering";
+        resultBox.textContent = "Feil: " + (error.message || String(error));
+      });
+    });
+  };
+
+  parent.appendChild(section.wrap);
+}
   function renderProductsManager(parent, data, sb) {
   var h2 = el("h2", "Produkter");
   h2.style.marginTop = "0";
@@ -1775,6 +1901,7 @@ savePriceBtn.onclick = function () {
   var intro = el("p", "Her kan du oppdatere innkjøpspris og låse/åpne kostnad på interne produkter.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
+    renderProductSyncBox(parent, sb);
 
     var createSection = createCollapsibleSection(
   "➕ Nytt produkt",
