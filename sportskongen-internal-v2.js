@@ -1456,6 +1456,317 @@ savePriceBtn.onclick = function () {
   renderDocument();
 }
 
+  function renderProductsSmartTable(parent, products) {
+  var state = {
+    search: "",
+    sortKey: "name",
+    sortDir: "asc"
+  };
+
+  var controls = el("div");
+  controls.style.display = "grid";
+  controls.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  controls.style.gap = "12px";
+  controls.style.marginBottom = "14px";
+
+  var searchInput = el("input");
+  searchInput.type = "text";
+  searchInput.placeholder = "Søk produkt, merke, kategori, leverandør, SKU...";
+  searchInput.style.width = "100%";
+  searchInput.style.padding = "10px";
+  searchInput.style.border = "1px solid #d1d5db";
+  searchInput.style.borderRadius = "10px";
+  searchInput.style.boxSizing = "border-box";
+
+  var sortSelect = el("select");
+  sortSelect.style.width = "100%";
+  sortSelect.style.padding = "10px";
+  sortSelect.style.border = "1px solid #d1d5db";
+  sortSelect.style.borderRadius = "10px";
+  sortSelect.style.boxSizing = "border-box";
+
+  addOption(sortSelect, "name", "Produkt");
+  addOption(sortSelect, "brand", "Merke");
+  addOption(sortSelect, "category", "Kategori");
+  addOption(sortSelect, "supplier_name", "Leverandør");
+  addOption(sortSelect, "sales_price_inc_vat", "Utsalgspris");
+  addOption(sortSelect, "purchase_price_ex_vat", "Innpris eks.");
+  addOption(sortSelect, "purchase_price_inc_vat", "Innpris inkl.");
+  addOption(sortSelect, "profit_ex_vat", "Fortjeneste kr");
+  addOption(sortSelect, "profit_margin_percent", "Fortjeneste %");
+  addOption(sortSelect, "stock_quantity", "Lager");
+  addOption(sortSelect, "quickbutik_status", "Status");
+  addOption(sortSelect, "last_synced_at", "Sist synket");
+
+  var dirSelect = el("select");
+  dirSelect.style.width = "100%";
+  dirSelect.style.padding = "10px";
+  dirSelect.style.border = "1px solid #d1d5db";
+  dirSelect.style.borderRadius = "10px";
+  dirSelect.style.boxSizing = "border-box";
+
+  addOption(dirSelect, "asc", "A–Å / lavest først");
+  addOption(dirSelect, "desc", "Å–A / høyest først");
+
+  controls.appendChild(searchInput);
+  controls.appendChild(sortSelect);
+  controls.appendChild(dirSelect);
+  parent.appendChild(controls);
+
+  var summary = el("div");
+  summary.style.marginBottom = "10px";
+  summary.style.color = "#6b7280";
+  summary.style.fontSize = "13px";
+  parent.appendChild(summary);
+
+  var tableTarget = el("div");
+  parent.appendChild(tableTarget);
+
+  function normalize(value) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    return String(value).toLowerCase();
+  }
+
+  function isNumberLike(value) {
+    if (value === null || value === undefined || value === "") {
+      return false;
+    }
+
+    return !Number.isNaN(Number(value));
+  }
+
+  function formatValue(row, key) {
+    var value = row[key];
+
+    if (key === "sales_price_inc_vat" ||
+        key === "sales_price_ex_vat" ||
+        key === "purchase_price_ex_vat" ||
+        key === "purchase_price_inc_vat" ||
+        key === "profit_ex_vat") {
+      return money(value) + " kr";
+    }
+
+    if (key === "profit_margin_percent") {
+      return money(value) + " %";
+    }
+
+    if (key === "cost_locked") {
+      return value ? "🔒 Låst" : "🔓 Åpen";
+    }
+
+    if (key === "last_synced_at") {
+      if (!value) {
+        return "-";
+      }
+
+      var d = new Date(value);
+
+      if (isNaN(d.getTime())) {
+        return "-";
+      }
+
+      return d.toLocaleString("no-NO");
+    }
+
+    if (value === null || value === undefined || value === "") {
+      return "-";
+    }
+
+    return value;
+  }
+
+  function productMatchesSearch(p, query) {
+    if (!query) {
+      return true;
+    }
+
+    var haystack = [
+      p.name,
+      p.brand,
+      p.category,
+      p.supplier_name,
+      p.quickbutik_sku,
+      p.quickbutik_product_id,
+      p.quickbutik_slug,
+      p.quickbutik_status,
+      p.sync_source
+    ].map(normalize).join(" ");
+
+    return haystack.indexOf(query) >= 0;
+  }
+
+  function compareRows(a, b) {
+    var key = state.sortKey;
+    var av = a[key];
+    var bv = b[key];
+
+    if (isNumberLike(av) || isNumberLike(bv)) {
+      av = Number(av || 0);
+      bv = Number(bv || 0);
+    } else {
+      av = normalize(av);
+      bv = normalize(bv);
+    }
+
+    if (av < bv) {
+      return state.sortDir === "asc" ? -1 : 1;
+    }
+
+    if (av > bv) {
+      return state.sortDir === "asc" ? 1 : -1;
+    }
+
+    return 0;
+  }
+
+  function render() {
+    clear(tableTarget);
+
+    var query = normalize(state.search);
+
+    var rows = (products || [])
+      .filter(function (p) {
+        return productMatchesSearch(p, query);
+      })
+      .sort(compareRows);
+
+    var lowProfitCount = rows.filter(function (p) {
+      return p.low_profit_warning === true || Number(p.profit_margin_percent || 0) < 20;
+    }).length;
+
+    summary.textContent =
+      "Viser " +
+      rows.length +
+      " av " +
+      (products || []).length +
+      " produkter" +
+      (lowProfitCount > 0 ? " · " + lowProfitCount + " med under 20 % fortjeneste" : "");
+
+    if (!rows.length) {
+      var empty = el("p", "Ingen produkter matcher søket.");
+      empty.style.color = "#6b7280";
+      tableTarget.appendChild(empty);
+      return;
+    }
+
+    var wrap = el("div");
+    wrap.style.overflowX = "auto";
+    wrap.style.border = "1px solid #e5e7eb";
+    wrap.style.borderRadius = "14px";
+
+    var table = el("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.fontSize = "14px";
+
+    var columns = [
+      { key: "name", label: "Produkt" },
+      { key: "brand", label: "Merke" },
+      { key: "category", label: "Kategori" },
+      { key: "supplier_name", label: "Leverandør" },
+      { key: "sales_price_inc_vat", label: "Utsalg inkl." },
+      { key: "purchase_price_ex_vat", label: "Innpris eks." },
+      { key: "purchase_price_inc_vat", label: "Innpris inkl." },
+      { key: "profit_ex_vat", label: "Fortjeneste" },
+      { key: "profit_margin_percent", label: "Fortj. %" },
+      { key: "stock_quantity", label: "Lager" },
+      { key: "quickbutik_status", label: "Status" },
+      { key: "cost_locked", label: "Kostnad" },
+      { key: "sync_source", label: "Kilde" },
+      { key: "last_synced_at", label: "Sist synket" }
+    ];
+
+    var thead = el("thead");
+    var headTr = el("tr");
+
+    columns.forEach(function (col) {
+      var th = el("th", col.label + (state.sortKey === col.key ? (state.sortDir === "asc" ? " ↑" : " ↓") : ""));
+      th.style.textAlign = "left";
+      th.style.padding = "11px";
+      th.style.borderBottom = "1px solid #e5e7eb";
+      th.style.background = "#f9fafb";
+      th.style.whiteSpace = "nowrap";
+      th.style.cursor = "pointer";
+
+      th.onclick = function () {
+        if (state.sortKey === col.key) {
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortKey = col.key;
+          state.sortDir = "asc";
+        }
+
+        sortSelect.value = state.sortKey;
+        dirSelect.value = state.sortDir;
+        render();
+      };
+
+      headTr.appendChild(th);
+    });
+
+    thead.appendChild(headTr);
+    table.appendChild(thead);
+
+    var tbody = el("tbody");
+
+    rows.forEach(function (row) {
+      var tr = el("tr");
+
+      var lowProfit =
+        row.low_profit_warning === true ||
+        Number(row.profit_margin_percent || 0) < 20;
+
+      if (lowProfit) {
+        tr.style.background = "#fee2e2";
+      }
+
+      columns.forEach(function (col) {
+        var td = el("td", formatValue(row, col.key));
+        td.style.padding = "11px";
+        td.style.borderBottom = "1px solid #f3f4f6";
+        td.style.whiteSpace = "nowrap";
+
+        if (col.key === "profit_margin_percent" && lowProfit) {
+          td.style.fontWeight = "900";
+          td.style.color = "#991b1b";
+        }
+
+        if (col.key === "profit_ex_vat" && lowProfit) {
+          td.style.fontWeight = "900";
+          td.style.color = "#991b1b";
+        }
+
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    tableTarget.appendChild(wrap);
+  }
+
+  searchInput.oninput = function () {
+    state.search = searchInput.value;
+    render();
+  };
+
+  sortSelect.onchange = function () {
+    state.sortKey = sortSelect.value;
+    render();
+  };
+
+  dirSelect.onchange = function () {
+    state.sortDir = dirSelect.value;
+    render();
+  };
+
+  render();
+}
   function renderProductsManager(parent, data, sb) {
   var h2 = el("h2", "Produkter");
   h2.style.marginTop = "0";
@@ -1801,21 +2112,13 @@ createBtn.onclick = function () {
 
   var productListSection = createCollapsibleSection(
   "📦 Produktoversikt",
-  "Alle produkter, innpriser, valuta, kategori og låsestatus.",
+  "Søk, sorter og kontroller priser, lager og fortjeneste.",
   true
 );
 
-addTable(productListSection.body, [
-    { key: "name", label: "Produkt" },
-    { key: "brand", label: "Merke" },
-    { key: "category", label: "Kategori" },
-    { key: "supplier_name", label: "Leverandør" },
-    { key: "purchase_price_ex_vat", label: "Innpris eks.", format: "money" },
-    { key: "purchase_price_inc_vat", label: "Innpris inkl.", format: "money" },
-    { key: "currency", label: "Valuta" },
-    { key: "cost_locked", label: "Låst" }
-  ], data.products, "Ingen produkter funnet.");
-    parent.appendChild(productListSection.wrap);
+renderProductsSmartTable(productListSection.body, data.products || []);
+
+parent.appendChild(productListSection.wrap);
 }
   function renderSuppliersAddonsManager(parent, data, sb) {
   var h2 = el("h2", "Leverandører / tillegg");
