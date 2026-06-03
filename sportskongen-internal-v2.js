@@ -3241,81 +3241,201 @@ addTable(addonsSection.body, [
     return found;
   }
 
-  function createLine() {
-    var line = {
-      productSelect: el("select"),
-      qtyInput: el("input"),
-      priceInput: el("input"),
-      info: el("div"),
-      wrap: el("div")
-    };
+    function findProductsBySearch(query) {
+  var q = String(query || "").toLowerCase().trim();
 
-    line.wrap.style.padding = "14px";
-    line.wrap.style.border = "1px solid #e5e7eb";
-    line.wrap.style.borderRadius = "12px";
-    line.wrap.style.background = "#f9fafb";
-    line.wrap.style.marginBottom = "12px";
-
-    var grid = el("div");
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = "minmax(260px, 2fr) minmax(100px, 0.6fr) minmax(160px, 1fr) auto";
-    grid.style.gap = "10px";
-    grid.style.alignItems = "end";
-
-    productOptions(line.productSelect);
-
-    line.qtyInput.type = "number";
-    line.qtyInput.min = "1";
-    line.qtyInput.step = "1";
-    line.qtyInput.value = "1";
-
-    line.priceInput.type = "number";
-    line.priceInput.step = "0.01";
-    line.priceInput.placeholder = "Valgfritt";
-
-    var removeBtn = createButton("Fjern");
-
-    addField(grid, "Produkt", line.productSelect);
-    addField(grid, "Antall", line.qtyInput);
-    addField(grid, "Manuell pris/stk inkl. mva", line.priceInput);
-
-    var removeWrap = el("div");
-    removeWrap.appendChild(removeBtn);
-    grid.appendChild(removeWrap);
-
-    line.info.style.marginTop = "10px";
-    line.info.style.color = "#6b7280";
-    line.info.style.fontSize = "13px";
-
-    line.wrap.appendChild(grid);
-    line.wrap.appendChild(line.info);
-
-    line.productSelect.onchange = updateSummary;
-    line.qtyInput.oninput = updateSummary;
-    line.priceInput.oninput = updateSummary;
-
-    removeBtn.onclick = function () {
-      var next = [];
-
-      lines.forEach(function (l) {
-        if (l !== line) {
-          next.push(l);
-        }
-      });
-
-      lines = next;
-      line.wrap.parentNode.removeChild(line.wrap);
-      updateSummary();
-    };
-
-    lines.push(line);
-    lineList.appendChild(line.wrap);
-
-    updateSummary();
+  if (!q) {
+    return [];
   }
 
+  return (data.products || [])
+    .filter(function (p) {
+      var haystack = [
+        p.name,
+        p.brand,
+        p.category,
+        p.supplier_name,
+        p.quickbutik_sku,
+        p.quickbutik_product_id
+      ].map(function (value) {
+        return String(value || "").toLowerCase();
+      }).join(" ");
+
+      return haystack.indexOf(q) >= 0;
+    })
+    .slice(0, 20);
+}
+  function createLine() {
+  var line = {
+    selectedProductId: "",
+    searchInput: el("input"),
+    resultList: el("div"),
+    selectedInfo: el("div"),
+    qtyInput: el("input"),
+    priceInput: el("input"),
+    info: el("div"),
+    wrap: el("div")
+  };
+
+  line.wrap.style.padding = "14px";
+  line.wrap.style.border = "1px solid #e5e7eb";
+  line.wrap.style.borderRadius = "12px";
+  line.wrap.style.background = "#f9fafb";
+  line.wrap.style.marginBottom = "12px";
+
+  var grid = el("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "minmax(260px, 2fr) minmax(100px, 0.6fr) minmax(160px, 1fr) auto";
+  grid.style.gap = "10px";
+  grid.style.alignItems = "end";
+
+  line.searchInput.type = "text";
+  line.searchInput.placeholder = "Søk produkt, merke, SKU...";
+  line.searchInput.autocomplete = "off";
+
+  line.qtyInput.type = "number";
+  line.qtyInput.min = "1";
+  line.qtyInput.step = "1";
+  line.qtyInput.value = "1";
+
+  line.priceInput.type = "number";
+  line.priceInput.step = "0.01";
+  line.priceInput.placeholder = "Valgfritt";
+
+  var removeBtn = createButton("Fjern");
+
+  addField(grid, "Søk produkt", line.searchInput);
+  addField(grid, "Antall", line.qtyInput);
+  addField(grid, "Manuell pris/stk inkl. mva", line.priceInput);
+
+  var removeWrap = el("div");
+  removeWrap.appendChild(removeBtn);
+  grid.appendChild(removeWrap);
+
+  line.resultList.style.marginTop = "8px";
+  line.resultList.style.border = "1px solid #e5e7eb";
+  line.resultList.style.borderRadius = "10px";
+  line.resultList.style.background = "#fff";
+  line.resultList.style.overflow = "hidden";
+  line.resultList.style.display = "none";
+
+  line.selectedInfo.style.marginTop = "8px";
+  line.selectedInfo.style.padding = "10px";
+  line.selectedInfo.style.border = "1px solid #d1d5db";
+  line.selectedInfo.style.borderRadius = "10px";
+  line.selectedInfo.style.background = "#fff";
+  line.selectedInfo.style.display = "none";
+
+  line.info.style.marginTop = "10px";
+  line.info.style.color = "#6b7280";
+  line.info.style.fontSize = "13px";
+
+  line.wrap.appendChild(grid);
+  line.wrap.appendChild(line.resultList);
+  line.wrap.appendChild(line.selectedInfo);
+  line.wrap.appendChild(line.info);
+
+  function renderSearchResults() {
+    clear(line.resultList);
+
+    var results = findProductsBySearch(line.searchInput.value);
+
+    if (!results.length) {
+      line.resultList.style.display = "none";
+      return;
+    }
+
+    line.resultList.style.display = "block";
+
+    results.forEach(function (p) {
+      var item = el("button");
+      item.type = "button";
+      item.style.display = "block";
+      item.style.width = "100%";
+      item.style.textAlign = "left";
+      item.style.padding = "10px 12px";
+      item.style.border = "0";
+      item.style.borderBottom = "1px solid #f3f4f6";
+      item.style.background = "#fff";
+      item.style.cursor = "pointer";
+
+      var title = el("div", (p.brand ? p.brand + " – " : "") + p.name);
+      title.style.fontWeight = "800";
+
+      var meta = el(
+        "div",
+        "Utsalg: " +
+          money(p.sales_price_inc_vat || 0) +
+          " kr · Innpris eks: " +
+          money(p.purchase_price_ex_vat || 0) +
+          " kr · Lager: " +
+          (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity)
+      );
+      meta.style.color = "#6b7280";
+      meta.style.fontSize = "13px";
+      meta.style.marginTop = "3px";
+
+      item.appendChild(title);
+      item.appendChild(meta);
+
+      item.onclick = function () {
+        line.selectedProductId = p.id;
+        line.searchInput.value = (p.brand ? p.brand + " – " : "") + p.name;
+        line.resultList.style.display = "none";
+
+        line.selectedInfo.style.display = "block";
+        line.selectedInfo.textContent =
+          "Valgt: " +
+          (p.brand ? p.brand + " – " : "") +
+          p.name +
+          " · Utsalg " +
+          money(p.sales_price_inc_vat || 0) +
+          " kr · Lager " +
+          (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity);
+
+        updateSummary();
+      };
+
+      line.resultList.appendChild(item);
+    });
+  }
+
+  line.searchInput.oninput = function () {
+    line.selectedProductId = "";
+    line.selectedInfo.style.display = "none";
+    renderSearchResults();
+    updateSummary();
+  };
+
+  line.qtyInput.oninput = updateSummary;
+  line.priceInput.oninput = updateSummary;
+
+  removeBtn.onclick = function () {
+    var next = [];
+
+    lines.forEach(function (l) {
+      if (l !== line) {
+        next.push(l);
+      }
+    });
+
+    lines = next;
+
+    if (line.wrap.parentNode) {
+      line.wrap.parentNode.removeChild(line.wrap);
+    }
+
+    updateSummary();
+  };
+
+  lines.push(line);
+  lineList.appendChild(line.wrap);
+
+  updateSummary();
+}
+
   function lineData(line) {
-    var product = getProduct(line.productSelect.value);
+    var product = getProduct(line.selectedProductId);
     var qty = Number(line.qtyInput.value || 0);
 
     if (!product || qty <= 0) {
