@@ -813,6 +813,44 @@ customerEditorWrap.appendChild(customerEditorTitle);
 customerEditorWrap.appendChild(customerGrid);
 customerEditorWrap.appendChild(saveCustomerBtn);
 parent.appendChild(customerEditorWrap);
+
+var priceEditorWrap = el("div");
+priceEditorWrap.style.marginBottom = "18px";
+priceEditorWrap.style.padding = "14px";
+priceEditorWrap.style.border = "1px solid #e5e7eb";
+priceEditorWrap.style.borderRadius = "12px";
+priceEditorWrap.style.background = "#f9fafb";
+
+var priceEditorTitle = el("div", "Kundepris");
+priceEditorTitle.style.fontWeight = "800";
+priceEditorTitle.style.marginBottom = "10px";
+
+var priceGrid = el("div");
+priceGrid.style.display = "grid";
+priceGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+priceGrid.style.gap = "12px";
+
+var editFinalPriceInc = el("input");
+editFinalPriceInc.type = "number";
+editFinalPriceInc.placeholder = "Totalpris inkl. mva";
+
+addField(priceGrid, "Endelig kundepris inkl. mva", editFinalPriceInc);
+
+var savePriceBtn = createButton("Lagre kundepris");
+savePriceBtn.style.marginTop = "10px";
+
+var priceNote = el("p", "Dette oppdaterer kundepris på tilbudet. Interne kostnader beholdes, men fortjeneste beregnes på nytt.");
+priceNote.style.color = "#6b7280";
+priceNote.style.fontSize = "13px";
+priceNote.style.marginTop = "8px";
+priceNote.style.marginBottom = "0";
+
+priceEditorWrap.appendChild(priceEditorTitle);
+priceEditorWrap.appendChild(priceGrid);
+priceEditorWrap.appendChild(savePriceBtn);
+priceEditorWrap.appendChild(priceNote);
+parent.appendChild(priceEditorWrap);
+  
   var textEditorWrap = el("div");
 textEditorWrap.style.marginBottom = "18px";
 textEditorWrap.style.padding = "14px";
@@ -897,6 +935,7 @@ parent.appendChild(textEditorWrap);
 editCustomerEmail.value = quote.customer_email || "";
 editCustomerPhone.value = quote.customer_phone || "";
 editCustomerCompany.value = quote.customer_company || "";
+    editFinalPriceInc.value = quote.total_sales_inc_vat || quote.final_sales_price_inc_vat || "";
 
     var contact = getOfferContact(quote);
     var quoteItems = selectedItems(quote.quote_id);
@@ -1175,6 +1214,56 @@ duplicateBtn.onclick = function () {
       alert("Tilbud duplisert.");
     }
 
+    window.location.reload();
+  });
+};
+
+savePriceBtn.onclick = function () {
+  var quote = selectedQuote();
+
+  if (!quote) {
+    alert("Velg tilbud først.");
+    return;
+  }
+
+  var price = Number(editFinalPriceInc.value || 0);
+
+  if (!price || price <= 0) {
+    alert("Skriv inn en gyldig kundepris inkl. mva.");
+    return;
+  }
+
+  var confirmPrice = confirm(
+    "Vil du oppdatere kundepris på " +
+    quote.quote_number +
+    " til " +
+    money(price) +
+    " kr inkl. mva?"
+  );
+
+  if (!confirmPrice) {
+    return;
+  }
+
+  savePriceBtn.disabled = true;
+  savePriceBtn.textContent = "Lagrer...";
+
+  sb.rpc("internal_update_quote_customer_price", {
+    p_quote_id: quote.quote_id,
+    p_final_sales_price_inc_vat: price
+  }).then(function (result) {
+    savePriceBtn.disabled = false;
+    savePriceBtn.textContent = "Lagre kundepris";
+
+    if (result.error) {
+      alert("Kunne ikke lagre kundepris: " + result.error.message);
+      return;
+    }
+
+    localStorage.setItem("sk_internal_active_tab", "customer");
+    localStorage.setItem("sk_internal_selected_quote_id", quote.quote_id);
+
+    alert("Kundepris lagret.");
     window.location.reload();
   });
 };
