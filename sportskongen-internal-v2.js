@@ -1959,7 +1959,7 @@ createBtn.onclick = function () {
     }
   }
 
-  var createSection = createCollapsibleBox(
+  var createSection = createCollapsibleSection(
   "➕ Nytt tillegg",
   "Opprett frakt, oppstart, trykk, designkost, montering eller andre tillegg.",
   false
@@ -2082,7 +2082,7 @@ parent.appendChild(createSection.wrap);
     });
   };
 
-  var editSection = createCollapsibleBox(
+  var editSection = createCollapsibleSection(
   "✏️ Rediger tillegg",
   "Velg et eksisterende tillegg og endre pris, leverandør, status eller notat.",
   false
