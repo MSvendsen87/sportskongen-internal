@@ -1752,21 +1752,22 @@ function productMatchesFilter(p) {
     table.style.fontSize = "14px";
 
     var columns = [
-      { key: "name", label: "Produkt" },
-      { key: "brand", label: "Merke" },
-      { key: "category", label: "Kategori" },
-      { key: "supplier_name", label: "Leverandør" },
-      { key: "sales_price_inc_vat", label: "Utsalg inkl." },
-      { key: "purchase_price_ex_vat", label: "Innpris eks." },
-      { key: "purchase_price_inc_vat", label: "Innpris inkl." },
-      { key: "profit_ex_vat", label: "Fortjeneste" },
-      { key: "profit_margin_percent", label: "Fortj. %" },
-      { key: "stock_quantity", label: "Lager" },
-      { key: "quickbutik_status", label: "Status" },
-      { key: "cost_locked", label: "Kostnad" },
-      { key: "sync_source", label: "Kilde" },
-      { key: "last_synced_at", label: "Sist synket" }
-    ];
+  { key: "name", label: "Produkt" },
+  { key: "open_product", label: "Åpne" },
+  { key: "brand", label: "Merke" },
+  { key: "category", label: "Kategori" },
+  { key: "supplier_name", label: "Leverandør" },
+  { key: "sales_price_inc_vat", label: "Utsalg inkl." },
+  { key: "purchase_price_ex_vat", label: "Innpris eks." },
+  { key: "purchase_price_inc_vat", label: "Innpris inkl." },
+  { key: "profit_ex_vat", label: "Fortjeneste" },
+  { key: "profit_margin_percent", label: "Fortj. %" },
+  { key: "stock_quantity", label: "Lager" },
+  { key: "quickbutik_status", label: "Status" },
+  { key: "cost_locked", label: "Kostnad" },
+  { key: "sync_source", label: "Kilde" },
+  { key: "last_synced_at", label: "Sist synket" }
+];
 
     var thead = el("thead");
     var headTr = el("tr");
@@ -1813,7 +1814,24 @@ function productMatchesFilter(p) {
       }
 
       columns.forEach(function (col) {
-        var td = el("td", formatValue(row, col.key));
+        var td = el("td");
+
+if (col.key === "open_product") {
+  if (row.product_url) {
+    var link = el("a", "Åpne");
+    link.href = row.product_url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.style.color = "#2563eb";
+    link.style.fontWeight = "800";
+    link.style.textDecoration = "none";
+    td.appendChild(link);
+  } else {
+    td.textContent = "-";
+  }
+} else {
+  td.textContent = formatValue(row, col.key);
+}
         td.style.padding = "11px";
         td.style.borderBottom = "1px solid #f3f4f6";
         td.style.whiteSpace = "nowrap";
