@@ -208,6 +208,8 @@
     var buttons = {};
 
     function activate(key) {
+      localStorage.setItem("sk_internal_active_tab", key);
+      
       Object.keys(tabs).forEach(function (tabKey) {
         buttons[tabKey].style.background = "#fff";
         buttons[tabKey].style.color = "#111827";
@@ -234,7 +236,13 @@
     app.appendChild(tabWrap);
     app.appendChild(content);
 
-    activate("overview");
+    var savedTab = localStorage.getItem("sk_internal_active_tab");
+
+if (!savedTab || !tabs[savedTab]) {
+  savedTab = "overview";
+}
+
+activate(savedTab);
   }
 
   function addStatGrid(parent, data) {
@@ -1111,7 +1119,15 @@ editCustomerCompany.value = quote.customer_company || "";
     docWrap.appendChild(documentBox);
   }
 
-  select.onchange = renderDocument;
+  select.onchange = function () {
+  localStorage.setItem("sk_internal_selected_quote_id", select.value);
+    var savedQuoteId = localStorage.getItem("sk_internal_selected_quote_id");
+
+if (savedQuoteId) {
+  select.value = savedQuoteId;
+}
+  renderDocument();
+};
 
   printBtn.onclick = function () {
     window.print();
