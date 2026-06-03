@@ -1817,9 +1817,9 @@ function productMatchesFilter(p) {
         var td = el("td");
 
 if (col.key === "open_product") {
-  if (row.product_url) {
-    var link = el("a", "Åpne");
-    link.href = row.product_url;
+  if (row.name) {
+    var link = el("a", "Søk");
+    link.href = "https://golfkongen.no/search?q=" + encodeURIComponent(row.name);
     link.target = "_blank";
     link.rel = "noopener";
     link.style.color = "#2563eb";
