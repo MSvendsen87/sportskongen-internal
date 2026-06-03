@@ -1818,7 +1818,432 @@ createBtn.onclick = function () {
     { key: "cost_locked", label: "Låst" }
   ], data.products, "Ingen produkter funnet.");
 }
-  
+  function renderSuppliersAddonsManager(parent, data, sb) {
+  var h2 = el("h2", "Leverandører / tillegg");
+  h2.style.marginTop = "0";
+  parent.appendChild(h2);
+
+  var intro = el("p", "Her kan du opprette og redigere tilleggskostnader som frakt, oppstart, folie, designkost, montering og andre tillegg.");
+  intro.style.color = "#6b7280";
+  parent.appendChild(intro);
+
+  function supplierOptions(select) {
+    addOption(select, "", "Ingen / generell");
+
+    (data.suppliers || []).forEach(function (s) {
+      addOption(select, s.supplier_id, s.name);
+    });
+  }
+
+  function addonTypeOptions(select) {
+    addOption(select, "shipping", "Frakt");
+    addOption(select, "setup_fee", "Oppstartskostnad");
+    addOption(select, "reorder_setup_fee", "Reorder setup");
+    addOption(select, "foil_single", "Single foil / trykk");
+    addOption(select, "foil_double", "Double foil / trykk");
+    addOption(select, "foil_triple", "Triple foil / trykk");
+    addOption(select, "design", "Designkost");
+    addOption(select, "mounting", "Montering");
+    addOption(select, "delivery", "Levering");
+    addOption(select, "discount", "Rabatt / justering");
+    addOption(select, "other", "Annet");
+  }
+
+  function currencyOptions(select) {
+    addOption(select, "NOK", "NOK");
+    addOption(select, "USD", "USD");
+    addOption(select, "EUR", "EUR");
+    addOption(select, "SEK", "SEK");
+  }
+
+  function calculationMethodOptions(select) {
+    addOption(select, "order_total", "Hele ordren");
+    addOption(select, "per_unit", "Per stk/enhet");
+    addOption(select, "percentage", "Prosent");
+  }
+
+  function lockedOptions(select) {
+    addOption(select, "false", "🔓 Åpen");
+    addOption(select, "true", "🔒 Låst");
+  }
+
+  function activeOptions(select) {
+    addOption(select, "true", "Aktiv");
+    addOption(select, "false", "Inaktiv");
+  }
+
+  function round2(value) {
+    return Math.round(Number(value || 0) * 100) / 100;
+  }
+
+  function calcIncFromEx(exInput, incInput, vatInput) {
+    var ex = Number(exInput.value || 0);
+    var vat = Number(vatInput.value || 0);
+
+    if (ex > 0) {
+      incInput.value = round2(ex * (1 + vat / 100));
+    }
+  }
+
+  function calcExFromInc(exInput, incInput, vatInput) {
+    var inc = Number(incInput.value || 0);
+    var vat = Number(vatInput.value || 0);
+
+    if (inc > 0) {
+      exInput.value = round2(inc / (1 + vat / 100));
+    }
+  }
+
+  var createWrap = el("div");
+  createWrap.style.marginBottom = "22px";
+  createWrap.style.padding = "14px";
+  createWrap.style.border = "1px solid #e5e7eb";
+  createWrap.style.borderRadius = "12px";
+  createWrap.style.background = "#f9fafb";
+
+  var createTitle = el("div", "Nytt tillegg");
+  createTitle.style.fontWeight = "800";
+  createTitle.style.marginBottom = "10px";
+
+  var createGrid = el("div");
+  createGrid.style.display = "grid";
+  createGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  createGrid.style.gap = "12px";
+
+  var newName = el("input");
+  newName.type = "text";
+  newName.placeholder = "Navn på tillegg";
+
+  var newType = el("select");
+  addonTypeOptions(newType);
+
+  var newSupplier = el("select");
+  supplierOptions(newSupplier);
+
+  var newAmountEx = el("input");
+  newAmountEx.type = "number";
+  newAmountEx.step = "0.01";
+
+  var newAmountInc = el("input");
+  newAmountInc.type = "number";
+  newAmountInc.step = "0.01";
+
+  var newCurrency = el("select");
+  currencyOptions(newCurrency);
+
+  var newVat = el("input");
+  newVat.type = "number";
+  newVat.step = "0.01";
+  newVat.value = "25";
+
+  var newMethod = el("select");
+  calculationMethodOptions(newMethod);
+
+  var newLocked = el("select");
+  lockedOptions(newLocked);
+
+  var newNotes = el("textarea");
+  newNotes.style.minHeight = "80px";
+  newNotes.style.fontFamily = "Arial, sans-serif";
+  newNotes.placeholder = "Intern kommentar";
+
+  addField(createGrid, "Navn", newName);
+  addField(createGrid, "Type", newType);
+  addField(createGrid, "Leverandør", newSupplier);
+  addField(createGrid, "Beløp eks. mva", newAmountEx);
+  addField(createGrid, "Beløp inkl. mva", newAmountInc);
+  addField(createGrid, "Valuta", newCurrency);
+  addField(createGrid, "MVA %", newVat);
+  addField(createGrid, "Beregning", newMethod);
+  addField(createGrid, "Kostnad", newLocked);
+  addField(createGrid, "Intern kommentar", newNotes);
+
+  var createBtn = createPrimaryButton("Opprett tillegg");
+  createBtn.style.marginTop = "12px";
+
+  var calcNewIncBtn = createButton("Regn inkl. mva");
+  calcNewIncBtn.style.marginTop = "12px";
+  calcNewIncBtn.style.marginLeft = "8px";
+
+  var calcNewExBtn = createButton("Regn eks. mva");
+  calcNewExBtn.style.marginTop = "12px";
+  calcNewExBtn.style.marginLeft = "8px";
+
+  createWrap.appendChild(createTitle);
+  createWrap.appendChild(createGrid);
+  createWrap.appendChild(createBtn);
+  createWrap.appendChild(calcNewIncBtn);
+  createWrap.appendChild(calcNewExBtn);
+  parent.appendChild(createWrap);
+
+  calcNewIncBtn.onclick = function () {
+    calcIncFromEx(newAmountEx, newAmountInc, newVat);
+  };
+
+  calcNewExBtn.onclick = function () {
+    calcExFromInc(newAmountEx, newAmountInc, newVat);
+  };
+
+  createBtn.onclick = function () {
+    var name = newName.value.trim();
+
+    if (!name) {
+      alert("Navn på tillegg må fylles ut.");
+      return;
+    }
+
+    createBtn.disabled = true;
+    createBtn.textContent = "Oppretter...";
+
+    sb.rpc("internal_create_addon", {
+      p_name: name,
+      p_addon_type: newType.value || "other",
+      p_supplier_id: newSupplier.value || null,
+      p_amount_ex_vat: Number(newAmountEx.value || 0),
+      p_amount_inc_vat: Number(newAmountInc.value || 0),
+      p_currency: newCurrency.value || "NOK",
+      p_vat_rate: Number(newVat.value || 25),
+      p_calculation_method: newMethod.value || "order_total",
+      p_cost_locked: newLocked.value === "true",
+      p_internal_notes: newNotes.value || null
+    }).then(function (result) {
+      createBtn.disabled = false;
+      createBtn.textContent = "Opprett tillegg";
+
+      if (result.error) {
+        alert("Kunne ikke opprette tillegg: " + result.error.message);
+        return;
+      }
+
+      localStorage.setItem("sk_internal_active_tab", "suppliers");
+      alert("Tillegg opprettet.");
+      window.location.reload();
+    });
+  };
+
+  var editWrap = el("div");
+  editWrap.style.marginBottom = "22px";
+  editWrap.style.padding = "14px";
+  editWrap.style.border = "1px solid #e5e7eb";
+  editWrap.style.borderRadius = "12px";
+  editWrap.style.background = "#f9fafb";
+
+  var editTitle = el("div", "Rediger tillegg");
+  editTitle.style.fontWeight = "800";
+  editTitle.style.marginBottom = "10px";
+
+  var editGrid = el("div");
+  editGrid.style.display = "grid";
+  editGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  editGrid.style.gap = "12px";
+
+  var editSelect = el("select");
+  addOption(editSelect, "", "Velg tillegg");
+
+  (data.addons || []).forEach(function (a) {
+    var label = (a.supplier_name ? a.supplier_name + " – " : "") + a.addon_name;
+    addOption(editSelect, a.addon_id, label);
+  });
+
+  var editName = el("input");
+  editName.type = "text";
+
+  var editType = el("select");
+  addonTypeOptions(editType);
+
+  var editSupplier = el("select");
+  supplierOptions(editSupplier);
+
+  var editAmountEx = el("input");
+  editAmountEx.type = "number";
+  editAmountEx.step = "0.01";
+
+  var editAmountInc = el("input");
+  editAmountInc.type = "number";
+  editAmountInc.step = "0.01";
+
+  var editCurrency = el("select");
+  currencyOptions(editCurrency);
+
+  var editVat = el("input");
+  editVat.type = "number";
+  editVat.step = "0.01";
+  editVat.value = "25";
+
+  var editMethod = el("select");
+  calculationMethodOptions(editMethod);
+
+  var editLocked = el("select");
+  lockedOptions(editLocked);
+
+  var editActive = el("select");
+  activeOptions(editActive);
+
+  var editNotes = el("textarea");
+  editNotes.style.minHeight = "80px";
+  editNotes.style.fontFamily = "Arial, sans-serif";
+
+  addField(editGrid, "Velg tillegg", editSelect);
+  addField(editGrid, "Navn", editName);
+  addField(editGrid, "Type", editType);
+  addField(editGrid, "Leverandør", editSupplier);
+  addField(editGrid, "Beløp eks. mva", editAmountEx);
+  addField(editGrid, "Beløp inkl. mva", editAmountInc);
+  addField(editGrid, "Valuta", editCurrency);
+  addField(editGrid, "MVA %", editVat);
+  addField(editGrid, "Beregning", editMethod);
+  addField(editGrid, "Kostnad", editLocked);
+  addField(editGrid, "Status", editActive);
+  addField(editGrid, "Intern kommentar", editNotes);
+
+  var saveBtn = createPrimaryButton("Lagre tillegg");
+  saveBtn.style.marginTop = "12px";
+
+  var calcEditIncBtn = createButton("Regn inkl. mva");
+  calcEditIncBtn.style.marginTop = "12px";
+  calcEditIncBtn.style.marginLeft = "8px";
+
+  var calcEditExBtn = createButton("Regn eks. mva");
+  calcEditExBtn.style.marginTop = "12px";
+  calcEditExBtn.style.marginLeft = "8px";
+
+  editWrap.appendChild(editTitle);
+  editWrap.appendChild(editGrid);
+  editWrap.appendChild(saveBtn);
+  editWrap.appendChild(calcEditIncBtn);
+  editWrap.appendChild(calcEditExBtn);
+  parent.appendChild(editWrap);
+
+  function getSelectedAddon() {
+    var found = null;
+
+    (data.addons || []).forEach(function (a) {
+      if (a.addon_id === editSelect.value) {
+        found = a;
+      }
+    });
+
+    return found;
+  }
+
+  function fillAddonEditor() {
+    var a = getSelectedAddon();
+
+    if (!a) {
+      editName.value = "";
+      editType.value = "other";
+      editSupplier.value = "";
+      editAmountEx.value = "";
+      editAmountInc.value = "";
+      editCurrency.value = "NOK";
+      editVat.value = "25";
+      editMethod.value = "order_total";
+      editLocked.value = "false";
+      editActive.value = "true";
+      editNotes.value = "";
+      return;
+    }
+
+    editName.value = a.addon_name || "";
+    editType.value = a.addon_type || "other";
+    editSupplier.value = a.supplier_id || "";
+    editAmountEx.value = a.amount_ex_vat || "";
+    editAmountInc.value = a.amount_inc_vat || "";
+    editCurrency.value = a.currency || "NOK";
+    editVat.value = a.vat_rate || 25;
+    editMethod.value = a.calculation_method || "order_total";
+    editLocked.value = a.cost_locked ? "true" : "false";
+    editActive.value = a.addon_is_active === false ? "false" : "true";
+    editNotes.value = a.addon_notes || "";
+  }
+
+  editSelect.onchange = fillAddonEditor;
+
+  calcEditIncBtn.onclick = function () {
+    calcIncFromEx(editAmountEx, editAmountInc, editVat);
+  };
+
+  calcEditExBtn.onclick = function () {
+    calcExFromInc(editAmountEx, editAmountInc, editVat);
+  };
+
+  saveBtn.onclick = function () {
+    var addon = getSelectedAddon();
+
+    if (!addon) {
+      alert("Velg tillegg først.");
+      return;
+    }
+
+    var name = editName.value.trim();
+
+    if (!name) {
+      alert("Navn på tillegg må fylles ut.");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Lagrer...";
+
+    sb.rpc("internal_update_addon", {
+      p_addon_id: addon.addon_id,
+      p_name: name,
+      p_addon_type: editType.value || "other",
+      p_supplier_id: editSupplier.value || null,
+      p_amount_ex_vat: Number(editAmountEx.value || 0),
+      p_amount_inc_vat: Number(editAmountInc.value || 0),
+      p_currency: editCurrency.value || "NOK",
+      p_vat_rate: Number(editVat.value || 25),
+      p_calculation_method: editMethod.value || "order_total",
+      p_cost_locked: editLocked.value === "true",
+      p_internal_notes: editNotes.value || null,
+      p_is_active: editActive.value === "true"
+    }).then(function (result) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Lagre tillegg";
+
+      if (result.error) {
+        alert("Kunne ikke lagre tillegg: " + result.error.message);
+        return;
+      }
+
+      localStorage.setItem("sk_internal_active_tab", "suppliers");
+      alert("Tillegg lagret.");
+      window.location.reload();
+    });
+  };
+
+  var suppliersTitle = el("h3", "Leverandører");
+  suppliersTitle.style.marginTop = "24px";
+  parent.appendChild(suppliersTitle);
+
+  addTable(parent, [
+    { key: "name", label: "Leverandør" },
+    { key: "brand_group", label: "Merkegruppe" },
+    { key: "currency", label: "Valuta" },
+    { key: "minimum_order_quantity", label: "MOQ" },
+    { key: "minimum_per_mold", label: "Min. pr mold" },
+    { key: "setup_fee", label: "Setup" },
+    { key: "typical_lead_time", label: "Leveringstid" },
+    { key: "is_active", label: "Aktiv" }
+  ], data.suppliers || [], "Ingen leverandører funnet.");
+
+  var addonsTitle = el("h3", "Tilleggskostnader");
+  addonsTitle.style.marginTop = "24px";
+  parent.appendChild(addonsTitle);
+
+  addTable(parent, [
+    { key: "supplier_name", label: "Leverandør" },
+    { key: "addon_name", label: "Tillegg" },
+    { key: "addon_type", label: "Type" },
+    { key: "amount_ex_vat", label: "Beløp eks.", format: "money" },
+    { key: "amount_inc_vat", label: "Beløp inkl.", format: "money" },
+    { key: "currency", label: "Valuta" },
+    { key: "calculation_method", label: "Beregning" },
+    { key: "cost_locked", label: "Låst" },
+    { key: "addon_is_active", label: "Aktiv" }
+  ], data.addons || [], "Ingen tillegg funnet.");
+}
   function renderPortal(sb, user, data) {
     var app = renderShell(
       "Intern Sportskongen-portal",
@@ -1858,19 +2283,11 @@ createBtn.onclick = function () {
   }
 },
       suppliers: {
-        label: "Leverandører / tillegg",
-        render: function (parent) {
-          addTable(parent, [
-            { key: "supplier_name", label: "Leverandør" },
-            { key: "addon_name", label: "Tillegg" },
-            { key: "addon_type", label: "Type" },
-            { key: "amount_ex_vat", label: "Beløp" },
-            { key: "currency", label: "Valuta" },
-            { key: "calculation_method", label: "Beregning" },
-            { key: "cost_locked", label: "Låst" }
-          ], data.addons, "Ingen tillegg funnet.");
-        }
-      },
+  label: "Leverandører / tillegg",
+  render: function (parent) {
+    renderSuppliersAddonsManager(parent, data, sb);
+  }
+},
       quotes: {
         label: "Kalkyler",
         render: function (parent) {
