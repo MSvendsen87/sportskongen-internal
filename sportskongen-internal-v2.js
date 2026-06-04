@@ -3314,7 +3314,7 @@ addTable(addonsSection.body, [
     addField(grid, "Produkt / linjenavn", line.searchInput);
     addField(grid, "Antall", line.qtyInput);
     addField(grid, "Kost eks.", line.costInput);
-    addField(grid, "Pris/stk inkl.", line.priceInput);
+    addField(grid, "Pris/stk inkl. / rabatt %", line.priceInput);
 
     var removeWrap = el("div");
     removeWrap.appendChild(removeBtn);
@@ -3373,7 +3373,7 @@ addTable(addonsSection.body, [
         line.qtyInput.value = "1";
         line.costInput.disabled = true;
         line.costInput.value = "0";
-        line.priceInput.placeholder = "Rabatt inkl. mva, skriv positivt tall";
+        line.priceInput.placeholder = "Rabatt i %, f.eks. 10";
       }
 
       if (type === "manual") {
@@ -3439,6 +3439,7 @@ addTable(addonsSection.body, [
           line.selectedProductId = p.id;
           line.searchInput.value = (p.brand ? p.brand + " – " : "") + p.name;
           line.resultList.style.display = "none";
+          line.costInput.value = Number(p.purchase_price_ex_vat || 0).toFixed(2);
 
           line.selectedInfo.style.display = "block";
           line.selectedInfo.textContent =
@@ -3447,6 +3448,8 @@ addTable(addonsSection.body, [
             p.name +
             " · Utsalg " +
             money(p.sales_price_inc_vat || 0) +
+            " kr · Innpris eks. " +
+            money(p.purchase_price_ex_vat || 0) +
             " kr · Lager " +
             (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity);
 
@@ -3502,7 +3505,7 @@ addTable(addonsSection.body, [
   // KAPITTEL 4 – Beregning av linjer og totaler
   // ============================================================
 
-  function lineData(line) {
+  function lineData(line, discountBaseInc) {
     var type = line.itemTypeSelect.value || "product";
     var qty = Number(line.qtyInput.value || 0);
 
@@ -3523,6 +3526,8 @@ addTable(addonsSection.body, [
       var unitSalesEx = unitSalesInc / (1 + vat / 100);
       var unitCostEx = Number(product.purchase_price_ex_vat || 0);
 
+      line.costInput.value = unitCostEx ? unitCostEx.toFixed(2) : "";
+
       var lineSalesInc = unitSalesInc * qty;
       var lineSalesEx = unitSalesEx * qty;
       var lineCostEx = unitCostEx * qty;
@@ -3535,13 +3540,14 @@ addTable(addonsSection.body, [
         name: product.name,
         quantity: qty,
         manualUnitSalesInc: manualInc,
-        unitCostEx: null,
+        unitCostEx: unitCostEx,
         unitSalesInc: unitSalesInc,
         lineSalesInc: lineSalesInc,
         lineSalesEx: lineSalesEx,
         lineCostEx: lineCostEx,
         profitEx: profitEx,
-        margin: margin
+        margin: margin,
+        discountPercent: null
       };
     }
 
@@ -3555,9 +3561,15 @@ addTable(addonsSection.body, [
 
     var unitCostEx = Number(line.costInput.value || 0);
     var unitSalesInc = Number(line.priceInput.value || 0);
+    var discountPercent = null;
 
-    if (type === "discount" && unitSalesInc > 0) {
-      unitSalesInc = unitSalesInc * -1;
+    if (type === "discount") {
+      discountPercent = Math.max(0, Number(line.priceInput.value || 0));
+      var baseInc = Number(discountBaseInc || 0);
+      unitCostEx = 0;
+      qty = 1;
+      unitSalesInc = baseInc > 0 ? (baseInc * discountPercent / 100) * -1 : 0;
+      name = "Rabatt " + money(discountPercent) + " %";
     }
 
     var unitSalesEx = unitSalesInc / 1.25;
@@ -3579,7 +3591,8 @@ addTable(addonsSection.body, [
       lineSalesEx: lineSalesEx,
       lineCostEx: lineCostEx,
       profitEx: profitEx,
-      margin: margin
+      margin: margin,
+      discountPercent: discountPercent
     };
   }
 
@@ -3645,9 +3658,10 @@ addTable(addonsSection.body, [
     var totalCostEx = 0;
     var totalProfitEx = 0;
     var validLines = 0;
+    var discountBaseInc = 0;
 
     lines.forEach(function (line) {
-      var d = lineData(line);
+      var d = lineData(line, discountBaseInc);
 
       if (!d) {
         line.info.textContent = "Velg/fyll ut linje.";
@@ -3659,20 +3673,35 @@ addTable(addonsSection.body, [
       totalCostEx += d.lineCostEx;
       totalProfitEx += d.profitEx;
 
-      line.info.textContent =
-        "Type: " +
-        d.itemType +
-        " · Pris/stk inkl: " +
-        money(d.unitSalesInc) +
-        " kr · Kost/stk eks: " +
-        money(d.unitCostEx || 0) +
-        " kr · Linje inkl: " +
-        money(d.lineSalesInc) +
-        " kr · Fortjeneste: " +
-        money(d.profitEx) +
-        " kr / " +
-        money(d.margin) +
-        " %";
+      if (d.itemType !== "discount") {
+        discountBaseInc += d.lineSalesInc;
+      }
+
+      if (d.itemType === "discount") {
+        line.info.textContent =
+          "Type: Rabatt · " +
+          money(d.discountPercent || 0) +
+          " % av " +
+          money(discountBaseInc) +
+          " kr inkl. mva = " +
+          money(d.lineSalesInc) +
+          " kr";
+      } else {
+        line.info.textContent =
+          "Type: " +
+          d.itemType +
+          " · Pris/stk inkl: " +
+          money(d.unitSalesInc) +
+          " kr · Kost/stk eks: " +
+          money(d.unitCostEx || 0) +
+          " kr · Linje inkl: " +
+          money(d.lineSalesInc) +
+          " kr · Fortjeneste: " +
+          money(d.profitEx) +
+          " kr / " +
+          money(d.margin) +
+          " %";
+      }
 
       if (d.margin < 20 && d.itemType !== "discount") {
         line.wrap.style.background = "#fee2e2";
@@ -3715,8 +3744,10 @@ addTable(addonsSection.body, [
 
     var items = [];
 
+    var discountBaseInc = 0;
+
     lines.forEach(function (line) {
-      var d = lineData(line);
+      var d = lineData(line, discountBaseInc);
 
       if (d) {
         items.push({
@@ -3729,8 +3760,12 @@ addTable(addonsSection.body, [
             d.manualUnitSalesInc !== null && d.manualUnitSalesInc !== undefined
               ? d.manualUnitSalesInc
               : d.unitSalesInc,
-          internal_notes: null
+          internal_notes: d.itemType === "discount" ? "Rabattprosent: " + money(d.discountPercent || 0) + " %" : null
         });
+
+        if (d.itemType !== "discount") {
+          discountBaseInc += d.lineSalesInc;
+        }
       }
     });
 
