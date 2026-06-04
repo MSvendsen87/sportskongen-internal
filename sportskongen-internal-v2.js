@@ -3815,6 +3815,193 @@ addTable(addonsSection.body, [
   createLine();
   updateSummary();
 }
+
+  function renderStockCountsManager(parent, data, sb) {
+  var h2 = el("h2", "Varetelling");
+  h2.style.marginTop = "0";
+  parent.appendChild(h2);
+
+  var intro = el("p", "Opprett og følg opp varetellinger. Første versjon lager telling basert på produkter som ligger i internportalen.");
+  intro.style.color = "#6b7280";
+  parent.appendChild(intro);
+
+  var createSection = createCollapsibleSection(
+    "➕ Ny varetelling",
+    "Velg om du vil telle alle produkter, en kategori, en leverandør eller et merke.",
+    true
+  );
+
+  var formGrid = el("div");
+  formGrid.style.display = "grid";
+  formGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  formGrid.style.gap = "12px";
+
+  var titleInput = el("input");
+  titleInput.type = "text";
+  titleInput.placeholder = "F.eks. Varetelling juni 2026";
+
+  var scopeSelect = el("select");
+  addOption(scopeSelect, "all", "Alle produkter");
+  addOption(scopeSelect, "category", "Kategori");
+  addOption(scopeSelect, "supplier", "Leverandør");
+  addOption(scopeSelect, "brand", "Merke");
+  addOption(scopeSelect, "manual", "Manuell / tom telling");
+
+  var valueSelect = el("select");
+  addOption(valueSelect, "", "Ikke nødvendig");
+
+  var notesInput = el("input");
+  notesInput.type = "text";
+  notesInput.placeholder = "Valgfritt notat";
+
+  addField(formGrid, "Tittel", titleInput);
+  addField(formGrid, "Type telling", scopeSelect);
+  addField(formGrid, "Utvalg", valueSelect);
+  addField(formGrid, "Notat", notesInput);
+
+  createSection.body.appendChild(formGrid);
+
+  var createBtn = createPrimaryButton("Opprett varetelling");
+  createBtn.style.marginTop = "10px";
+  createSection.body.appendChild(createBtn);
+
+  var createInfo = el("div");
+  createInfo.style.marginTop = "12px";
+  createInfo.style.color = "#6b7280";
+  createSection.body.appendChild(createInfo);
+
+  parent.appendChild(createSection.wrap);
+
+  function uniqueValues(key) {
+    var map = {};
+    var list = [];
+
+    (data.products || []).forEach(function (p) {
+      var value = p[key];
+
+      if (value !== null && value !== undefined && String(value).trim() !== "") {
+        value = String(value).trim();
+
+        if (!map[value]) {
+          map[value] = true;
+          list.push(value);
+        }
+      }
+    });
+
+    list.sort(function (a, b) {
+      return a.localeCompare(b, "no");
+    });
+
+    return list;
+  }
+
+  function refreshValueSelect() {
+    clear(valueSelect);
+
+    var scope = scopeSelect.value;
+
+    if (scope === "all" || scope === "manual") {
+      addOption(valueSelect, "", "Ikke nødvendig");
+      valueSelect.disabled = true;
+      return;
+    }
+
+    valueSelect.disabled = false;
+
+    var key = "category";
+
+    if (scope === "supplier") {
+      key = "supplier_name";
+    }
+
+    if (scope === "brand") {
+      key = "brand";
+    }
+
+    addOption(valueSelect, "", "Velg");
+
+    uniqueValues(key).forEach(function (value) {
+      addOption(valueSelect, value, value);
+    });
+  }
+
+  scopeSelect.onchange = refreshValueSelect;
+  refreshValueSelect();
+
+  createBtn.onclick = function () {
+    var title = titleInput.value.trim();
+    var scope = scopeSelect.value;
+    var value = valueSelect.value || null;
+
+    if (!title) {
+      alert("Skriv inn tittel på varetellingen.");
+      return;
+    }
+
+    if ((scope === "category" || scope === "supplier" || scope === "brand") && !value) {
+      alert("Velg utvalg først.");
+      return;
+    }
+
+    createBtn.disabled = true;
+    createBtn.textContent = "Oppretter...";
+
+    sb.rpc("internal_create_stock_count", {
+      p_title: title,
+      p_scope_type: scope,
+      p_scope_value: value,
+      p_notes: notesInput.value.trim() || null
+    }).then(function (result) {
+      createBtn.disabled = false;
+      createBtn.textContent = "Opprett varetelling";
+
+      if (result.error) {
+        alert("Kunne ikke opprette varetelling: " + result.error.message);
+        return;
+      }
+
+      var created = result.data && result.data[0];
+
+      if (created) {
+        localStorage.setItem("sk_internal_active_tab", "stock");
+        alert(
+          "Varetelling opprettet: " +
+          created.count_number +
+          "\nLinjer: " +
+          created.line_count
+        );
+      } else {
+        alert("Varetelling opprettet.");
+      }
+
+      window.location.reload();
+    });
+  };
+
+  var overviewSection = createCollapsibleSection(
+    "📋 Tidligere varetellinger",
+    "Oversikt over varetellinger og avvik.",
+    true
+  );
+
+  addTable(overviewSection.body, [
+    { key: "count_number", label: "Nr" },
+    { key: "title", label: "Tittel" },
+    { key: "status", label: "Status" },
+    { key: "scope_type", label: "Type" },
+    { key: "scope_value", label: "Utvalg" },
+    { key: "line_count", label: "Linjer" },
+    { key: "counted_line_count", label: "Telt" },
+    { key: "expected_quantity_total", label: "Forventet" },
+    { key: "counted_quantity_total", label: "Opptalt" },
+    { key: "difference_quantity_total", label: "Avvik stk" },
+    { key: "difference_value_ex_vat_total", label: "Avvik verdi", format: "money" }
+  ], data.stockCounts || [], "Ingen varetellinger funnet.");
+
+  parent.appendChild(overviewSection.wrap);
+}
+  
   function renderPortal(sb, user, data) {
     var app = renderShell(
       "Intern Sportskongen-portal",
@@ -3859,6 +4046,12 @@ addTable(addonsSection.body, [
     renderProductsManager(parent, data, sb);
   }
 },
+    stock: {
+  label: "Varetelling",
+  render: function (parent) {
+    renderStockCountsManager(parent, data, sb);
+  }
+},  
       suppliers: {
   label: "Leverandører / tillegg",
   render: function (parent) {
@@ -3927,7 +4120,9 @@ addTable(addonsSection.body, [
   sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
   sb.from("internal_settings_view").select("*"),
   sb.from("internal_suppliers_view").select("*").order("name", { ascending: true }),
-  sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false })
+  sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false }),
+  sb.from("internal_stock_counts_view").select("*").order("created_at", { ascending: false }),
+sb.from("internal_stock_count_items_view").select("*").order("name", { ascending: true })  
 ]).then(function (results) {
     if (results[0].error) {
       renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
@@ -3969,6 +4164,16 @@ addTable(addonsSection.body, [
   return;
 }
 
+    if (results[8].error) {
+  renderError("Kunne ikke hente varetellinger: " + results[8].error.message);
+  return;
+}
+
+if (results[9].error) {
+  renderError("Kunne ikke hente varetellingslinjer: " + results[9].error.message);
+  return;
+}
+
     renderPortal(sb, user, {
   addons: results[0].data || [],
   products: results[1].data || [],
@@ -3977,7 +4182,9 @@ addTable(addonsSection.body, [
   customerQuoteItems: results[4].data || [],
   settings: results[5].data || [],
   suppliers: results[6].data || [],
-  customers: results[7].data || []
+  customers: results[7].data || [],
+stockCounts: results[8].data || [],
+stockCountItems: results[9].data || []
 });
   });
 }
