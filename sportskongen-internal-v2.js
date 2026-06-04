@@ -4294,7 +4294,12 @@ detailSection.body.appendChild(hideZeroWrap);
     detailTarget.appendChild(wrap);
   }
 
-  countSelect.onchange = renderStockCountDetails;
+  function refreshStockCountView() {
+  renderStockCountDetails();
+  renderStockReport();
+}
+
+countSelect.onchange = refreshStockCountView;
 searchInput.oninput = renderStockCountDetails;
 countFilterSelect.onchange = renderStockCountDetails;
 hideZeroCheckbox.onchange = renderStockCountDetails;
@@ -4306,7 +4311,220 @@ hideZeroCheckbox.onchange = renderStockCountDetails;
   }
 
   renderStockCountDetails();
+renderStockReport();
 
+  // ============================================================
+  // KAPITTEL 4 – Rapport og avvik
+  // ============================================================
+
+  var reportSection = createCollapsibleSection(
+    "📈 Rapport og avvik",
+    "Se oppsummering av varetellingen og avvik gruppert på kategori, leverandør eller merke.",
+    true
+  );
+
+  var reportControls = el("div");
+  reportControls.style.display = "grid";
+  reportControls.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+  reportControls.style.gap = "12px";
+  reportControls.style.alignItems = "end";
+
+  var reportGroupSelect = el("select");
+  addOption(reportGroupSelect, "category", "Grupper på kategori");
+  addOption(reportGroupSelect, "supplier_name", "Grupper på leverandør");
+  addOption(reportGroupSelect, "brand", "Grupper på merke");
+
+  addField(reportControls, "Rapportvisning", reportGroupSelect);
+
+  var onlyDiffWrap = el("label");
+  onlyDiffWrap.style.display = "flex";
+  onlyDiffWrap.style.alignItems = "center";
+  onlyDiffWrap.style.gap = "8px";
+  onlyDiffWrap.style.marginBottom = "12px";
+  onlyDiffWrap.style.fontWeight = "700";
+
+  var onlyDiffCheckbox = el("input");
+  onlyDiffCheckbox.type = "checkbox";
+  onlyDiffCheckbox.checked = true;
+
+  onlyDiffWrap.appendChild(onlyDiffCheckbox);
+  onlyDiffWrap.appendChild(el("span", "Vis kun avvik"));
+
+  reportControls.appendChild(onlyDiffWrap);
+
+  var copyReportBtn = createButton("Kopier rapport");
+  reportControls.appendChild(copyReportBtn);
+
+  reportSection.body.appendChild(reportControls);
+
+  var reportTarget = el("div");
+  reportTarget.style.marginTop = "14px";
+  reportSection.body.appendChild(reportTarget);
+
+  parent.appendChild(reportSection.wrap);
+
+  function getAllItemsForSelectedCount() {
+    var list = [];
+
+    (data.stockCountItems || []).forEach(function (item) {
+      if (item.stock_count_id === countSelect.value) {
+        list.push(item);
+      }
+    });
+
+    return list;
+  }
+
+  function renderStockReport() {
+    clear(reportTarget);
+
+    var count = selectedStockCount();
+
+    if (!count) {
+      reportTarget.appendChild(el("p", "Velg en varetelling først."));
+      return;
+    }
+
+    var rows = getAllItemsForSelectedCount();
+
+    if (onlyDiffCheckbox.checked) {
+      rows = rows.filter(function (item) {
+        return Number(item.difference_quantity || 0) !== 0;
+      });
+    }
+
+    var totalExpected = 0;
+    var totalCounted = 0;
+    var totalDiffQty = 0;
+    var totalDiffValue = 0;
+    var countedLines = 0;
+
+    getAllItemsForSelectedCount().forEach(function (item) {
+      totalExpected += Number(item.expected_quantity || 0);
+      totalCounted += Number(item.counted_quantity || 0);
+      totalDiffQty += Number(item.difference_quantity || 0);
+      totalDiffValue += Number(item.difference_value_ex_vat || 0);
+
+      if (item.counted_quantity !== null && item.counted_quantity !== undefined) {
+        countedLines += 1;
+      }
+    });
+
+    addStatGrid(reportTarget, [
+      { label: "Linjer totalt", value: String(count.line_count || 0) },
+      { label: "Linjer telt", value: String(countedLines) },
+      { label: "Forventet antall", value: money(totalExpected) },
+      { label: "Opptalt antall", value: money(totalCounted) },
+      { label: "Avvik antall", value: money(totalDiffQty) },
+      { label: "Avvik verdi eks.", value: money(totalDiffValue) + " kr" }
+    ]);
+
+    var groupKey = reportGroupSelect.value;
+    var grouped = {};
+
+    rows.forEach(function (item) {
+      var groupName = item[groupKey] || "Ukjent";
+
+      if (!grouped[groupName]) {
+        grouped[groupName] = {
+          name: groupName,
+          line_count: 0,
+          counted_line_count: 0,
+          expected_quantity: 0,
+          counted_quantity: 0,
+          difference_quantity: 0,
+          difference_value_ex_vat: 0
+        };
+      }
+
+      grouped[groupName].line_count += 1;
+      grouped[groupName].expected_quantity += Number(item.expected_quantity || 0);
+      grouped[groupName].counted_quantity += Number(item.counted_quantity || 0);
+      grouped[groupName].difference_quantity += Number(item.difference_quantity || 0);
+      grouped[groupName].difference_value_ex_vat += Number(item.difference_value_ex_vat || 0);
+
+      if (item.counted_quantity !== null && item.counted_quantity !== undefined) {
+        grouped[groupName].counted_line_count += 1;
+      }
+    });
+
+    var groupedRows = Object.keys(grouped).map(function (key) {
+      return grouped[key];
+    }).sort(function (a, b) {
+      return Math.abs(b.difference_value_ex_vat) - Math.abs(a.difference_value_ex_vat);
+    });
+
+    var title = el("h3", "Avvik gruppert");
+    title.style.marginTop = "22px";
+    reportTarget.appendChild(title);
+
+    if (!groupedRows.length) {
+      var empty = el("p", onlyDiffCheckbox.checked ? "Ingen avvik funnet." : "Ingen linjer funnet.");
+      empty.style.color = "#6b7280";
+      reportTarget.appendChild(empty);
+      return;
+    }
+
+    addTable(reportTarget, [
+      { key: "name", label: "Gruppe" },
+      { key: "line_count", label: "Linjer" },
+      { key: "counted_line_count", label: "Telt" },
+      { key: "expected_quantity", label: "Forventet" },
+      { key: "counted_quantity", label: "Opptalt" },
+      { key: "difference_quantity", label: "Avvik stk" },
+      { key: "difference_value_ex_vat", label: "Avvik verdi", format: "money" }
+    ], groupedRows, "Ingen rapportdata.");
+  }
+
+  copyReportBtn.onclick = function () {
+    var count = selectedStockCount();
+
+    if (!count) {
+      alert("Velg en varetelling først.");
+      return;
+    }
+
+    var rows = getAllItemsForSelectedCount();
+
+    if (onlyDiffCheckbox.checked) {
+      rows = rows.filter(function (item) {
+        return Number(item.difference_quantity || 0) !== 0;
+      });
+    }
+
+    var lines = [];
+
+    lines.push("Varetellingsrapport");
+    lines.push("Nr: " + count.count_number);
+    lines.push("Tittel: " + count.title);
+    lines.push("Status: " + count.status);
+    lines.push("");
+    lines.push("Produkt\tMerke\tKategori\tLeverandør\tForventet\tOpptalt\tAvvik stk\tAvvik verdi eks. mva\tNotat");
+
+    rows.forEach(function (item) {
+      lines.push([
+        item.name || "",
+        item.brand || "",
+        item.category || "",
+        item.supplier_name || "",
+        item.expected_quantity || 0,
+        item.counted_quantity === null || item.counted_quantity === undefined ? "" : item.counted_quantity,
+        item.difference_quantity || 0,
+        item.difference_value_ex_vat || 0,
+        item.notes || ""
+      ].join("\t"));
+    });
+
+    navigator.clipboard.writeText(lines.join("\n")).then(function () {
+      alert("Rapport kopiert.");
+    }).catch(function () {
+      alert("Kunne ikke kopiere rapporten automatisk.");
+    });
+  };
+
+  reportGroupSelect.onchange = renderStockReport;
+  onlyDiffCheckbox.onchange = renderStockReport;
+    
   // ============================================================
   // KAPITTEL 4 – Oversikt over varetellinger
   // ============================================================
