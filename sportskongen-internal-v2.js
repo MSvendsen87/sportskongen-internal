@@ -4019,6 +4019,27 @@ addTable(addonsSection.body, [
   searchInput.type = "text";
   searchInput.placeholder = "Søk produkt, merke, kategori, SKU...";
   addField(detailSection.body, "Søk i varer", searchInput);
+    var countFilterSelect = el("select");
+addOption(countFilterSelect, "all", "Alle varer");
+addOption(countFilterSelect, "not_counted", "Kun ikke telt");
+addOption(countFilterSelect, "counted", "Kun telt");
+
+addField(detailSection.body, "Vis", countFilterSelect);
+
+var hideZeroWrap = el("label");
+hideZeroWrap.style.display = "flex";
+hideZeroWrap.style.alignItems = "center";
+hideZeroWrap.style.gap = "8px";
+hideZeroWrap.style.marginBottom = "12px";
+hideZeroWrap.style.fontWeight = "700";
+
+var hideZeroCheckbox = el("input");
+hideZeroCheckbox.type = "checkbox";
+
+hideZeroWrap.appendChild(hideZeroCheckbox);
+hideZeroWrap.appendChild(el("span", "Skjul varer med 0 på forventet lager"));
+
+detailSection.body.appendChild(hideZeroWrap);
 
   var detailSummary = el("div");
   detailSummary.style.margin = "10px 0";
@@ -4047,11 +4068,27 @@ addTable(addonsSection.body, [
     var query = String(searchInput.value || "").toLowerCase().trim();
 
     (data.stockCountItems || []).forEach(function (item) {
-      if (item.stock_count_id !== countSelect.value) {
-        return;
-      }
+  if (item.stock_count_id !== countSelect.value) {
+    return;
+  }
 
-      var haystack = [
+  var isCounted =
+    item.counted_quantity !== null &&
+    item.counted_quantity !== undefined;
+
+  if (countFilterSelect.value === "not_counted" && isCounted) {
+    return;
+  }
+
+  if (countFilterSelect.value === "counted" && !isCounted) {
+    return;
+  }
+
+  if (hideZeroCheckbox.checked && Number(item.expected_quantity || 0) === 0) {
+    return;
+  }
+
+  var haystack = [
         item.name,
         item.brand,
         item.category,
@@ -4258,7 +4295,9 @@ addTable(addonsSection.body, [
   }
 
   countSelect.onchange = renderStockCountDetails;
-  searchInput.oninput = renderStockCountDetails;
+searchInput.oninput = renderStockCountDetails;
+countFilterSelect.onchange = renderStockCountDetails;
+hideZeroCheckbox.onchange = renderStockCountDetails;
 
   var savedStockCountId = localStorage.getItem("sk_internal_selected_stock_count_id");
 
