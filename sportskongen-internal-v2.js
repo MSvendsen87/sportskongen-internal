@@ -4042,12 +4042,68 @@ hideZeroWrap.appendChild(el("span", "Skjul varer med 0 på forventet lager"));
 detailSection.body.appendChild(hideZeroWrap);
 
   var detailSummary = el("div");
-  detailSummary.style.margin = "10px 0";
-  detailSummary.style.color = "#6b7280";
-  detailSection.body.appendChild(detailSummary);
+detailSummary.style.margin = "10px 0";
+detailSummary.style.color = "#6b7280";
+detailSection.body.appendChild(detailSummary);
 
-  var detailTarget = el("div");
-  detailSection.body.appendChild(detailTarget);
+// ============================================================
+// RAPPORT / AVVIK – synlig inne i Tell varer
+// ============================================================
+
+var reportBox = el("div");
+reportBox.style.margin = "14px 0";
+reportBox.style.padding = "14px";
+reportBox.style.border = "1px solid #e5e7eb";
+reportBox.style.borderRadius = "12px";
+reportBox.style.background = "#f9fafb";
+
+var reportTitle = el("div", "📈 Rapport og avvik");
+reportTitle.style.fontWeight = "900";
+reportTitle.style.marginBottom = "10px";
+
+var reportControls = el("div");
+reportControls.style.display = "grid";
+reportControls.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+reportControls.style.gap = "12px";
+reportControls.style.alignItems = "end";
+
+var reportGroupSelect = el("select");
+addOption(reportGroupSelect, "category", "Grupper på kategori");
+addOption(reportGroupSelect, "supplier_name", "Grupper på leverandør");
+addOption(reportGroupSelect, "brand", "Grupper på merke");
+
+addField(reportControls, "Rapportvisning", reportGroupSelect);
+
+var onlyDiffWrap = el("label");
+onlyDiffWrap.style.display = "flex";
+onlyDiffWrap.style.alignItems = "center";
+onlyDiffWrap.style.gap = "8px";
+onlyDiffWrap.style.marginBottom = "12px";
+onlyDiffWrap.style.fontWeight = "700";
+
+var onlyDiffCheckbox = el("input");
+onlyDiffCheckbox.type = "checkbox";
+onlyDiffCheckbox.checked = true;
+
+onlyDiffWrap.appendChild(onlyDiffCheckbox);
+onlyDiffWrap.appendChild(el("span", "Vis kun avvik"));
+
+reportControls.appendChild(onlyDiffWrap);
+
+var copyReportBtn = createButton("Kopier rapport");
+reportControls.appendChild(copyReportBtn);
+
+var reportTarget = el("div");
+reportTarget.style.marginTop = "14px";
+
+reportBox.appendChild(reportTitle);
+reportBox.appendChild(reportControls);
+reportBox.appendChild(reportTarget);
+
+detailSection.body.appendChild(reportBox);
+
+var detailTarget = el("div");
+detailSection.body.appendChild(detailTarget);
 
   parent.appendChild(detailSection.wrap);
 
