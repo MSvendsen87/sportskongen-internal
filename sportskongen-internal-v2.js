@@ -4046,6 +4046,15 @@ detailSummary.style.margin = "10px 0";
 detailSummary.style.color = "#6b7280";
 detailSection.body.appendChild(detailSummary);
 
+    var stockStatusBox = el("div");
+stockStatusBox.style.margin = "12px 0";
+stockStatusBox.style.padding = "12px";
+stockStatusBox.style.border = "1px solid #e5e7eb";
+stockStatusBox.style.borderRadius = "12px";
+stockStatusBox.style.background = "#f9fafb";
+
+detailSection.body.appendChild(stockStatusBox);
+
 // ============================================================
 // RAPPORT / AVVIK – synlig inne i Tell varer
 // ============================================================
@@ -4119,6 +4128,117 @@ detailSection.body.appendChild(detailTarget);
     return found;
   }
 
+    function renderStockStatusBox() {
+  clear(stockStatusBox);
+
+  var count = selectedStockCount();
+
+  if (!count) {
+    stockStatusBox.textContent = "Velg en varetelling for å låse eller åpne den.";
+    return;
+  }
+
+  var title = el("div");
+  title.style.fontWeight = "900";
+  title.style.marginBottom = "6px";
+
+  var text = el("div");
+  text.style.color = "#6b7280";
+  text.style.marginBottom = "10px";
+
+  var actionBtn;
+
+  if (count.status === "locked") {
+    stockStatusBox.style.background = "#ecfdf5";
+    stockStatusBox.style.borderColor = "#bbf7d0";
+
+    title.textContent = "🔒 Varetellingen er låst";
+    text.textContent = "Tellefeltene er låst. For å åpne igjen må du bevisst skrive ÅPNE.";
+
+    actionBtn = createButton("Åpne varetelling igjen");
+
+    actionBtn.onclick = function () {
+      var confirmText = prompt(
+        "Denne varetellingen er låst.\n\nSkriv ÅPNE for å åpne den igjen:"
+      );
+
+      if (confirmText !== "ÅPNE") {
+        alert("Varetellingen ble ikke åpnet. Du må skrive nøyaktig ÅPNE.");
+        return;
+      }
+
+      actionBtn.disabled = true;
+      actionBtn.textContent = "Åpner...";
+
+      sb.rpc("internal_set_stock_count_status", {
+        p_stock_count_id: count.id,
+        p_action: "unlock",
+        p_confirm_text: confirmText
+      }).then(function (result) {
+        actionBtn.disabled = false;
+        actionBtn.textContent = "Åpne varetelling igjen";
+
+        if (result.error) {
+          alert("Kunne ikke åpne varetellingen: " + result.error.message);
+          return;
+        }
+
+        localStorage.setItem("sk_internal_active_tab", "stock");
+        localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
+
+        alert("Varetellingen er åpnet igjen.");
+        window.location.reload();
+      });
+    };
+  } else {
+    stockStatusBox.style.background = "#fff7ed";
+    stockStatusBox.style.borderColor = "#fed7aa";
+
+    title.textContent = "🔓 Varetellingen er åpen";
+    text.textContent = "Når tellingen er ferdig bør den låses, slik at den ikke endres ved et uhell.";
+
+    actionBtn = createPrimaryButton("Lås varetelling");
+
+    actionBtn.onclick = function () {
+      var confirmText = prompt(
+        "Dette låser varetellingen og hindrer videre endringer.\n\nSkriv LÅS for å bekrefte:"
+      );
+
+      if (confirmText !== "LÅS") {
+        alert("Varetellingen ble ikke låst. Du må skrive nøyaktig LÅS.");
+        return;
+      }
+
+      actionBtn.disabled = true;
+      actionBtn.textContent = "Låser...";
+
+      sb.rpc("internal_set_stock_count_status", {
+        p_stock_count_id: count.id,
+        p_action: "lock",
+        p_confirm_text: confirmText
+      }).then(function (result) {
+        actionBtn.disabled = false;
+        actionBtn.textContent = "Lås varetelling";
+
+        if (result.error) {
+          alert("Kunne ikke låse varetellingen: " + result.error.message);
+          return;
+        }
+
+        localStorage.setItem("sk_internal_active_tab", "stock");
+        localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
+
+        alert("Varetellingen er låst.");
+        window.location.reload();
+      });
+    };
+  }
+
+  stockStatusBox.appendChild(title);
+  stockStatusBox.appendChild(text);
+  stockStatusBox.appendChild(actionBtn);
+}
+    
   function getItemsForSelectedCount() {
     var list = [];
     var query = String(searchInput.value || "").toLowerCase().trim();
@@ -4287,8 +4407,20 @@ detailSection.body.appendChild(detailTarget);
       noteInput.style.borderRadius = "8px";
 
       var saveBtn = createButton("Lagre");
+      var isLocked = count.status === "locked";
+
+if (isLocked) {
+  countedInput.disabled = true;
+  noteInput.disabled = true;
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Låst";
+}
 
       saveBtn.onclick = function () {
+        if (count.status === "locked") {
+  alert("Denne varetellingen er låst. Åpne den igjen først hvis du må gjøre endringer.");
+  return;
+}
         if (countedInput.value === "") {
           alert("Skriv inn opptalt antall først.");
           return;
@@ -4351,6 +4483,7 @@ detailSection.body.appendChild(detailTarget);
   }
 
   function refreshStockCountView() {
+  renderStockStatusBox();
   renderStockCountDetails();
   renderStockReport();
 }
@@ -4366,7 +4499,8 @@ hideZeroCheckbox.onchange = renderStockCountDetails;
     countSelect.value = savedStockCountId;
   }
 
-  renderStockCountDetails();
+  renderStockStatusBox();
+renderStockCountDetails();
 renderStockReport();
 
   // ============================================================
