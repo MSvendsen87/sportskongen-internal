@@ -3104,17 +3104,25 @@ addTable(addonsSection.body, [
 }
 
   function renderStandardQuoteBuilder(parent, data, sb) {
+  // ============================================================
+  // KAPITTEL 1 – Tittel og intro
+  // ============================================================
+
   var h2 = el("h2", "Vanlig tilbudsbygger");
   h2.style.marginTop = "0";
   parent.appendChild(h2);
 
-  var intro = el("p", "Lag tilbud med flere produktlinjer fra produktregisteret.");
+  var intro = el("p", "Lag tilbud med flere produktlinjer, frakt, rabatt og manuelle linjer.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
 
+  // ============================================================
+  // KAPITTEL 2 – Kundeinfo / tidligere kunde
+  // ============================================================
+
   var customerSection = createCollapsibleSection(
     "👤 Kundeinfo",
-    "Legg inn kunde, firma/klubb, e-post og telefon.",
+    "Velg tidligere kunde eller legg inn ny kunde.",
     true
   );
 
@@ -3123,27 +3131,27 @@ addTable(addonsSection.body, [
   customerGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
   customerGrid.style.gap = "12px";
 
-var existingCustomerSelect = el("select");
-addOption(existingCustomerSelect, "", "Ny kunde / velg tidligere kunde");
+  var existingCustomerSelect = el("select");
+  addOption(existingCustomerSelect, "", "Ny kunde / velg tidligere kunde");
 
-(data.customers || []).forEach(function (c) {
-  var label = c.customer_name || "Ukjent kunde";
+  (data.customers || []).forEach(function (c) {
+    var label = c.customer_name || "Ukjent kunde";
 
-  if (c.customer_company) {
-    label += " / " + c.customer_company;
-  }
+    if (c.customer_company) {
+      label += " / " + c.customer_company;
+    }
 
-  if (c.customer_email) {
-    label += " – " + c.customer_email;
-  }
+    if (c.customer_email) {
+      label += " – " + c.customer_email;
+    }
 
-  if (c.quote_count) {
-    label += " (" + c.quote_count + " tilbud)";
-  }
+    if (c.quote_count) {
+      label += " (" + c.quote_count + " tilbud)";
+    }
 
-  addOption(existingCustomerSelect, c.customer_key, label);
-});
-    
+    addOption(existingCustomerSelect, c.customer_key, label);
+  });
+
   var customerName = el("input");
   customerName.type = "text";
   customerName.placeholder = "Kundenavn";
@@ -3161,52 +3169,423 @@ addOption(existingCustomerSelect, "", "Ny kunde / velg tidligere kunde");
   customerCompany.placeholder = "Klubb / firma";
 
   addField(customerGrid, "Velg tidligere kunde", existingCustomerSelect);
-addField(customerGrid, "Kundenavn", customerName);
-addField(customerGrid, "E-post", customerEmail);
-addField(customerGrid, "Telefon", customerPhone);
-addField(customerGrid, "Klubb / firma", customerCompany);
+  addField(customerGrid, "Kundenavn", customerName);
+  addField(customerGrid, "E-post", customerEmail);
+  addField(customerGrid, "Telefon", customerPhone);
+  addField(customerGrid, "Klubb / firma", customerCompany);
 
   customerSection.body.appendChild(customerGrid);
   parent.appendChild(customerSection.wrap);
-    function getSelectedCustomer() {
-  var found = null;
 
-  (data.customers || []).forEach(function (c) {
-    if (c.customer_key === existingCustomerSelect.value) {
-      found = c;
-    }
-  });
+  function getSelectedCustomer() {
+    var found = null;
 
-  return found;
-}
+    (data.customers || []).forEach(function (c) {
+      if (c.customer_key === existingCustomerSelect.value) {
+        found = c;
+      }
+    });
 
-existingCustomerSelect.onchange = function () {
-  var c = getSelectedCustomer();
-
-  if (!c) {
-    return;
+    return found;
   }
 
-  customerName.value = c.customer_name || "";
-  customerEmail.value = c.customer_email || "";
-  customerPhone.value = c.customer_phone || "";
-  customerCompany.value = c.customer_company || "";
-};
+  existingCustomerSelect.onchange = function () {
+    var c = getSelectedCustomer();
+
+    if (!c) {
+      return;
+    }
+
+    customerName.value = c.customer_name || "";
+    customerEmail.value = c.customer_email || "";
+    customerPhone.value = c.customer_phone || "";
+    customerCompany.value = c.customer_company || "";
+  };
+
+  // ============================================================
+  // KAPITTEL 3 – Tilbudslinjer: produkt / frakt / rabatt / manuell
+  // ============================================================
 
   var linesSection = createCollapsibleSection(
-    "📦 Produktlinjer",
-    "Legg til produkter, antall og eventuelt manuell kundepris.",
+    "📦 Tilbudslinjer",
+    "Legg til produkter, frakt, rabatt eller manuelle linjer.",
     true
   );
 
   var lineList = el("div");
   linesSection.body.appendChild(lineList);
 
-  var addLineBtn = createPrimaryButton("Legg til produktlinje");
+  var addLineBtn = createPrimaryButton("Legg til linje");
   addLineBtn.style.marginTop = "10px";
   linesSection.body.appendChild(addLineBtn);
 
   parent.appendChild(linesSection.wrap);
+
+  var lines = [];
+
+  function getProduct(productId) {
+    var found = null;
+
+    (data.products || []).forEach(function (p) {
+      if (p.id === productId) {
+        found = p;
+      }
+    });
+
+    return found;
+  }
+
+  function findProductsBySearch(query) {
+    var q = String(query || "").toLowerCase().trim();
+
+    if (!q) {
+      return [];
+    }
+
+    return (data.products || [])
+      .filter(function (p) {
+        var haystack = [
+          p.name,
+          p.brand,
+          p.category,
+          p.supplier_name,
+          p.quickbutik_sku,
+          p.quickbutik_product_id
+        ].map(function (value) {
+          return String(value || "").toLowerCase();
+        }).join(" ");
+
+        return haystack.indexOf(q) >= 0;
+      })
+      .slice(0, 20);
+  }
+
+  function createLine() {
+    var line = {
+      itemTypeSelect: el("select"),
+      selectedProductId: "",
+      searchInput: el("input"),
+      resultList: el("div"),
+      selectedInfo: el("div"),
+      qtyInput: el("input"),
+      costInput: el("input"),
+      priceInput: el("input"),
+      info: el("div"),
+      wrap: el("div")
+    };
+
+    line.wrap.style.padding = "14px";
+    line.wrap.style.border = "1px solid #e5e7eb";
+    line.wrap.style.borderRadius = "12px";
+    line.wrap.style.background = "#f9fafb";
+    line.wrap.style.marginBottom = "12px";
+
+    addOption(line.itemTypeSelect, "product", "Produkt");
+    addOption(line.itemTypeSelect, "shipping", "Frakt");
+    addOption(line.itemTypeSelect, "discount", "Rabatt");
+    addOption(line.itemTypeSelect, "manual", "Manuell linje");
+
+    line.searchInput.type = "text";
+    line.searchInput.placeholder = "Søk produkt, merke, SKU...";
+    line.searchInput.autocomplete = "off";
+
+    line.qtyInput.type = "number";
+    line.qtyInput.min = "1";
+    line.qtyInput.step = "1";
+    line.qtyInput.value = "1";
+
+    line.costInput.type = "number";
+    line.costInput.step = "0.01";
+    line.costInput.placeholder = "Kost eks. mva";
+
+    line.priceInput.type = "number";
+    line.priceInput.step = "0.01";
+    line.priceInput.placeholder = "Pris/stk inkl. mva";
+
+    var grid = el("div");
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "minmax(150px, 0.8fr) minmax(260px, 2fr) minmax(90px, 0.6fr) minmax(140px, 0.8fr) minmax(150px, 1fr) auto";
+    grid.style.gap = "10px";
+    grid.style.alignItems = "end";
+
+    var removeBtn = createButton("Fjern");
+
+    addField(grid, "Linjetype", line.itemTypeSelect);
+    addField(grid, "Produkt / linjenavn", line.searchInput);
+    addField(grid, "Antall", line.qtyInput);
+    addField(grid, "Kost eks.", line.costInput);
+    addField(grid, "Pris/stk inkl.", line.priceInput);
+
+    var removeWrap = el("div");
+    removeWrap.appendChild(removeBtn);
+    grid.appendChild(removeWrap);
+
+    line.resultList.style.marginTop = "8px";
+    line.resultList.style.border = "1px solid #e5e7eb";
+    line.resultList.style.borderRadius = "10px";
+    line.resultList.style.background = "#fff";
+    line.resultList.style.overflow = "hidden";
+    line.resultList.style.display = "none";
+
+    line.selectedInfo.style.marginTop = "8px";
+    line.selectedInfo.style.padding = "10px";
+    line.selectedInfo.style.border = "1px solid #d1d5db";
+    line.selectedInfo.style.borderRadius = "10px";
+    line.selectedInfo.style.background = "#fff";
+    line.selectedInfo.style.display = "none";
+
+    line.info.style.marginTop = "10px";
+    line.info.style.color = "#6b7280";
+    line.info.style.fontSize = "13px";
+
+    line.wrap.appendChild(grid);
+    line.wrap.appendChild(line.resultList);
+    line.wrap.appendChild(line.selectedInfo);
+    line.wrap.appendChild(line.info);
+
+    function setLineMode() {
+      var type = line.itemTypeSelect.value;
+
+      line.selectedProductId = "";
+      line.resultList.style.display = "none";
+      line.selectedInfo.style.display = "none";
+
+      if (type === "product") {
+        line.searchInput.value = "";
+        line.searchInput.placeholder = "Søk produkt, merke, SKU...";
+        line.costInput.disabled = true;
+        line.costInput.value = "";
+        line.priceInput.placeholder = "Valgfritt, ellers produktpris";
+      }
+
+      if (type === "shipping") {
+        line.searchInput.value = "Frakt";
+        line.searchInput.placeholder = "Frakt";
+        line.qtyInput.value = "1";
+        line.costInput.disabled = false;
+        line.costInput.value = "";
+        line.priceInput.placeholder = "Fraktpris inkl. mva";
+      }
+
+      if (type === "discount") {
+        line.searchInput.value = "Rabatt";
+        line.searchInput.placeholder = "Rabatt";
+        line.qtyInput.value = "1";
+        line.costInput.disabled = true;
+        line.costInput.value = "0";
+        line.priceInput.placeholder = "Rabatt inkl. mva, skriv positivt tall";
+      }
+
+      if (type === "manual") {
+        line.searchInput.value = "";
+        line.searchInput.placeholder = "Navn på manuell linje";
+        line.costInput.disabled = false;
+        line.costInput.value = "";
+        line.priceInput.placeholder = "Pris/stk inkl. mva";
+      }
+
+      updateSummary();
+    }
+
+    function renderSearchResults() {
+      clear(line.resultList);
+
+      if (line.itemTypeSelect.value !== "product") {
+        line.resultList.style.display = "none";
+        return;
+      }
+
+      var results = findProductsBySearch(line.searchInput.value);
+
+      if (!results.length) {
+        line.resultList.style.display = "none";
+        return;
+      }
+
+      line.resultList.style.display = "block";
+
+      results.forEach(function (p) {
+        var item = el("button");
+        item.type = "button";
+        item.style.display = "block";
+        item.style.width = "100%";
+        item.style.textAlign = "left";
+        item.style.padding = "10px 12px";
+        item.style.border = "0";
+        item.style.borderBottom = "1px solid #f3f4f6";
+        item.style.background = "#fff";
+        item.style.cursor = "pointer";
+
+        var title = el("div", (p.brand ? p.brand + " – " : "") + p.name);
+        title.style.fontWeight = "800";
+
+        var meta = el(
+          "div",
+          "Utsalg: " +
+            money(p.sales_price_inc_vat || 0) +
+            " kr · Innpris eks: " +
+            money(p.purchase_price_ex_vat || 0) +
+            " kr · Lager: " +
+            (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity)
+        );
+        meta.style.color = "#6b7280";
+        meta.style.fontSize = "13px";
+        meta.style.marginTop = "3px";
+
+        item.appendChild(title);
+        item.appendChild(meta);
+
+        item.onclick = function () {
+          line.selectedProductId = p.id;
+          line.searchInput.value = (p.brand ? p.brand + " – " : "") + p.name;
+          line.resultList.style.display = "none";
+
+          line.selectedInfo.style.display = "block";
+          line.selectedInfo.textContent =
+            "Valgt: " +
+            (p.brand ? p.brand + " – " : "") +
+            p.name +
+            " · Utsalg " +
+            money(p.sales_price_inc_vat || 0) +
+            " kr · Lager " +
+            (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity);
+
+          updateSummary();
+        };
+
+        line.resultList.appendChild(item);
+      });
+    }
+
+    line.itemTypeSelect.onchange = setLineMode;
+
+    line.searchInput.oninput = function () {
+      if (line.itemTypeSelect.value === "product") {
+        line.selectedProductId = "";
+        line.selectedInfo.style.display = "none";
+        renderSearchResults();
+      }
+
+      updateSummary();
+    };
+
+    line.qtyInput.oninput = updateSummary;
+    line.costInput.oninput = updateSummary;
+    line.priceInput.oninput = updateSummary;
+
+    removeBtn.onclick = function () {
+      var next = [];
+
+      lines.forEach(function (l) {
+        if (l !== line) {
+          next.push(l);
+        }
+      });
+
+      lines = next;
+
+      if (line.wrap.parentNode) {
+        line.wrap.parentNode.removeChild(line.wrap);
+      }
+
+      updateSummary();
+    };
+
+    lines.push(line);
+    lineList.appendChild(line.wrap);
+
+    setLineMode();
+    updateSummary();
+  }
+
+  // ============================================================
+  // KAPITTEL 4 – Beregning av linjer og totaler
+  // ============================================================
+
+  function lineData(line) {
+    var type = line.itemTypeSelect.value || "product";
+    var qty = Number(line.qtyInput.value || 0);
+
+    if (qty <= 0) {
+      return null;
+    }
+
+    if (type === "product") {
+      var product = getProduct(line.selectedProductId);
+
+      if (!product) {
+        return null;
+      }
+
+      var manualInc = line.priceInput.value ? Number(line.priceInput.value) : null;
+      var unitSalesInc = manualInc || Number(product.sales_price_inc_vat || 0);
+      var vat = Number(product.vat_rate || 25);
+      var unitSalesEx = unitSalesInc / (1 + vat / 100);
+      var unitCostEx = Number(product.purchase_price_ex_vat || 0);
+
+      var lineSalesInc = unitSalesInc * qty;
+      var lineSalesEx = unitSalesEx * qty;
+      var lineCostEx = unitCostEx * qty;
+      var profitEx = lineSalesEx - lineCostEx;
+      var margin = lineSalesEx > 0 ? (profitEx / lineSalesEx) * 100 : 0;
+
+      return {
+        itemType: "product",
+        product: product,
+        name: product.name,
+        quantity: qty,
+        manualUnitSalesInc: manualInc,
+        unitCostEx: null,
+        unitSalesInc: unitSalesInc,
+        lineSalesInc: lineSalesInc,
+        lineSalesEx: lineSalesEx,
+        lineCostEx: lineCostEx,
+        profitEx: profitEx,
+        margin: margin
+      };
+    }
+
+    var name = line.searchInput.value.trim();
+
+    if (!name) {
+      if (type === "shipping") name = "Frakt";
+      if (type === "discount") name = "Rabatt";
+      if (type === "manual") name = "Manuell linje";
+    }
+
+    var unitCostEx = Number(line.costInput.value || 0);
+    var unitSalesInc = Number(line.priceInput.value || 0);
+
+    if (type === "discount" && unitSalesInc > 0) {
+      unitSalesInc = unitSalesInc * -1;
+    }
+
+    var unitSalesEx = unitSalesInc / 1.25;
+    var lineSalesInc = unitSalesInc * qty;
+    var lineSalesEx = unitSalesEx * qty;
+    var lineCostEx = unitCostEx * qty;
+    var profitEx = lineSalesEx - lineCostEx;
+    var margin = lineSalesEx !== 0 ? (profitEx / Math.abs(lineSalesEx)) * 100 : 0;
+
+    return {
+      itemType: type,
+      product: null,
+      name: name,
+      quantity: qty,
+      manualUnitSalesInc: unitSalesInc,
+      unitCostEx: unitCostEx,
+      unitSalesInc: unitSalesInc,
+      lineSalesInc: lineSalesInc,
+      lineSalesEx: lineSalesEx,
+      lineCostEx: lineCostEx,
+      profitEx: profitEx,
+      margin: margin
+    };
+  }
+
+  // ============================================================
+  // KAPITTEL 5 – Oppsummering og tilbudstekster
+  // ============================================================
 
   var summarySection = createCollapsibleSection(
     "📊 Oppsummering",
@@ -3259,260 +3638,6 @@ existingCustomerSelect.onchange = function () {
 
   parent.appendChild(summarySection.wrap);
 
-  var lines = [];
-
-  function productOptions(select) {
-    addOption(select, "", "Velg produkt");
-
-    (data.products || []).forEach(function (p) {
-      var label = (p.brand ? p.brand + " – " : "") + p.name;
-
-      if (p.sales_price_inc_vat) {
-        label += " – " + money(p.sales_price_inc_vat) + " kr";
-      }
-
-      addOption(select, p.id, label);
-    });
-  }
-
-  function getProduct(productId) {
-    var found = null;
-
-    (data.products || []).forEach(function (p) {
-      if (p.id === productId) {
-        found = p;
-      }
-    });
-
-    return found;
-  }
-
-    function findProductsBySearch(query) {
-  var q = String(query || "").toLowerCase().trim();
-
-  if (!q) {
-    return [];
-  }
-
-  return (data.products || [])
-    .filter(function (p) {
-      var haystack = [
-        p.name,
-        p.brand,
-        p.category,
-        p.supplier_name,
-        p.quickbutik_sku,
-        p.quickbutik_product_id
-      ].map(function (value) {
-        return String(value || "").toLowerCase();
-      }).join(" ");
-
-      return haystack.indexOf(q) >= 0;
-    })
-    .slice(0, 20);
-}
-  function createLine() {
-  var line = {
-    selectedProductId: "",
-    searchInput: el("input"),
-    resultList: el("div"),
-    selectedInfo: el("div"),
-    qtyInput: el("input"),
-    priceInput: el("input"),
-    info: el("div"),
-    wrap: el("div")
-  };
-
-  line.wrap.style.padding = "14px";
-  line.wrap.style.border = "1px solid #e5e7eb";
-  line.wrap.style.borderRadius = "12px";
-  line.wrap.style.background = "#f9fafb";
-  line.wrap.style.marginBottom = "12px";
-
-  var grid = el("div");
-  grid.style.display = "grid";
-  grid.style.gridTemplateColumns = "minmax(260px, 2fr) minmax(100px, 0.6fr) minmax(160px, 1fr) auto";
-  grid.style.gap = "10px";
-  grid.style.alignItems = "end";
-
-  line.searchInput.type = "text";
-  line.searchInput.placeholder = "Søk produkt, merke, SKU...";
-  line.searchInput.autocomplete = "off";
-
-  line.qtyInput.type = "number";
-  line.qtyInput.min = "1";
-  line.qtyInput.step = "1";
-  line.qtyInput.value = "1";
-
-  line.priceInput.type = "number";
-  line.priceInput.step = "0.01";
-  line.priceInput.placeholder = "Valgfritt";
-
-  var removeBtn = createButton("Fjern");
-
-  addField(grid, "Søk produkt", line.searchInput);
-  addField(grid, "Antall", line.qtyInput);
-  addField(grid, "Manuell pris/stk inkl. mva", line.priceInput);
-
-  var removeWrap = el("div");
-  removeWrap.appendChild(removeBtn);
-  grid.appendChild(removeWrap);
-
-  line.resultList.style.marginTop = "8px";
-  line.resultList.style.border = "1px solid #e5e7eb";
-  line.resultList.style.borderRadius = "10px";
-  line.resultList.style.background = "#fff";
-  line.resultList.style.overflow = "hidden";
-  line.resultList.style.display = "none";
-
-  line.selectedInfo.style.marginTop = "8px";
-  line.selectedInfo.style.padding = "10px";
-  line.selectedInfo.style.border = "1px solid #d1d5db";
-  line.selectedInfo.style.borderRadius = "10px";
-  line.selectedInfo.style.background = "#fff";
-  line.selectedInfo.style.display = "none";
-
-  line.info.style.marginTop = "10px";
-  line.info.style.color = "#6b7280";
-  line.info.style.fontSize = "13px";
-
-  line.wrap.appendChild(grid);
-  line.wrap.appendChild(line.resultList);
-  line.wrap.appendChild(line.selectedInfo);
-  line.wrap.appendChild(line.info);
-
-  function renderSearchResults() {
-    clear(line.resultList);
-
-    var results = findProductsBySearch(line.searchInput.value);
-
-    if (!results.length) {
-      line.resultList.style.display = "none";
-      return;
-    }
-
-    line.resultList.style.display = "block";
-
-    results.forEach(function (p) {
-      var item = el("button");
-      item.type = "button";
-      item.style.display = "block";
-      item.style.width = "100%";
-      item.style.textAlign = "left";
-      item.style.padding = "10px 12px";
-      item.style.border = "0";
-      item.style.borderBottom = "1px solid #f3f4f6";
-      item.style.background = "#fff";
-      item.style.cursor = "pointer";
-
-      var title = el("div", (p.brand ? p.brand + " – " : "") + p.name);
-      title.style.fontWeight = "800";
-
-      var meta = el(
-        "div",
-        "Utsalg: " +
-          money(p.sales_price_inc_vat || 0) +
-          " kr · Innpris eks: " +
-          money(p.purchase_price_ex_vat || 0) +
-          " kr · Lager: " +
-          (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity)
-      );
-      meta.style.color = "#6b7280";
-      meta.style.fontSize = "13px";
-      meta.style.marginTop = "3px";
-
-      item.appendChild(title);
-      item.appendChild(meta);
-
-      item.onclick = function () {
-        line.selectedProductId = p.id;
-        line.searchInput.value = (p.brand ? p.brand + " – " : "") + p.name;
-        line.resultList.style.display = "none";
-
-        line.selectedInfo.style.display = "block";
-        line.selectedInfo.textContent =
-          "Valgt: " +
-          (p.brand ? p.brand + " – " : "") +
-          p.name +
-          " · Utsalg " +
-          money(p.sales_price_inc_vat || 0) +
-          " kr · Lager " +
-          (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity);
-
-        updateSummary();
-      };
-
-      line.resultList.appendChild(item);
-    });
-  }
-
-  line.searchInput.oninput = function () {
-    line.selectedProductId = "";
-    line.selectedInfo.style.display = "none";
-    renderSearchResults();
-    updateSummary();
-  };
-
-  line.qtyInput.oninput = updateSummary;
-  line.priceInput.oninput = updateSummary;
-
-  removeBtn.onclick = function () {
-    var next = [];
-
-    lines.forEach(function (l) {
-      if (l !== line) {
-        next.push(l);
-      }
-    });
-
-    lines = next;
-
-    if (line.wrap.parentNode) {
-      line.wrap.parentNode.removeChild(line.wrap);
-    }
-
-    updateSummary();
-  };
-
-  lines.push(line);
-  lineList.appendChild(line.wrap);
-
-  updateSummary();
-}
-
-  function lineData(line) {
-    var product = getProduct(line.selectedProductId);
-    var qty = Number(line.qtyInput.value || 0);
-
-    if (!product || qty <= 0) {
-      return null;
-    }
-
-    var manualInc = line.priceInput.value ? Number(line.priceInput.value) : null;
-    var unitSalesInc = manualInc || Number(product.sales_price_inc_vat || 0);
-    var vat = Number(product.vat_rate || 25);
-    var unitSalesEx = unitSalesInc / (1 + vat / 100);
-    var unitCostEx = Number(product.purchase_price_ex_vat || 0);
-
-    var lineSalesInc = unitSalesInc * qty;
-    var lineSalesEx = unitSalesEx * qty;
-    var lineCostEx = unitCostEx * qty;
-    var profitEx = lineSalesEx - lineCostEx;
-    var margin = lineSalesEx > 0 ? (profitEx / lineSalesEx) * 100 : 0;
-
-    return {
-      product: product,
-      quantity: qty,
-      manualUnitSalesInc: manualInc,
-      unitSalesInc: unitSalesInc,
-      unitCostEx: unitCostEx,
-      lineSalesInc: lineSalesInc,
-      lineCostEx: lineCostEx,
-      profitEx: profitEx,
-      margin: margin
-    };
-  }
-
   function updateSummary() {
     clear(summaryBox);
 
@@ -3525,7 +3650,7 @@ existingCustomerSelect.onchange = function () {
       var d = lineData(line);
 
       if (!d) {
-        line.info.textContent = "Velg produkt og antall.";
+        line.info.textContent = "Velg/fyll ut linje.";
         return;
       }
 
@@ -3535,10 +3660,12 @@ existingCustomerSelect.onchange = function () {
       totalProfitEx += d.profitEx;
 
       line.info.textContent =
-        "Pris/stk inkl: " +
+        "Type: " +
+        d.itemType +
+        " · Pris/stk inkl: " +
         money(d.unitSalesInc) +
-        " kr · Innpris/stk eks: " +
-        money(d.unitCostEx) +
+        " kr · Kost/stk eks: " +
+        money(d.unitCostEx || 0) +
         " kr · Linje inkl: " +
         money(d.lineSalesInc) +
         " kr · Fortjeneste: " +
@@ -3547,7 +3674,7 @@ existingCustomerSelect.onchange = function () {
         money(d.margin) +
         " %";
 
-      if (d.margin < 20) {
+      if (d.margin < 20 && d.itemType !== "discount") {
         line.wrap.style.background = "#fee2e2";
         line.info.style.color = "#991b1b";
         line.info.style.fontWeight = "800";
@@ -3562,13 +3689,17 @@ existingCustomerSelect.onchange = function () {
     var totalMargin = totalSalesEx > 0 ? (totalProfitEx / totalSalesEx) * 100 : 0;
 
     addStatGrid(summaryBox, [
-      { label: "Produktlinjer", value: String(validLines) },
+      { label: "Linjer", value: String(validLines) },
       { label: "Salg inkl. mva", value: money(totalSalesInc) + " kr" },
       { label: "Kost eks. mva", value: money(totalCostEx) + " kr" },
       { label: "Fortjeneste eks.", value: money(totalProfitEx) + " kr" },
       { label: "Fortjeneste %", value: money(totalMargin) + " %" }
     ]);
   }
+
+  // ============================================================
+  // KAPITTEL 6 – Lagre tilbud
+  // ============================================================
 
   addLineBtn.onclick = function () {
     createLine();
@@ -3589,16 +3720,22 @@ existingCustomerSelect.onchange = function () {
 
       if (d) {
         items.push({
-          product_id: d.product.id,
+          item_type: d.itemType,
+          product_id: d.product ? d.product.id : null,
+          name: d.name,
           quantity: d.quantity,
-          unit_sales_price_inc_vat: d.manualUnitSalesInc,
+          unit_cost_ex_vat: d.unitCostEx,
+          unit_sales_price_inc_vat:
+            d.manualUnitSalesInc !== null && d.manualUnitSalesInc !== undefined
+              ? d.manualUnitSalesInc
+              : d.unitSalesInc,
           internal_notes: null
         });
       }
     });
 
     if (!items.length) {
-      alert("Legg til minst én produktlinje.");
+      alert("Legg til minst én tilbudslinje.");
       return;
     }
 
@@ -3635,6 +3772,10 @@ existingCustomerSelect.onchange = function () {
       window.location.reload();
     });
   };
+
+  // ============================================================
+  // KAPITTEL 7 – Start med én tom produktlinje
+  // ============================================================
 
   createLine();
   updateSummary();
