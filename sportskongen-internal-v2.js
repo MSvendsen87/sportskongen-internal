@@ -3817,18 +3817,26 @@ addTable(addonsSection.body, [
 }
 
   function renderStockCountsManager(parent, data, sb) {
+  // ============================================================
+  // KAPITTEL 1 – Tittel
+  // ============================================================
+
   var h2 = el("h2", "Varetelling");
   h2.style.marginTop = "0";
   parent.appendChild(h2);
 
-  var intro = el("p", "Opprett og følg opp varetellinger. Første versjon lager telling basert på produkter som ligger i internportalen.");
+  var intro = el("p", "Opprett, tell og følg opp varetellinger direkte fra internportalen.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
+
+  // ============================================================
+  // KAPITTEL 2 – Opprett ny varetelling
+  // ============================================================
 
   var createSection = createCollapsibleSection(
     "➕ Ny varetelling",
     "Velg om du vil telle alle produkter, en kategori, en leverandør eller et merke.",
-    true
+    false
   );
 
   var formGrid = el("div");
@@ -3864,11 +3872,6 @@ addTable(addonsSection.body, [
   var createBtn = createPrimaryButton("Opprett varetelling");
   createBtn.style.marginTop = "10px";
   createSection.body.appendChild(createBtn);
-
-  var createInfo = el("div");
-  createInfo.style.marginTop = "12px";
-  createInfo.style.color = "#6b7280";
-  createSection.body.appendChild(createInfo);
 
   parent.appendChild(createSection.wrap);
 
@@ -3965,6 +3968,8 @@ addTable(addonsSection.body, [
 
       if (created) {
         localStorage.setItem("sk_internal_active_tab", "stock");
+        localStorage.setItem("sk_internal_selected_stock_count_id", created.stock_count_id);
+
         alert(
           "Varetelling opprettet: " +
           created.count_number +
@@ -3978,6 +3983,294 @@ addTable(addonsSection.body, [
       window.location.reload();
     });
   };
+
+  // ============================================================
+  // KAPITTEL 3 – Velg varetelling
+  // ============================================================
+
+  var detailSection = createCollapsibleSection(
+    "🧮 Tell varer",
+    "Velg en varetelling, søk etter varer og registrer opptalt antall.",
+    true
+  );
+
+  var countSelect = el("select");
+  countSelect.style.marginBottom = "12px";
+
+  addOption(countSelect, "", "Velg varetelling");
+
+  (data.stockCounts || []).forEach(function (count) {
+    var label =
+      count.count_number +
+      " – " +
+      count.title +
+      " (" +
+      count.counted_line_count +
+      "/" +
+      count.line_count +
+      " telt)";
+
+    addOption(countSelect, count.id, label);
+  });
+
+  addField(detailSection.body, "Varetelling", countSelect);
+
+  var searchInput = el("input");
+  searchInput.type = "text";
+  searchInput.placeholder = "Søk produkt, merke, kategori, SKU...";
+  addField(detailSection.body, "Søk i varer", searchInput);
+
+  var detailSummary = el("div");
+  detailSummary.style.margin = "10px 0";
+  detailSummary.style.color = "#6b7280";
+  detailSection.body.appendChild(detailSummary);
+
+  var detailTarget = el("div");
+  detailSection.body.appendChild(detailTarget);
+
+  parent.appendChild(detailSection.wrap);
+
+  function selectedStockCount() {
+    var found = null;
+
+    (data.stockCounts || []).forEach(function (count) {
+      if (count.id === countSelect.value) {
+        found = count;
+      }
+    });
+
+    return found;
+  }
+
+  function getItemsForSelectedCount() {
+    var list = [];
+    var query = String(searchInput.value || "").toLowerCase().trim();
+
+    (data.stockCountItems || []).forEach(function (item) {
+      if (item.stock_count_id !== countSelect.value) {
+        return;
+      }
+
+      var haystack = [
+        item.name,
+        item.brand,
+        item.category,
+        item.supplier_name,
+        item.quickbutik_sku,
+        item.quickbutik_product_id
+      ].map(function (value) {
+        return String(value || "").toLowerCase();
+      }).join(" ");
+
+      if (query && haystack.indexOf(query) < 0) {
+        return;
+      }
+
+      list.push(item);
+    });
+
+    list.sort(function (a, b) {
+      return String(a.name || "").localeCompare(String(b.name || ""), "no");
+    });
+
+    return list;
+  }
+
+  function renderStockCountDetails() {
+    clear(detailTarget);
+
+    var count = selectedStockCount();
+
+    if (!count) {
+      detailSummary.textContent = "Velg en varetelling først.";
+      return;
+    }
+
+    localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
+
+    detailSummary.textContent =
+      "Status: " +
+      count.status +
+      " · Linjer: " +
+      count.line_count +
+      " · Telt: " +
+      count.counted_line_count +
+      " · Avvik stk: " +
+      money(count.difference_quantity_total) +
+      " · Avvik verdi eks. mva: " +
+      money(count.difference_value_ex_vat_total) +
+      " kr";
+
+    var rows = getItemsForSelectedCount();
+
+    if (!rows.length) {
+      var empty = el("p", "Ingen varelinjer funnet.");
+      empty.style.color = "#6b7280";
+      detailTarget.appendChild(empty);
+      return;
+    }
+
+    var wrap = el("div");
+    wrap.style.overflowX = "auto";
+    wrap.style.border = "1px solid #e5e7eb";
+    wrap.style.borderRadius = "14px";
+
+    var table = el("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.fontSize = "14px";
+
+    var thead = el("thead");
+    var headTr = el("tr");
+
+    [
+      "Produkt",
+      "Merke",
+      "Kategori",
+      "Forventet",
+      "Opptalt",
+      "Avvik",
+      "Verdiavvik eks.",
+      "Notat",
+      "Lagre"
+    ].forEach(function (label) {
+      var th = el("th", label);
+      th.style.textAlign = "left";
+      th.style.padding = "10px";
+      th.style.borderBottom = "1px solid #e5e7eb";
+      th.style.background = "#f9fafb";
+      th.style.whiteSpace = "nowrap";
+      headTr.appendChild(th);
+    });
+
+    thead.appendChild(headTr);
+    table.appendChild(thead);
+
+    var tbody = el("tbody");
+
+    rows.forEach(function (item) {
+      var tr = el("tr");
+
+      var diff = Number(item.difference_quantity || 0);
+
+      if (item.counted_quantity !== null && item.counted_quantity !== undefined && diff !== 0) {
+        tr.style.background = "#fee2e2";
+      }
+
+      function tdText(text, right) {
+        var td = el("td", text);
+        td.style.padding = "10px";
+        td.style.borderBottom = "1px solid #f3f4f6";
+        td.style.whiteSpace = "nowrap";
+
+        if (right) {
+          td.style.textAlign = "right";
+        }
+
+        return td;
+      }
+
+      var countedInput = el("input");
+      countedInput.type = "number";
+      countedInput.min = "0";
+      countedInput.step = "1";
+      countedInput.value =
+        item.counted_quantity === null || item.counted_quantity === undefined
+          ? ""
+          : item.counted_quantity;
+
+      countedInput.style.width = "90px";
+      countedInput.style.padding = "8px";
+      countedInput.style.border = "1px solid #d1d5db";
+      countedInput.style.borderRadius = "8px";
+
+      var noteInput = el("input");
+      noteInput.type = "text";
+      noteInput.value = item.notes || "";
+      noteInput.placeholder = "Valgfritt";
+      noteInput.style.width = "160px";
+      noteInput.style.padding = "8px";
+      noteInput.style.border = "1px solid #d1d5db";
+      noteInput.style.borderRadius = "8px";
+
+      var saveBtn = createButton("Lagre");
+
+      saveBtn.onclick = function () {
+        if (countedInput.value === "") {
+          alert("Skriv inn opptalt antall først.");
+          return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Lagrer...";
+
+        sb.rpc("internal_update_stock_count_item", {
+          p_item_id: item.id,
+          p_counted_quantity: Number(countedInput.value),
+          p_notes: noteInput.value.trim() || null
+        }).then(function (result) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Lagre";
+
+          if (result.error) {
+            alert("Kunne ikke lagre opptalt antall: " + result.error.message);
+            return;
+          }
+
+          localStorage.setItem("sk_internal_active_tab", "stock");
+          localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
+
+          window.location.reload();
+        });
+      };
+
+      var countedTd = el("td");
+      countedTd.style.padding = "10px";
+      countedTd.style.borderBottom = "1px solid #f3f4f6";
+      countedTd.appendChild(countedInput);
+
+      var noteTd = el("td");
+      noteTd.style.padding = "10px";
+      noteTd.style.borderBottom = "1px solid #f3f4f6";
+      noteTd.appendChild(noteInput);
+
+      var saveTd = el("td");
+      saveTd.style.padding = "10px";
+      saveTd.style.borderBottom = "1px solid #f3f4f6";
+      saveTd.appendChild(saveBtn);
+
+      tr.appendChild(tdText(item.name || "-", false));
+      tr.appendChild(tdText(item.brand || "-", false));
+      tr.appendChild(tdText(item.category || "-", false));
+      tr.appendChild(tdText(money(item.expected_quantity), true));
+      tr.appendChild(countedTd);
+      tr.appendChild(tdText(money(item.difference_quantity), true));
+      tr.appendChild(tdText(money(item.difference_value_ex_vat) + " kr", true));
+      tr.appendChild(noteTd);
+      tr.appendChild(saveTd);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    detailTarget.appendChild(wrap);
+  }
+
+  countSelect.onchange = renderStockCountDetails;
+  searchInput.oninput = renderStockCountDetails;
+
+  var savedStockCountId = localStorage.getItem("sk_internal_selected_stock_count_id");
+
+  if (savedStockCountId) {
+    countSelect.value = savedStockCountId;
+  }
+
+  renderStockCountDetails();
+
+  // ============================================================
+  // KAPITTEL 4 – Oversikt over varetellinger
+  // ============================================================
 
   var overviewSection = createCollapsibleSection(
     "📋 Tidligere varetellinger",
