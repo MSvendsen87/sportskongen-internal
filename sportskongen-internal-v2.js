@@ -4040,6 +4040,31 @@ hideZeroWrap.appendChild(hideZeroCheckbox);
 hideZeroWrap.appendChild(el("span", "Skjul varer med 0 på forventet lager"));
 
 detailSection.body.appendChild(hideZeroWrap);
+    var pendingStockChanges = {};
+
+var batchActionBox = el("div");
+batchActionBox.style.display = "flex";
+batchActionBox.style.gap = "10px";
+batchActionBox.style.flexWrap = "wrap";
+batchActionBox.style.alignItems = "center";
+batchActionBox.style.marginBottom = "14px";
+batchActionBox.style.padding = "12px";
+batchActionBox.style.border = "1px solid #e5e7eb";
+batchActionBox.style.borderRadius = "12px";
+batchActionBox.style.background = "#f9fafb";
+
+var saveChangedBtn = createPrimaryButton("Lagre endrede linjer");
+var resetChangedBtn = createButton("Nullstill endringer");
+
+var batchInfo = el("div", "Ingen ulagrede endringer.");
+batchInfo.style.color = "#6b7280";
+batchInfo.style.fontSize = "13px";
+
+batchActionBox.appendChild(saveChangedBtn);
+batchActionBox.appendChild(resetChangedBtn);
+batchActionBox.appendChild(batchInfo);
+
+detailSection.body.appendChild(batchActionBox);
 
   var detailSummary = el("div");
 detailSummary.style.margin = "10px 0";
@@ -4238,6 +4263,115 @@ detailSection.body.appendChild(detailTarget);
   stockStatusBox.appendChild(text);
   stockStatusBox.appendChild(actionBtn);
 }
+
+    function getPendingStockChangeIds() {
+  return Object.keys(pendingStockChanges);
+}
+
+function updateBatchButtons() {
+  var ids = getPendingStockChangeIds();
+  var count = selectedStockCount();
+
+  saveChangedBtn.textContent = "Lagre endrede linjer (" + ids.length + ")";
+  saveChangedBtn.disabled = ids.length === 0 || (count && count.status === "locked");
+
+  resetChangedBtn.disabled = ids.length === 0;
+
+  if (count && count.status === "locked") {
+    batchInfo.textContent = "Varetellingen er låst. Åpne den igjen for å lagre endringer.";
+    return;
+  }
+
+  batchInfo.textContent =
+    ids.length === 0
+      ? "Ingen ulagrede endringer."
+      : ids.length + " linje(r) har ulagrede endringer.";
+}
+
+resetChangedBtn.onclick = function () {
+  var ids = getPendingStockChangeIds();
+
+  if (!ids.length) {
+    return;
+  }
+
+  if (!confirm("Vil du nullstille ulagrede endringer?")) {
+    return;
+  }
+
+  pendingStockChanges = {};
+  renderStockCountDetails();
+  renderStockReport();
+  updateBatchButtons();
+};
+
+saveChangedBtn.onclick = function () {
+  var count = selectedStockCount();
+
+  if (!count) {
+    alert("Velg en varetelling først.");
+    return;
+  }
+
+  if (count.status === "locked") {
+    alert("Denne varetellingen er låst. Åpne den igjen først hvis du må gjøre endringer.");
+    return;
+  }
+
+  var ids = getPendingStockChangeIds();
+
+  if (!ids.length) {
+    alert("Ingen endringer å lagre.");
+    return;
+  }
+
+  var invalid = ids.some(function (id) {
+    return pendingStockChanges[id].counted_quantity === "";
+  });
+
+  if (invalid) {
+    alert("Alle endrede linjer må ha opptalt antall før lagring.");
+    return;
+  }
+
+  saveChangedBtn.disabled = true;
+  resetChangedBtn.disabled = true;
+  saveChangedBtn.textContent = "Lagrer " + ids.length + " linje(r)...";
+
+  var chain = Promise.resolve();
+
+  ids.forEach(function (id) {
+    chain = chain.then(function () {
+      var change = pendingStockChanges[id];
+
+      return sb.rpc("internal_update_stock_count_item", {
+        p_item_id: change.item_id,
+        p_counted_quantity: Number(change.counted_quantity),
+        p_notes: change.notes || null
+      }).then(function (result) {
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+      });
+    });
+  });
+
+  chain.then(function () {
+    pendingStockChanges = {};
+
+    localStorage.setItem("sk_internal_active_tab", "stock");
+    localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
+
+    alert("Endringer lagret.");
+    window.location.reload();
+  }).catch(function (error) {
+    saveChangedBtn.disabled = false;
+    resetChangedBtn.disabled = false;
+    updateBatchButtons();
+
+    alert("Kunne ikke lagre alle endringer: " + (error.message || String(error)));
+  });
+};
     
   function getItemsForSelectedCount() {
     var list = [];
@@ -4406,6 +4540,29 @@ detailSection.body.appendChild(detailTarget);
       noteInput.style.border = "1px solid #d1d5db";
       noteInput.style.borderRadius = "8px";
 
+if (pendingStockChanges[item.id]) {
+  countedInput.value = pendingStockChanges[item.id].counted_quantity;
+  noteInput.value = pendingStockChanges[item.id].notes || "";
+  tr.style.outline = "2px solid #f59e0b";
+  tr.style.outlineOffset = "-2px";
+}
+
+function markRowChanged() {
+  pendingStockChanges[item.id] = {
+    item_id: item.id,
+    counted_quantity: countedInput.value,
+    notes: noteInput.value.trim() || null
+  };
+
+  tr.style.outline = "2px solid #f59e0b";
+  tr.style.outlineOffset = "-2px";
+
+  updateBatchButtons();
+}
+
+countedInput.oninput = markRowChanged;
+noteInput.oninput = markRowChanged;
+      
       var saveBtn = createButton("Lagre");
       var isLocked = count.status === "locked";
 
@@ -4480,6 +4637,8 @@ if (isLocked) {
     table.appendChild(tbody);
     wrap.appendChild(table);
     detailTarget.appendChild(wrap);
+
+        updateBatchButtons();
   }
 
   function refreshStockCountView() {
