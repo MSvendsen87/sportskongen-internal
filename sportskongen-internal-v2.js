@@ -5051,6 +5051,43 @@ renderStockReport();
     app.appendChild(logout);
   }
 
+  function fetchAllRows(sb, tableName, orderColumn, ascending) {
+  var pageSize = 1000;
+  var from = 0;
+  var allRows = [];
+
+  function fetchPage() {
+    return sb
+      .from(tableName)
+      .select("*")
+      .order(orderColumn, { ascending: ascending !== false })
+      .range(from, from + pageSize - 1)
+      .then(function (result) {
+        if (result.error) {
+          return {
+            data: allRows,
+            error: result.error
+          };
+        }
+
+        var rows = result.data || [];
+        allRows = allRows.concat(rows);
+
+        if (rows.length < pageSize) {
+          return {
+            data: allRows,
+            error: null
+          };
+        }
+
+        from += pageSize;
+        return fetchPage();
+      });
+  }
+
+  return fetchPage();
+}
+  
   function loadPortalData(sb, user) {
   Promise.all([
   sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
@@ -5062,7 +5099,7 @@ renderStockReport();
   sb.from("internal_suppliers_view").select("*").order("name", { ascending: true }),
   sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false }),
   sb.from("internal_stock_counts_view").select("*").order("created_at", { ascending: false }),
-sb.from("internal_stock_count_items_view").select("*").order("name", { ascending: true })  
+fetchAllRows(sb, "internal_stock_count_items_view", "name", true)  
 ]).then(function (results) {
     if (results[0].error) {
       renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
