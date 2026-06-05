@@ -2190,6 +2190,139 @@ function renderProductSyncBox(parent, sb) {
 
   parent.appendChild(section.wrap);
 }
+
+function renderDeleteManualProductSection(parent, data, sb) {
+  var section = createCollapsibleSection(
+    "🗑️ Slett selvlaget produkt",
+    "Slett eller deaktiver produkter som er opprettet manuelt i internportalen. Quickbutik-produkter kan ikke slettes her.",
+    false
+  );
+
+  var info = el("p", "Velg et selvlaget produkt. Hvis produktet er brukt i tilbud eller varetelling, blir det deaktivert i stedet for fysisk slettet.");
+  info.style.color = "#6b7280";
+  section.body.appendChild(info);
+
+  var manualProducts = (data.products || []).filter(function (p) {
+    return !p.quickbutik_product_id;
+  });
+
+  var grid = el("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "minmax(260px, 1fr) auto";
+  grid.style.gap = "12px";
+  grid.style.alignItems = "end";
+
+  var productSelect = el("select");
+  addOption(productSelect, "", "Velg selvlaget produkt");
+
+  manualProducts.forEach(function (p) {
+    var label = p.name || "Ukjent produkt";
+
+    if (p.brand) {
+      label += " – " + p.brand;
+    }
+
+    if (p.category) {
+      label += " (" + p.category + ")";
+    }
+
+    addOption(productSelect, p.id, label);
+  });
+
+  var deleteBtn = createButton("Slett / deaktiver");
+  deleteBtn.style.background = "#991b1b";
+  deleteBtn.style.color = "#fff";
+  deleteBtn.style.borderColor = "#991b1b";
+
+  addField(grid, "Produkt", productSelect);
+
+  var btnWrap = el("div");
+  btnWrap.appendChild(deleteBtn);
+  grid.appendChild(btnWrap);
+
+  section.body.appendChild(grid);
+
+  var resultBox = el("pre");
+  resultBox.style.display = "none";
+  resultBox.style.marginTop = "12px";
+  resultBox.style.padding = "12px";
+  resultBox.style.background = "#111827";
+  resultBox.style.color = "#f9fafb";
+  resultBox.style.borderRadius = "10px";
+  resultBox.style.overflowX = "auto";
+  resultBox.style.whiteSpace = "pre-wrap";
+  resultBox.style.fontSize = "13px";
+
+  section.body.appendChild(resultBox);
+
+  deleteBtn.onclick = function () {
+    var productId = productSelect.value;
+
+    if (!productId) {
+      alert("Velg et produkt først.");
+      return;
+    }
+
+    var selected = null;
+
+    manualProducts.forEach(function (p) {
+      if (p.id === productId) {
+        selected = p;
+      }
+    });
+
+    if (!selected) {
+      alert("Fant ikke valgt produkt.");
+      return;
+    }
+
+    var confirmText = prompt(
+      "Dette gjelder kun selvlagde produkter.\n\n" +
+      "Produkt: " + selected.name + "\n\n" +
+      "Hvis produktet er brukt i tilbud eller varetelling, blir det deaktivert i stedet for slettet.\n\n" +
+      "Skriv SLETT PRODUKT for å bekrefte:"
+    );
+
+    if (confirmText !== "SLETT PRODUKT") {
+      alert("Produktet ble ikke slettet. Du må skrive nøyaktig SLETT PRODUKT.");
+      return;
+    }
+
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = "Sletter...";
+
+    sb.rpc("internal_delete_manual_product", {
+      p_product_id: productId,
+      p_confirm_text: confirmText
+    }).then(function (result) {
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = "Slett / deaktiver";
+
+      resultBox.style.display = "block";
+      resultBox.textContent = JSON.stringify(result, null, 2);
+
+      if (result.error) {
+        alert("Kunne ikke slette/deaktivere produkt: " + result.error.message);
+        return;
+      }
+
+      var row = result.data && result.data[0];
+
+      if (row && row.action === "deleted") {
+        alert("Produktet ble slettet.");
+      } else if (row && row.action === "deactivated") {
+        alert("Produktet ble deaktivert fordi det er brukt tidligere.");
+      } else {
+        alert("Ferdig.");
+      }
+
+      localStorage.setItem("sk_internal_active_tab", "products");
+      window.location.reload();
+    });
+  };
+
+  parent.appendChild(section.wrap);
+}
   
   function renderProductsManager(parent, data, sb) {
   var h2 = el("h2", "Produkter");
@@ -2199,6 +2332,7 @@ function renderProductSyncBox(parent, sb) {
   var intro = el("p", "Her kan du oppdatere innkjøpspris og låse/åpne kostnad på interne produkter.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
+    renderDeleteManualProductSection(parent, data, sb);
     renderProductSyncBox(parent, sb);
 
     var createSection = createCollapsibleSection(
