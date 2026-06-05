@@ -3995,36 +3995,67 @@ addTable(addonsSection.body, [
   );
 
   var countSelect = el("select");
-  countSelect.style.marginBottom = "12px";
+countSelect.style.marginBottom = "12px";
 
-  addOption(countSelect, "", "Velg varetelling");
+addOption(countSelect, "", "Velg varetelling");
 
-  (data.stockCounts || []).forEach(function (count) {
-    var label =
-      count.count_number +
-      " – " +
-      count.title +
-      " (" +
-      count.counted_line_count +
-      "/" +
-      count.line_count +
-      " telt)";
+(data.stockCounts || []).forEach(function (count) {
+  var label =
+    count.count_number +
+    " – " +
+    count.title +
+    " (" +
+    count.counted_line_count +
+    "/" +
+    count.line_count +
+    " telt)";
 
-    addOption(countSelect, count.id, label);
-  });
+  addOption(countSelect, count.id, label);
+});
 
-  addField(detailSection.body, "Varetelling", countSelect);
+addField(detailSection.body, "Varetelling", countSelect);
 
-  var searchInput = el("input");
-  searchInput.type = "text";
-  searchInput.placeholder = "Søk produkt, merke, kategori, SKU...";
-  addField(detailSection.body, "Søk i varer", searchInput);
-    var countFilterSelect = el("select");
+// ============================================================
+// STATUS / LÅSING – rett under valgt varetelling
+// ============================================================
+
+var stockStatusBox = el("div");
+stockStatusBox.style.margin = "12px 0";
+stockStatusBox.style.padding = "12px";
+stockStatusBox.style.border = "1px solid #e5e7eb";
+stockStatusBox.style.borderRadius = "12px";
+stockStatusBox.style.background = "#f9fafb";
+
+detailSection.body.appendChild(stockStatusBox);
+
+// ============================================================
+// SØK OG FILTER – rett over varelisten
+// ============================================================
+
+var filterBox = el("div");
+filterBox.style.margin = "14px 0";
+filterBox.style.padding = "14px";
+filterBox.style.border = "1px solid #e5e7eb";
+filterBox.style.borderRadius = "12px";
+filterBox.style.background = "#f9fafb";
+
+var filterTitle = el("div", "🔎 Søk og filter");
+filterTitle.style.fontWeight = "900";
+filterTitle.style.marginBottom = "10px";
+
+filterBox.appendChild(filterTitle);
+
+var searchInput = el("input");
+searchInput.type = "text";
+searchInput.placeholder = "Søk produkt, variant, merke, kategori, SKU...";
+addField(filterBox, "Søk i varer", searchInput);
+
+var countFilterSelect = el("select");
 addOption(countFilterSelect, "all", "Alle varer");
 addOption(countFilterSelect, "not_counted", "Kun ikke telt");
 addOption(countFilterSelect, "counted", "Kun telt");
 
-addField(detailSection.body, "Vis", countFilterSelect);
+addField(filterBox, "Vis", countFilterSelect);
 
 var hideZeroWrap = el("label");
 hideZeroWrap.style.display = "flex";
@@ -4039,8 +4070,15 @@ hideZeroCheckbox.type = "checkbox";
 hideZeroWrap.appendChild(hideZeroCheckbox);
 hideZeroWrap.appendChild(el("span", "Skjul varer med 0 på forventet lager"));
 
-detailSection.body.appendChild(hideZeroWrap);
-    var pendingStockChanges = {};
+filterBox.appendChild(hideZeroWrap);
+
+detailSection.body.appendChild(filterBox);
+
+// ============================================================
+// BATCH-LAGRING – rett over varelisten
+// ============================================================
+
+var pendingStockChanges = {};
 
 var batchActionBox = el("div");
 batchActionBox.style.display = "flex";
@@ -4066,26 +4104,24 @@ batchActionBox.appendChild(batchInfo);
 
 detailSection.body.appendChild(batchActionBox);
 
-  var detailSummary = el("div");
+// ============================================================
+// SAMMENDRAG + VARELISTE
+// ============================================================
+
+var detailSummary = el("div");
 detailSummary.style.margin = "10px 0";
 detailSummary.style.color = "#6b7280";
 detailSection.body.appendChild(detailSummary);
 
-    var stockStatusBox = el("div");
-stockStatusBox.style.margin = "12px 0";
-stockStatusBox.style.padding = "12px";
-stockStatusBox.style.border = "1px solid #e5e7eb";
-stockStatusBox.style.borderRadius = "12px";
-stockStatusBox.style.background = "#f9fafb";
-
-detailSection.body.appendChild(stockStatusBox);
+var detailTarget = el("div");
+detailSection.body.appendChild(detailTarget);
 
 // ============================================================
-// RAPPORT / AVVIK – synlig inne i Tell varer
+// RAPPORT / AVVIK – under varelisten
 // ============================================================
 
 var reportBox = el("div");
-reportBox.style.margin = "14px 0";
+reportBox.style.margin = "18px 0";
 reportBox.style.padding = "14px";
 reportBox.style.border = "1px solid #e5e7eb";
 reportBox.style.borderRadius = "12px";
@@ -4136,10 +4172,7 @@ reportBox.appendChild(reportTarget);
 
 detailSection.body.appendChild(reportBox);
 
-var detailTarget = el("div");
-detailSection.body.appendChild(detailTarget);
-
-  parent.appendChild(detailSection.wrap);
+parent.appendChild(detailSection.wrap);
 
   function selectedStockCount() {
     var found = null;
