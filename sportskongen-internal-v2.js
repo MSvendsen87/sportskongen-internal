@@ -4366,7 +4366,7 @@ applyBtn.style.marginLeft = "8px";
     });
   };
 
-  applyBtn.onclick = function () {
+ applyBtn.onclick = function () {
   var confirmText = prompt(
     "Dette vil oppdatere lageret i Quickbutik basert på denne låste varetellingen.\n\n" +
     "Dette bør kun gjøres når varetellingen er ferdig kontrollert.\n\n" +
@@ -4377,6 +4377,14 @@ applyBtn.style.marginLeft = "8px";
     alert("Quickbutik ble ikke oppdatert. Du må skrive nøyaktig OPPDATER QUICKBUTIK.");
     return;
   }
+
+  var batchLimit = 25;
+  var offset = 0;
+  var batches = 0;
+  var totalUpdates = 0;
+  var totalSkipped = 0;
+  var lastResult = null;
+  var maxBatches = 500;
 
   applyBtn.disabled = true;
   previewBtn.disabled = true;
@@ -4392,50 +4400,113 @@ applyBtn.style.marginLeft = "8px";
       throw new Error("Fant ikke innlogget Supabase-session.");
     }
 
-    var url =
-      "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/apply-stock-count-quickbutik" +
-      "?stock_count_id=" +
-      encodeURIComponent(count.id) +
-      "&limit=25" +
-      "&offset=0" +
-      "&dryRun=false" +
-      "&confirm_text=" +
-      encodeURIComponent(confirmText);
+    function runBatch() {
+      batches += 1;
 
-    return fetch(url, {
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer " + token
+      if (batches > maxBatches) {
+        throw new Error("Stoppet fordi maks antall batcher ble nådd. Kontroller tellingen før du prøver igjen.");
       }
-    });
-  }).then(function (response) {
-    return response.json();
-  }).then(function (data) {
+
+      previewResult.textContent =
+        "Oppdaterer Quickbutik..." +
+        "\nBatch: " + batches +
+        "\nOffset: " + offset +
+        "\nOppdatert så langt: " + totalUpdates +
+        "\nHoppet over så langt: " + totalSkipped;
+
+      var url =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/apply-stock-count-quickbutik" +
+        "?stock_count_id=" +
+        encodeURIComponent(count.id) +
+        "&limit=" +
+        encodeURIComponent(batchLimit) +
+        "&offset=" +
+        encodeURIComponent(offset) +
+        "&dryRun=false" +
+        "&confirm_text=" +
+        encodeURIComponent(confirmText);
+
+      return fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }).then(function (response) {
+        return response.json();
+      }).then(function (data) {
+        lastResult = data;
+
+        if (!data.ok) {
+          throw new Error(data.error || JSON.stringify(data));
+        }
+
+        totalUpdates += Number(data.quickbutik_updates || 0);
+        totalSkipped += Number(data.skipped || 0);
+
+        previewResult.textContent =
+          "Batch ferdig." +
+          "\nBatch: " + batches +
+          "\nOppdatert i denne batchen: " + Number(data.quickbutik_updates || 0) +
+          "\nHoppet over i denne batchen: " + Number(data.skipped || 0) +
+          "\nTotalt oppdatert: " + totalUpdates +
+          "\nTotalt hoppet over: " + totalSkipped +
+          "\nHar flere: " + (data.has_more ? "ja" : "nei") +
+          "\n\nSiste svar:\n" +
+          JSON.stringify(data, null, 2);
+
+        if (data.has_more) {
+          offset = Number(data.next_offset || (offset + batchLimit));
+
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve(runBatch());
+            }, 600);
+          });
+        }
+
+        return data;
+      });
+    }
+
+    return runBatch();
+  }).then(function () {
     applyBtn.disabled = false;
     previewBtn.disabled = false;
     applyBtn.textContent = "Oppdater Quickbutik-lager";
 
-    previewResult.textContent = JSON.stringify(data, null, 2);
+    previewResult.textContent =
+      "Quickbutik-oppdatering ferdig ✅" +
+      "\nBatcher kjørt: " + batches +
+      "\nTotalt oppdatert: " + totalUpdates +
+      "\nTotalt hoppet over: " + totalSkipped +
+      "\n\nSiste svar:\n" +
+      JSON.stringify(lastResult, null, 2);
 
-    if (data.ok) {
-      alert(
-        "Quickbutik er oppdatert.\n\n" +
-        "Oppdateringer: " +
-        data.quickbutik_updates +
-        "\nHoppet over: " +
-        data.skipped
-      );
-    } else {
-      alert("Quickbutik ble ikke oppdatert: " + (data.error || "Ukjent feil"));
-    }
+    alert(
+      "Quickbutik er oppdatert.\n\n" +
+      "Batcher kjørt: " +
+      batches +
+      "\nOppdateringer: " +
+      totalUpdates +
+      "\nHoppet over: " +
+      totalSkipped
+    );
   }).catch(function (error) {
     applyBtn.disabled = false;
     previewBtn.disabled = false;
     applyBtn.textContent = "Oppdater Quickbutik-lager";
 
-    previewResult.textContent = "Feil: " + (error.message || String(error));
+    previewResult.textContent =
+      "Feil under Quickbutik-oppdatering:\n" +
+      (error.message || String(error)) +
+      "\n\nTotalt oppdatert før stopp: " +
+      totalUpdates +
+      "\nTotalt hoppet over før stopp: " +
+      totalSkipped;
+
+    alert("Oppdateringen stoppet: " + (error.message || String(error)));
   });
-};
+}; 
   
   qbBox.appendChild(qbTitle);
 qbBox.appendChild(qbText);
