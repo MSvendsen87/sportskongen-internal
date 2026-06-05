@@ -4664,35 +4664,90 @@ if (isLocked) {
       saveTd.style.borderBottom = "1px solid #f3f4f6";
       saveTd.appendChild(saveBtn);
 
-      var variantText = "-";
+  var variantText = "-";
+
+function cleanVariantText(item) {
+  var parts = [];
+
+  function addPart(value) {
+    value = String(value || "").trim();
+
+    if (!value) {
+      return;
+    }
+
+    // Fjern "Variant 1", "Variant 2" osv.
+    value = value.replace(/\bvariant\s*\d+\b/gi, "").trim();
+
+    // Rydd separatorer i starten/slutten
+    value = value
+      .replace(/^[\s\-–—|/·:]+/g, "")
+      .replace(/[\s\-–—|/·:]+$/g, "")
+      .trim();
+
+    if (!value) {
+      return;
+    }
+
+    if (parts.indexOf(value) === -1) {
+      parts.push(value);
+    }
+  }
+
+  function escapeRegex(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function removeProductName(value, productName) {
+    value = String(value || "").trim();
+    productName = String(productName || "").trim();
+
+    if (!value || !productName) {
+      return value;
+    }
+
+    var regex = new RegExp(escapeRegex(productName), "gi");
+
+    return value
+      .replace(regex, "")
+      .replace(/\bvariant\s*\d+\b/gi, "")
+      .replace(/^[\s\-–—|/·:]+/g, "")
+      .replace(/[\s\-–—|/·:]+$/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  // Hvis Quickbutik faktisk gir valgverdier, bruk disse først
+  addPart(item.option_1_value);
+  addPart(item.option_2_value);
+  addPart(item.option_3_value);
+
+  // Hvis ikke, hent nyttig tekst fra SKU
+  if (parts.length === 0 && item.quickbutik_variant_sku) {
+    var cleanedSku = removeProductName(item.quickbutik_variant_sku, item.name);
+
+    // Gjør tekst litt penere, men behold f.eks. "173-175g" intakt
+    cleanedSku = cleanedSku
+      .replace(/\s+-\s+/g, " / ")
+      .replace(/\s+–\s+/g, " / ")
+      .replace(/\s+—\s+/g, " / ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    addPart(cleanedSku);
+  }
+
+  // Bruk variant_name kun hvis den ikke bare er "Variant 1"
+  if (parts.length === 0 && item.variant_name) {
+    addPart(item.variant_name);
+  }
+
+  return parts.length ? parts.join(" / ") : "-";
+}
 
 if (item.count_level === "variant") {
-  variantText = "";
-
-  if (item.quickbutik_variant_sku) {
-    variantText += item.quickbutik_variant_sku;
-  }
-
-  if (item.variant_name) {
-    variantText += variantText ? " · " + item.variant_name : item.variant_name;
-  }
-
-  if (item.option_1_value) {
-    variantText += variantText ? " · " + item.option_1_value : item.option_1_value;
-  }
-
-  if (item.option_2_value) {
-    variantText += variantText ? " · " + item.option_2_value : item.option_2_value;
-  }
-
-  if (item.option_3_value) {
-    variantText += variantText ? " · " + item.option_3_value : item.option_3_value;
-  }
-
-  if (!variantText) {
-    variantText = "Variant";
-  }
-}
+  variantText = cleanVariantText(item);
+}    
 
 tr.appendChild(tdText(item.name || "-", false));
 tr.appendChild(tdText(variantText, false));
