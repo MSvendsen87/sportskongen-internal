@@ -4293,8 +4293,84 @@ parent.appendChild(detailSection.wrap);
   }
 
   stockStatusBox.appendChild(title);
-  stockStatusBox.appendChild(text);
-  stockStatusBox.appendChild(actionBtn);
+stockStatusBox.appendChild(text);
+stockStatusBox.appendChild(actionBtn);
+
+if (count.status === "locked") {
+  var qbBox = el("div");
+  qbBox.style.marginTop = "12px";
+  qbBox.style.paddingTop = "12px";
+  qbBox.style.borderTop = "1px solid #d1d5db";
+
+  var qbTitle = el("div", "Quickbutik lageroppdatering");
+  qbTitle.style.fontWeight = "900";
+  qbTitle.style.marginBottom = "6px";
+
+  var qbText = el("div", "Forhåndsvis hva som vil bli sendt til Quickbutik. Dette oppdaterer ikke lageret.");
+  qbText.style.color = "#6b7280";
+  qbText.style.marginBottom = "10px";
+
+  var previewBtn = createButton("Forhåndsvis Quickbutik-oppdatering");
+  var previewResult = el("pre");
+
+  previewResult.style.display = "none";
+  previewResult.style.marginTop = "10px";
+  previewResult.style.padding = "12px";
+  previewResult.style.background = "#111827";
+  previewResult.style.color = "#f9fafb";
+  previewResult.style.borderRadius = "10px";
+  previewResult.style.overflowX = "auto";
+  previewResult.style.whiteSpace = "pre-wrap";
+  previewResult.style.fontSize = "13px";
+
+  previewBtn.onclick = function () {
+    previewBtn.disabled = true;
+    previewBtn.textContent = "Henter forhåndsvisning...";
+    previewResult.style.display = "none";
+
+    sb.auth.getSession().then(function (sessionResult) {
+      var session = sessionResult.data && sessionResult.data.session;
+      var token = session && session.access_token;
+
+      if (!token) {
+        throw new Error("Fant ikke innlogget Supabase-session.");
+      }
+
+      var url =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/preview-stock-count-quickbutik" +
+        "?stock_count_id=" +
+        encodeURIComponent(count.id);
+
+      return fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      });
+    }).then(function (response) {
+      return response.json();
+    }).then(function (data) {
+      previewBtn.disabled = false;
+      previewBtn.textContent = "Forhåndsvis Quickbutik-oppdatering";
+
+      previewResult.style.display = "block";
+      previewResult.textContent = JSON.stringify(data, null, 2);
+    }).catch(function (error) {
+      previewBtn.disabled = false;
+      previewBtn.textContent = "Forhåndsvis Quickbutik-oppdatering";
+
+      previewResult.style.display = "block";
+      previewResult.textContent = "Feil: " + (error.message || String(error));
+    });
+  };
+
+  qbBox.appendChild(qbTitle);
+  qbBox.appendChild(qbText);
+  qbBox.appendChild(previewBtn);
+  qbBox.appendChild(previewResult);
+
+  stockStatusBox.appendChild(qbBox);
+}
 }
 
     function getPendingStockChangeIds() {
