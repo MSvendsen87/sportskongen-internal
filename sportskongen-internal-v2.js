@@ -4399,15 +4399,24 @@ saveChangedBtn.onclick = function () {
   }
 
   var haystack = [
-        item.name,
-        item.brand,
-        item.category,
-        item.supplier_name,
-        item.quickbutik_sku,
-        item.quickbutik_product_id
-      ].map(function (value) {
-        return String(value || "").toLowerCase();
-      }).join(" ");
+  item.name,
+  item.brand,
+  item.category,
+  item.supplier_name,
+  item.quickbutik_sku,
+  item.quickbutik_product_id,
+  item.quickbutik_variant_id,
+  item.quickbutik_variant_sku,
+  item.variant_name,
+  item.option_1_name,
+  item.option_1_value,
+  item.option_2_name,
+  item.option_2_value,
+  item.option_3_name,
+  item.option_3_value
+].map(function (value) {
+  return String(value || "").toLowerCase();
+}).join(" ");
 
       if (query && haystack.indexOf(query) < 0) {
         return;
@@ -4471,16 +4480,17 @@ saveChangedBtn.onclick = function () {
     var headTr = el("tr");
 
     [
-      "Produkt",
-      "Merke",
-      "Kategori",
-      "Forventet",
-      "Opptalt",
-      "Avvik",
-      "Verdiavvik eks.",
-      "Notat",
-      "Lagre"
-    ].forEach(function (label) {
+  "Produkt",
+  "Variant / SKU",
+  "Merke",
+  "Kategori",
+  "Forventet",
+  "Opptalt",
+  "Avvik",
+  "Verdiavvik eks.",
+  "Notat",
+  "Lagre"
+].forEach(function (label) {
       var th = el("th", label);
       th.style.textAlign = "left";
       th.style.padding = "10px";
@@ -4621,15 +4631,46 @@ if (isLocked) {
       saveTd.style.borderBottom = "1px solid #f3f4f6";
       saveTd.appendChild(saveBtn);
 
-      tr.appendChild(tdText(item.name || "-", false));
-      tr.appendChild(tdText(item.brand || "-", false));
-      tr.appendChild(tdText(item.category || "-", false));
-      tr.appendChild(tdText(money(item.expected_quantity), true));
-      tr.appendChild(countedTd);
-      tr.appendChild(tdText(money(item.difference_quantity), true));
-      tr.appendChild(tdText(money(item.difference_value_ex_vat) + " kr", true));
-      tr.appendChild(noteTd);
-      tr.appendChild(saveTd);
+      var variantText = "-";
+
+if (item.count_level === "variant") {
+  variantText = "";
+
+  if (item.quickbutik_variant_sku) {
+    variantText += item.quickbutik_variant_sku;
+  }
+
+  if (item.variant_name) {
+    variantText += variantText ? " · " + item.variant_name : item.variant_name;
+  }
+
+  if (item.option_1_value) {
+    variantText += variantText ? " · " + item.option_1_value : item.option_1_value;
+  }
+
+  if (item.option_2_value) {
+    variantText += variantText ? " · " + item.option_2_value : item.option_2_value;
+  }
+
+  if (item.option_3_value) {
+    variantText += variantText ? " · " + item.option_3_value : item.option_3_value;
+  }
+
+  if (!variantText) {
+    variantText = "Variant";
+  }
+}
+
+tr.appendChild(tdText(item.name || "-", false));
+tr.appendChild(tdText(variantText, false));
+tr.appendChild(tdText(item.brand || "-", false));
+tr.appendChild(tdText(item.category || "-", false));
+tr.appendChild(tdText(money(item.expected_quantity), true));
+tr.appendChild(countedTd);
+tr.appendChild(tdText(money(item.difference_quantity), true));
+tr.appendChild(tdText(money(item.difference_value_ex_vat) + " kr", true));
+tr.appendChild(noteTd);
+tr.appendChild(saveTd);
 
       tbody.appendChild(tr);
     });
