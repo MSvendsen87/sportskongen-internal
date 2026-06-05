@@ -4312,6 +4312,8 @@ if (count.status === "locked") {
 
   var previewBtn = createButton("Forhåndsvis Quickbutik-oppdatering");
   var previewResult = el("pre");
+  var applyBtn = createPrimaryButton("Oppdater Quickbutik-lager");
+applyBtn.style.marginLeft = "8px";
 
   previewResult.style.display = "none";
   previewResult.style.marginTop = "10px";
@@ -4364,10 +4366,82 @@ if (count.status === "locked") {
     });
   };
 
+  applyBtn.onclick = function () {
+  var confirmText = prompt(
+    "Dette vil oppdatere lageret i Quickbutik basert på denne låste varetellingen.\n\n" +
+    "Dette bør kun gjøres når varetellingen er ferdig kontrollert.\n\n" +
+    "Skriv OPPDATER QUICKBUTIK for å bekrefte:"
+  );
+
+  if (confirmText !== "OPPDATER QUICKBUTIK") {
+    alert("Quickbutik ble ikke oppdatert. Du må skrive nøyaktig OPPDATER QUICKBUTIK.");
+    return;
+  }
+
+  applyBtn.disabled = true;
+  previewBtn.disabled = true;
+  applyBtn.textContent = "Oppdaterer Quickbutik...";
+  previewResult.style.display = "block";
+  previewResult.textContent = "Starter oppdatering...";
+
+  sb.auth.getSession().then(function (sessionResult) {
+    var session = sessionResult.data && sessionResult.data.session;
+    var token = session && session.access_token;
+
+    if (!token) {
+      throw new Error("Fant ikke innlogget Supabase-session.");
+    }
+
+    var url =
+      "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/apply-stock-count-quickbutik" +
+      "?stock_count_id=" +
+      encodeURIComponent(count.id) +
+      "&limit=25" +
+      "&offset=0" +
+      "&dryRun=false" +
+      "&confirm_text=" +
+      encodeURIComponent(confirmText);
+
+    return fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": "Bearer " + token
+      }
+    });
+  }).then(function (response) {
+    return response.json();
+  }).then(function (data) {
+    applyBtn.disabled = false;
+    previewBtn.disabled = false;
+    applyBtn.textContent = "Oppdater Quickbutik-lager";
+
+    previewResult.textContent = JSON.stringify(data, null, 2);
+
+    if (data.ok) {
+      alert(
+        "Quickbutik er oppdatert.\n\n" +
+        "Oppdateringer: " +
+        data.quickbutik_updates +
+        "\nHoppet over: " +
+        data.skipped
+      );
+    } else {
+      alert("Quickbutik ble ikke oppdatert: " + (data.error || "Ukjent feil"));
+    }
+  }).catch(function (error) {
+    applyBtn.disabled = false;
+    previewBtn.disabled = false;
+    applyBtn.textContent = "Oppdater Quickbutik-lager";
+
+    previewResult.textContent = "Feil: " + (error.message || String(error));
+  });
+};
+  
   qbBox.appendChild(qbTitle);
-  qbBox.appendChild(qbText);
-  qbBox.appendChild(previewBtn);
-  qbBox.appendChild(previewResult);
+qbBox.appendChild(qbText);
+qbBox.appendChild(previewBtn);
+qbBox.appendChild(applyBtn);
+qbBox.appendChild(previewResult);
 
   stockStatusBox.appendChild(qbBox);
 }
