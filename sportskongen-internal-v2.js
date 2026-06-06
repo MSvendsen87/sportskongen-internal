@@ -4584,6 +4584,42 @@ if (count.status === "locked") {
   qbText.style.color = "#6b7280";
   qbText.style.marginBottom = "10px";
 
+  var qbStatus = el("div");
+qbStatus.style.marginTop = "10px";
+qbStatus.style.marginBottom = "12px";
+qbStatus.style.padding = "12px";
+qbStatus.style.borderRadius = "12px";
+qbStatus.style.border = "1px solid #e5e7eb";
+
+if (count.quickbutik_updated_at) {
+  var updatedDate = new Date(count.quickbutik_updated_at);
+  var updatedText = isNaN(updatedDate.getTime())
+    ? count.quickbutik_updated_at
+    : updatedDate.toLocaleString("no-NO");
+
+  qbStatus.style.background = "#ecfdf5";
+  qbStatus.style.borderColor = "#86efac";
+  qbStatus.style.color = "#14532d";
+
+  qbStatus.textContent =
+    "✅ Quickbutik oppdatert" +
+    "\nOppdatert: " + updatedText +
+    "\nBatcher: " + (count.quickbutik_update_batches || 0) +
+    "\nOppdateringer: " + (count.quickbutik_update_count || 0) +
+    "\nHoppet over: " + (count.quickbutik_update_skipped || 0);
+} else {
+  qbStatus.style.background = "#fffbeb";
+  qbStatus.style.borderColor = "#fde68a";
+  qbStatus.style.color = "#78350f";
+
+  qbStatus.textContent =
+    "⚠️ Ikke oppdatert mot Quickbutik ennå" +
+    "\nNår varetellingen er låst og kontrollert, kan lageret oppdateres herfra.";
+}
+
+qbStatus.style.whiteSpace = "pre-line";
+qbStatus.style.fontWeight = "700";
+
   var previewBtn = createButton("Forhåndsvis Quickbutik-oppdatering");
   var previewResult = el("pre");
   var applyBtn = createPrimaryButton("Oppdater Quickbutik-lager");
@@ -4825,8 +4861,9 @@ applyBtn.style.marginLeft = "8px";
   });
 }; 
   
-  qbBox.appendChild(qbTitle);
+qbBox.appendChild(qbTitle);
 qbBox.appendChild(qbText);
+qbBox.appendChild(qbStatus);
 qbBox.appendChild(previewBtn);
 qbBox.appendChild(applyBtn);
 qbBox.appendChild(previewResult);
