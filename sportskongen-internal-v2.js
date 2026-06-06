@@ -4274,15 +4274,25 @@ countSelect.style.marginBottom = "12px";
 addOption(countSelect, "", "Velg varetelling");
 
 (data.stockCounts || []).forEach(function (count) {
+  var statusIcon = count.status === "locked" ? "🔒" : "🔓";
+  var qbIcon = count.quickbutik_updated_at ? "✅ QB" : "⚠️ ikke QB";
+
+  var counted = Number(count.counted_line_count || 0);
+  var total = Number(count.line_count || 0);
+
   var label =
+    statusIcon +
+    " " +
     count.count_number +
     " – " +
     count.title +
     " (" +
-    count.counted_line_count +
+    counted +
     "/" +
-    count.line_count +
-    " telt)";
+    total +
+    " telt, " +
+    qbIcon +
+    ")";
 
   addOption(countSelect, count.id, label);
 });
