@@ -312,7 +312,7 @@
 
     var settings = settingsMap(data.settings || []);
 
-    var note = el("div", "Endringer her bør gjøres rolig og bevisst. Verdiene brukes som standard i tilbud, utskrift og kundedokumenter. Hvis lagring feiler, må vi legge til en egen Supabase-RPC for trygg lagring.");
+    var note = el("div", "Endringer her bør gjøres rolig og bevisst. Verdiene brukes som standard i tilbud, utskrift og kundedokumenter. Lagring går via en trygg Supabase-RPC som bare godkjente admin-brukere kan bruke.");
     note.className = "sk-warning";
     note.style.marginBottom = "16px";
     parent.appendChild(note);
@@ -442,14 +442,8 @@
       saveBtn.textContent = "Lagrer...";
       resultBox.style.display = "none";
 
-      var settingsPayload = {};
-
-      rows.forEach(function (row) {
-        settingsPayload[row.setting_key] = row.setting_value;
-      });
-
       sb.rpc("internal_save_settings", {
-        p_settings: settingsPayload
+        p_settings: rows
       }).then(function (result) {
         saveBtn.disabled = false;
         saveBtn.textContent = "Lagre innstillinger";
@@ -477,6 +471,14 @@
       { label: "Kunder", value: String((data.customers || []).length) },
       { label: "Varetellinger", value: String((data.stockCounts || []).length) }
     ]);
+
+    var security = el("div");
+    security.className = "sk-note";
+    security.style.marginTop = "14px";
+    security.textContent =
+      "Sikkerhet: Portalen bruker Supabase-innlogging, sjekker internal_admin_users før data vises, bruker kun publishable key i frontend og service-role ligger ikke i nettleseren. Siden bør fortsatt være fjernet fra offentlig meny og ha noindex.";
+    system.body.appendChild(security);
+
     parent.appendChild(system.wrap);
   }
 
@@ -515,7 +517,7 @@
   }
 
   function renderLoading() {
-    renderShell("Intern Sportskongen-portal", "Laster internportal v2...");
+    renderShell("Intern Sportskongen-portal", "Laster internportal v4...");
   }
 
   function renderError(message) {
