@@ -4743,21 +4743,44 @@ applyBtn.style.marginLeft = "8px";
     }
 
     return runBatch();
-  }).then(function () {
+    }).then(function () {
+    previewResult.textContent =
+      "Quickbutik-oppdatering ferdig ✅" +
+      "\nMarkerer varetellingen som oppdatert..." +
+      "\nBatcher kjørt: " + batches +
+      "\nTotalt oppdatert: " + totalUpdates +
+      "\nTotalt hoppet over: " + totalSkipped;
+
+    return sb.rpc("internal_mark_stock_count_quickbutik_updated", {
+      p_stock_count_id: count.id,
+      p_batches: batches,
+      p_update_count: totalUpdates,
+      p_skipped_count: totalSkipped,
+      p_note: "Oppdatert fra internportal mot Quickbutik. Siste batch-svar: " + JSON.stringify(lastResult)
+    });
+  }).then(function (markResult) {
     applyBtn.disabled = false;
     previewBtn.disabled = false;
     applyBtn.textContent = "Oppdater Quickbutik-lager";
 
+    if (markResult.error) {
+      throw new Error("Quickbutik ble oppdatert, men varetellingen ble ikke markert som oppdatert: " + markResult.error.message);
+    }
+
     previewResult.textContent =
       "Quickbutik-oppdatering ferdig ✅" +
+      "\nVaretellingen er markert som Quickbutik-oppdatert ✅" +
       "\nBatcher kjørt: " + batches +
       "\nTotalt oppdatert: " + totalUpdates +
       "\nTotalt hoppet over: " + totalSkipped +
-      "\n\nSiste svar:\n" +
+      "\n\nMarkering:\n" +
+      JSON.stringify(markResult.data, null, 2) +
+      "\n\nSiste Quickbutik-svar:\n" +
       JSON.stringify(lastResult, null, 2);
 
     alert(
       "Quickbutik er oppdatert.\n\n" +
+      "Varetellingen er markert som oppdatert.\n\n" +
       "Batcher kjørt: " +
       batches +
       "\nOppdateringer: " +
@@ -4765,6 +4788,8 @@ applyBtn.style.marginLeft = "8px";
       "\nHoppet over: " +
       totalSkipped
     );
+
+    localStorage.setItem("sk_internal_active_tab", "stock");
   }).catch(function (error) {
     applyBtn.disabled = false;
     previewBtn.disabled = false;
