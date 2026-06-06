@@ -4582,17 +4582,23 @@ stockStatusBox.appendChild(actionBtn);
 
 if (count.status === "locked") {
   var qbBox = el("div");
-  qbBox.style.marginTop = "12px";
-  qbBox.style.paddingTop = "12px";
-  qbBox.style.borderTop = "1px solid #d1d5db";
+qbBox.style.marginTop = "16px";
+qbBox.style.padding = "16px";
+qbBox.style.border = "1px solid #d1d5db";
+qbBox.style.borderRadius = "14px";
+qbBox.style.background = "#ffffff";
+qbBox.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
 
-  var qbTitle = el("div", "Quickbutik lageroppdatering");
-  qbTitle.style.fontWeight = "900";
-  qbTitle.style.marginBottom = "6px";
+  var qbTitle = el("div", "🔄 Quickbutik lageroppdatering");
+qbTitle.style.fontWeight = "900";
+qbTitle.style.fontSize = "16px";
+qbTitle.style.marginBottom = "4px";
 
-  var qbText = el("div", "Forhåndsvis hva som vil bli sendt til Quickbutik. Dette oppdaterer ikke lageret.");
-  qbText.style.color = "#6b7280";
-  qbText.style.marginBottom = "10px";
+  var qbText = el("p", "Forhåndsvis først. Når varetellingen er låst og kontrollert, kan lageret oppdateres i Quickbutik.");
+qbText.style.marginTop = "0";
+qbText.style.marginBottom = "12px";
+qbText.style.color = "#6b7280";
+qbText.style.lineHeight = "1.5";
 
   var qbStatus = el("div");
 qbStatus.style.marginTop = "10px";
@@ -4885,11 +4891,19 @@ applyBtn.style.marginLeft = "8px";
   });
 }; 
   
+var qbButtonRow = el("div");
+qbButtonRow.style.display = "flex";
+qbButtonRow.style.gap = "10px";
+qbButtonRow.style.flexWrap = "wrap";
+qbButtonRow.style.marginTop = "12px";
+
+qbButtonRow.appendChild(previewBtn);
+qbButtonRow.appendChild(applyBtn);
+
 qbBox.appendChild(qbTitle);
 qbBox.appendChild(qbText);
 qbBox.appendChild(qbStatus);
-qbBox.appendChild(previewBtn);
-qbBox.appendChild(applyBtn);
+qbBox.appendChild(qbButtonRow);
 qbBox.appendChild(previewResult);
 
   stockStatusBox.appendChild(qbBox);
