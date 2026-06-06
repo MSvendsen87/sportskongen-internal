@@ -442,8 +442,14 @@
       saveBtn.textContent = "Lagrer...";
       resultBox.style.display = "none";
 
-      sb.from("internal_settings").upsert(rows, {
-        onConflict: "setting_key"
+      var settingsPayload = {};
+
+      rows.forEach(function (row) {
+        settingsPayload[row.setting_key] = row.setting_value;
+      });
+
+      sb.rpc("internal_save_settings", {
+        p_settings: settingsPayload
       }).then(function (result) {
         saveBtn.disabled = false;
         saveBtn.textContent = "Lagre innstillinger";
@@ -1092,23 +1098,29 @@ function formatDateNorwegian(value) {
 
   style.textContent =
     "@media print {" +
-    "  body * {" +
-    "    visibility: hidden !important;" +
+    "  html, body {" +
+    "    background: #fff !important;" +
+    "    margin: 0 !important;" +
+    "    padding: 0 !important;" +
     "  }" +
-    "  #sk-customer-offer-document, #sk-customer-offer-document *, #sk-stock-report-document, #sk-stock-report-document * {" +
-    "    visibility: visible !important;" +
+    "  body.sk-print-mode > *:not(.sk-print-document) {" +
+    "    display: none !important;" +
     "  }" +
-    "  #sk-customer-offer-document, #sk-stock-report-document {" +
-    "    position: absolute !important;" +
-    "    left: 0 !important;" +
-    "    top: 0 !important;" +
-    "    width: 100% !important;" +
+    "  body.sk-print-mode .sk-print-document {" +
+    "    display: block !important;" +
+    "    position: static !important;" +
+    "    width: auto !important;" +
     "    max-width: none !important;" +
     "    margin: 0 !important;" +
-    "    padding: 24px !important;" +
+    "    padding: 0 !important;" +
     "    border: none !important;" +
     "    box-shadow: none !important;" +
     "    border-radius: 0 !important;" +
+    "    background: #fff !important;" +
+    "    color: #111827 !important;" +
+    "  }" +
+    "  body.sk-print-mode .sk-print-document * {" +
+    "    box-shadow: none !important;" +
     "  }" +
     "  @page {" +
     "    size: A4;" +
@@ -1117,6 +1129,50 @@ function formatDateNorwegian(value) {
     "}";
 
   document.head.appendChild(style);
+}
+
+function printElementAsPdf(elementId, message) {
+  ensureOfferPrintStyle();
+
+  var source = document.getElementById(elementId);
+
+  if (!source) {
+    alert("Fant ikke dokumentet som skal skrives ut.");
+    return;
+  }
+
+  var oldPrint = document.querySelector(".sk-print-document");
+
+  if (oldPrint && oldPrint.parentNode) {
+    oldPrint.parentNode.removeChild(oldPrint);
+  }
+
+  var clone = source.cloneNode(true);
+  clone.className = (clone.className ? clone.className + " " : "") + "sk-print-document";
+  clone.removeAttribute("id");
+
+  document.body.appendChild(clone);
+  document.body.classList.add("sk-print-mode");
+
+  function cleanup() {
+    document.body.classList.remove("sk-print-mode");
+
+    if (clone && clone.parentNode) {
+      clone.parentNode.removeChild(clone);
+    }
+
+    window.removeEventListener("afterprint", cleanup);
+  }
+
+  window.addEventListener("afterprint", cleanup);
+
+  if (message) {
+    alert(message);
+  }
+
+  setTimeout(function () {
+    window.print();
+  }, 80);
 }
 function renderCustomerOffer(parent, data, sb) {
 ensureOfferPrintStyle();
@@ -1594,12 +1650,11 @@ if (savedQuoteId) {
 };
 
   printBtn.onclick = function () {
-    window.print();
+    printElementAsPdf("sk-customer-offer-document", null);
   };
 
 pdfBtn.onclick = function () {
-  alert("Velg ‘Lagre som PDF’ i utskriftsvinduet for å laste ned tilbudet som PDF.");
-  window.print();
+  printElementAsPdf("sk-customer-offer-document", "Velg ‘Lagre som PDF’ i utskriftsvinduet for å laste ned tilbudet som PDF.");
 };
 
 duplicateBtn.onclick = function () {
@@ -5004,6 +5059,42 @@ stockStatusBox.style.background = "#f9fafb";
 detailSection.body.appendChild(stockStatusBox);
 
 // ============================================================
+// RAPPORTSNARVEI – tydelig tilgjengelig før varelisten
+// ============================================================
+
+var reportShortcutBox = el("div");
+reportShortcutBox.style.margin = "14px 0";
+reportShortcutBox.style.padding = "14px";
+reportShortcutBox.style.border = "1px solid #d1d5db";
+reportShortcutBox.style.borderRadius = "14px";
+reportShortcutBox.style.background = "#ffffff";
+reportShortcutBox.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
+
+var reportShortcutTitle = el("div", "📄 Rapport og PDF");
+reportShortcutTitle.style.fontWeight = "900";
+reportShortcutTitle.style.marginBottom = "4px";
+
+var reportShortcutText = el("p", "Kopier en kort oppsummering av varetellingen eller lagre rapporten som PDF.");
+reportShortcutText.style.marginTop = "0";
+reportShortcutText.style.marginBottom = "10px";
+reportShortcutText.style.color = "#6b7280";
+
+var reportShortcutButtons = el("div");
+reportShortcutButtons.style.display = "flex";
+reportShortcutButtons.style.gap = "10px";
+reportShortcutButtons.style.flexWrap = "wrap";
+
+var shortcutCopyReportBtn = createButton("Kopier rapportoppsummering");
+var shortcutPdfReportBtn = createPrimaryButton("Last ned PDF");
+
+reportShortcutButtons.appendChild(shortcutCopyReportBtn);
+reportShortcutButtons.appendChild(shortcutPdfReportBtn);
+reportShortcutBox.appendChild(reportShortcutTitle);
+reportShortcutBox.appendChild(reportShortcutText);
+reportShortcutBox.appendChild(reportShortcutButtons);
+detailSection.body.appendChild(reportShortcutBox);
+
+// ============================================================
 // SØK OG FILTER – rett over varelisten
 // ============================================================
 
@@ -6038,7 +6129,6 @@ hideZeroCheckbox.onchange = renderStockCountDetails;
 
   renderStockStatusBox();
 renderStockCountDetails();
-renderStockReport();
 
   // ============================================================
   // KAPITTEL 4 – Rapport og avvik
@@ -6079,10 +6169,8 @@ renderStockReport();
 
   reportControls.appendChild(onlyDiffWrap);
 
-  var copyReportBtn = createButton("Kopier rapport");
-  var pdfReportBtn = createButton("Last ned PDF");
-  reportControls.appendChild(copyReportBtn);
-  reportControls.appendChild(pdfReportBtn);
+  var copyReportBtn = shortcutCopyReportBtn;
+  var pdfReportBtn = shortcutPdfReportBtn;
 
   reportSection.body.appendChild(reportControls);
 
@@ -6262,6 +6350,7 @@ renderStockReport();
     lines.push("Tittel: " + (count.title || "-"));
     lines.push("Status: " + statusLabel(count.status));
     lines.push("Dato: " + formatDateNorwegian(count.created_at));
+    lines.push("Quickbutik: " + (count.quickbutik_updated_at ? "Oppdatert " + formatDateNorwegian(count.quickbutik_updated_at) : "Ikke oppdatert"));
     lines.push("");
     lines.push("OPPSUMMERING");
     lines.push("Linjer totalt: " + dataReport.totals.line_count);
@@ -6351,12 +6440,12 @@ renderStockReport();
     doc.appendChild(pre);
 
     document.body.appendChild(doc);
-    alert("Velg ‘Lagre som PDF’ i utskriftsvinduet for å laste ned rapporten som PDF.");
-    window.print();
+    printElementAsPdf("sk-stock-report-document", "Velg ‘Lagre som PDF’ i utskriftsvinduet for å laste ned rapporten som PDF.");
   };
 
   reportGroupSelect.onchange = renderStockReport;
   onlyDiffCheckbox.onchange = renderStockReport;
+  renderStockReport();
     
   // ============================================================
   // KAPITTEL 4 – Oversikt over varetellinger
