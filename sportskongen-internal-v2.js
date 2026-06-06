@@ -2679,128 +2679,6 @@ renderProductsSmartTable(productListSection.body, data.products || []);
 
 parent.appendChild(productListSection.wrap);
 }
-
-  create or replace function internal_delete_addon(
-  p_addon_id uuid,
-  p_confirm_text text
-)
-returns table (
-  addon_id uuid,
-  addon_name text,
-  action text
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_user_id uuid;
-  v_is_admin boolean;
-  v_addon internal_addons%rowtype;
-  v_used_in_quotes boolean;
-begin
-  v_user_id := auth.uid();
-
-  if v_user_id is null then
-    raise exception 'Not authenticated';
-  end if;
-
-  select exists (
-    select 1
-    from internal_admin_users a
-    where a.user_id = v_user_id
-      and a.is_active = true
-  )
-  into v_is_admin;
-
-  if not v_is_admin then
-    raise exception 'Not authorized';
-  end if;
-
-  if trim(coalesce(p_confirm_text, '')) <> 'SLETT TILLEGG' then
-    raise exception 'Du må skrive SLETT TILLEGG for å slette/deaktivere tillegget';
-  end if;
-
-  select *
-  into v_addon
-  from internal_addons
-  where id = p_addon_id;
-
-  if not found then
-    raise exception 'Tillegget finnes ikke';
-  end if;
-
-  select exists (
-    select 1
-    from internal_quote_items qi
-    where qi.addon_id = p_addon_id
-  )
-  into v_used_in_quotes;
-
-  if v_used_in_quotes then
-    update internal_addons
-    set
-      is_active = false,
-      internal_notes =
-        coalesce(internal_notes, '') ||
-        E'\nDeaktivert via internportal. Kunne ikke slettes fysisk fordi tillegget er brukt tidligere.',
-      updated_at = now()
-    where id = p_addon_id;
-
-    insert into internal_audit_log (
-      table_name,
-      record_id,
-      action,
-      description,
-      changed_by
-    )
-    values (
-      'internal_addons',
-      p_addon_id,
-      'deactivate_addon',
-      'Deaktiverte tillegg: ' || v_addon.name,
-      v_user_id
-    );
-
-    return query
-    select
-      p_addon_id,
-      v_addon.name,
-      'deactivated'::text;
-
-    return;
-  end if;
-
-  delete from internal_addons
-  where id = p_addon_id;
-
-  insert into internal_audit_log (
-    table_name,
-    record_id,
-    action,
-    description,
-    changed_by
-  )
-  values (
-    'internal_addons',
-    p_addon_id,
-    'delete_addon',
-    'Slettet tillegg: ' || v_addon.name,
-    v_user_id
-  );
-
-  return query
-  select
-    p_addon_id,
-    v_addon.name,
-    'deleted'::text;
-end;
-$$;
-
-grant execute on function internal_delete_addon(
-  uuid,
-  text
-) to authenticated;
   
   function renderSuppliersAddonsManager(parent, data, sb) {
   var h2 = el("h2", "Leverandører / tillegg");
@@ -2810,8 +2688,6 @@ grant execute on function internal_delete_addon(
   var intro = el("p", "Her kan du opprette og redigere tilleggskostnader som frakt, oppstart, folie, designkost, montering og andre tillegg.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
-
-    renderDeleteAddonSection(parent, data, sb);
 
   function supplierOptions(select) {
     addOption(select, "", "Ingen / generell");
