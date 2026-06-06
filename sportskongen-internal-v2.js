@@ -4622,7 +4622,17 @@ qbStatus.style.fontWeight = "700";
 
   var previewBtn = createButton("Forhåndsvis Quickbutik-oppdatering");
   var previewResult = el("pre");
-  var applyBtn = createPrimaryButton("Oppdater Quickbutik-lager");
+  var applyBtn = createPrimaryButton(
+  count.quickbutik_updated_at
+    ? "Kjør Quickbutik-oppdatering på nytt"
+    : "Oppdater Quickbutik-lager"
+);
+
+if (count.quickbutik_updated_at) {
+  applyBtn.style.background = "#92400e";
+  applyBtn.style.borderColor = "#92400e";
+  applyBtn.style.color = "#fff";
+}
 applyBtn.style.marginLeft = "8px";
 
   previewResult.style.display = "none";
@@ -4815,7 +4825,9 @@ applyBtn.style.marginLeft = "8px";
   }).then(function (markResult) {
     applyBtn.disabled = false;
     previewBtn.disabled = false;
-    applyBtn.textContent = "Oppdater Quickbutik-lager";
+    applyBtn.textContent = count.quickbutik_updated_at
+  ? "Kjør Quickbutik-oppdatering på nytt"
+  : "Oppdater Quickbutik-lager";
 
     if (markResult.error) {
       throw new Error("Quickbutik ble oppdatert, men varetellingen ble ikke markert som oppdatert: " + markResult.error.message);
@@ -4847,7 +4859,9 @@ applyBtn.style.marginLeft = "8px";
   }).catch(function (error) {
     applyBtn.disabled = false;
     previewBtn.disabled = false;
-    applyBtn.textContent = "Oppdater Quickbutik-lager";
+    applyBtn.textContent = count.quickbutik_updated_at
+  ? "Kjør Quickbutik-oppdatering på nytt"
+  : "Oppdater Quickbutik-lager";
 
     previewResult.textContent =
       "Feil under Quickbutik-oppdatering:\n" +
