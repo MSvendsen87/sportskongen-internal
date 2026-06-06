@@ -4641,14 +4641,32 @@ applyBtn.style.marginLeft = "8px";
   };
 
  applyBtn.onclick = function () {
-  var confirmText = prompt(
-    "Dette vil oppdatere lageret i Quickbutik basert på denne låste varetellingen.\n\n" +
-    "Dette bør kun gjøres når varetellingen er ferdig kontrollert.\n\n" +
-    "Skriv OPPDATER QUICKBUTIK for å bekrefte:"
-  );
+  var alreadyUpdated = !!count.quickbutik_updated_at;
 
-  if (confirmText !== "OPPDATER QUICKBUTIK") {
-    alert("Quickbutik ble ikke oppdatert. Du må skrive nøyaktig OPPDATER QUICKBUTIK.");
+  var requiredConfirmText = alreadyUpdated
+    ? "OPPDATER QUICKBUTIK PÅ NYTT"
+    : "OPPDATER QUICKBUTIK";
+
+  var confirmMessage =
+    "Dette vil oppdatere lageret i Quickbutik basert på denne låste varetellingen.\n\n" +
+    "Dette bør kun gjøres når varetellingen er ferdig kontrollert.\n\n";
+
+  if (alreadyUpdated) {
+    confirmMessage +=
+      "ADVARSEL: Denne varetellingen er allerede markert som Quickbutik-oppdatert.\n\n" +
+      "Oppdatert: " + count.quickbutik_updated_at + "\n" +
+      "Antall oppdatert sist: " + (count.quickbutik_update_count || 0) + "\n" +
+      "Hoppet over sist: " + (count.quickbutik_update_skipped || 0) + "\n\n" +
+      "Hvis du likevel vil kjøre den på nytt, skriv " + requiredConfirmText + ":";
+  } else {
+    confirmMessage +=
+      "Skriv " + requiredConfirmText + " for å bekrefte:";
+  }
+
+  var confirmText = prompt(confirmMessage);
+
+  if (confirmText !== requiredConfirmText) {
+    alert("Quickbutik ble ikke oppdatert. Du må skrive nøyaktig " + requiredConfirmText + ".");
     return;
   }
 
