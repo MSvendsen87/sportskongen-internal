@@ -2692,8 +2692,8 @@ parent.appendChild(productListSection.wrap);
   section.body.appendChild(info);
 
   var addons = (data.addons || []).filter(function (a) {
-    return a && a.id;
-  });
+  return a && a.addon_id;
+});
 
   var grid = el("div");
   grid.style.display = "grid";
@@ -2705,7 +2705,7 @@ parent.appendChild(productListSection.wrap);
   addOption(addonSelect, "", "Velg tillegg");
 
   addons.forEach(function (a) {
-    var label = a.name || "Ukjent tillegg";
+    var label = a.addon_name || "Ukjent tillegg";
 
     if (a.supplier_name) {
       label += " – " + a.supplier_name;
@@ -2715,11 +2715,11 @@ parent.appendChild(productListSection.wrap);
       label += " (" + money(a.amount_ex_vat) + " kr eks. mva)";
     }
 
-    if (a.is_active === false) {
-      label += " – deaktivert";
-    }
+    if (a.addon_is_active === false) {
+  label += " – deaktivert";
+}
 
-    addOption(addonSelect, a.id, label);
+    addOption(addonSelect, a.addon_id, label);
   });
 
   var deleteBtn = createButton("Slett / deaktiver");
@@ -2759,9 +2759,9 @@ parent.appendChild(productListSection.wrap);
     var selected = null;
 
     addons.forEach(function (a) {
-      if (a.id === addonId) {
-        selected = a;
-      }
+      if (a.addon_id === addonId) {
+  selected = a;
+}
     });
 
     if (!selected) {
@@ -2771,7 +2771,7 @@ parent.appendChild(productListSection.wrap);
 
     var confirmText = prompt(
       "Dette vil slette eller deaktivere tillegget.\n\n" +
-      "Tillegg: " + selected.name + "\n\n" +
+      "Tillegg: " + selected.addon_name + "\n\n" +
       "Hvis tillegget er brukt tidligere, blir det deaktivert i stedet for slettet.\n\n" +
       "Skriv SLETT TILLEGG for å bekrefte:"
     );
