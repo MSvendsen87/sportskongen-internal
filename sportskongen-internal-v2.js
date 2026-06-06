@@ -2679,6 +2679,143 @@ renderProductsSmartTable(productListSection.body, data.products || []);
 
 parent.appendChild(productListSection.wrap);
 }
+
+  function renderDeleteAddonSection(parent, data, sb) {
+  var section = createCollapsibleSection(
+    "🗑️ Slett / deaktiver tillegg",
+    "Slett tillegg som ikke er brukt tidligere. Tillegg som er brukt i tilbud blir deaktivert i stedet.",
+    false
+  );
+
+  var info = el("p", "Velg et tillegg du ønsker å fjerne. Hvis tillegget er brukt tidligere, blir det deaktivert slik at historikken beholdes.");
+  info.style.color = "#6b7280";
+  section.body.appendChild(info);
+
+  var addons = (data.addons || []).filter(function (a) {
+    return a && a.id;
+  });
+
+  var grid = el("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "minmax(260px, 1fr) auto";
+  grid.style.gap = "12px";
+  grid.style.alignItems = "end";
+
+  var addonSelect = el("select");
+  addOption(addonSelect, "", "Velg tillegg");
+
+  addons.forEach(function (a) {
+    var label = a.name || "Ukjent tillegg";
+
+    if (a.supplier_name) {
+      label += " – " + a.supplier_name;
+    }
+
+    if (a.amount_ex_vat !== null && a.amount_ex_vat !== undefined) {
+      label += " (" + money(a.amount_ex_vat) + " kr eks. mva)";
+    }
+
+    if (a.is_active === false) {
+      label += " – deaktivert";
+    }
+
+    addOption(addonSelect, a.id, label);
+  });
+
+  var deleteBtn = createButton("Slett / deaktiver");
+  deleteBtn.style.background = "#991b1b";
+  deleteBtn.style.color = "#fff";
+  deleteBtn.style.borderColor = "#991b1b";
+
+  addField(grid, "Tillegg", addonSelect);
+
+  var btnWrap = el("div");
+  btnWrap.appendChild(deleteBtn);
+  grid.appendChild(btnWrap);
+
+  section.body.appendChild(grid);
+
+  var resultBox = el("pre");
+  resultBox.style.display = "none";
+  resultBox.style.marginTop = "12px";
+  resultBox.style.padding = "12px";
+  resultBox.style.background = "#111827";
+  resultBox.style.color = "#f9fafb";
+  resultBox.style.borderRadius = "10px";
+  resultBox.style.overflowX = "auto";
+  resultBox.style.whiteSpace = "pre-wrap";
+  resultBox.style.fontSize = "13px";
+
+  section.body.appendChild(resultBox);
+
+  deleteBtn.onclick = function () {
+    var addonId = addonSelect.value;
+
+    if (!addonId) {
+      alert("Velg et tillegg først.");
+      return;
+    }
+
+    var selected = null;
+
+    addons.forEach(function (a) {
+      if (a.id === addonId) {
+        selected = a;
+      }
+    });
+
+    if (!selected) {
+      alert("Fant ikke valgt tillegg.");
+      return;
+    }
+
+    var confirmText = prompt(
+      "Dette vil slette eller deaktivere tillegget.\n\n" +
+      "Tillegg: " + selected.name + "\n\n" +
+      "Hvis tillegget er brukt tidligere, blir det deaktivert i stedet for slettet.\n\n" +
+      "Skriv SLETT TILLEGG for å bekrefte:"
+    );
+
+    if (confirmText !== "SLETT TILLEGG") {
+      alert("Tillegget ble ikke slettet. Du må skrive nøyaktig SLETT TILLEGG.");
+      return;
+    }
+
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = "Sletter...";
+
+    sb.rpc("internal_delete_addon", {
+      p_addon_id: addonId,
+      p_confirm_text: confirmText
+    }).then(function (result) {
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = "Slett / deaktiver";
+
+      resultBox.style.display = "block";
+      resultBox.textContent = JSON.stringify(result, null, 2);
+
+      if (result.error) {
+        alert("Kunne ikke slette/deaktivere tillegg: " + result.error.message);
+        return;
+      }
+
+      var row = result.data && result.data[0];
+
+      if (row && row.action === "deleted") {
+        alert("Tillegget ble slettet.");
+      } else if (row && row.action === "deactivated") {
+        alert("Tillegget ble deaktivert fordi det er brukt tidligere.");
+      } else {
+        alert("Ferdig.");
+      }
+
+      localStorage.setItem("sk_internal_active_tab", "suppliers");
+      window.location.reload();
+    });
+  };
+
+  parent.appendChild(section.wrap);
+}
   
   function renderSuppliersAddonsManager(parent, data, sb) {
   var h2 = el("h2", "Leverandører / tillegg");
@@ -2688,6 +2825,8 @@ parent.appendChild(productListSection.wrap);
   var intro = el("p", "Her kan du opprette og redigere tilleggskostnader som frakt, oppstart, folie, designkost, montering og andre tillegg.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
+
+    renderDeleteAddonSection(parent, data, sb);
 
   function supplierOptions(select) {
     addOption(select, "", "Ingen / generell");
