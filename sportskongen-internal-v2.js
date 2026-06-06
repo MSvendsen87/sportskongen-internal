@@ -57,31 +57,413 @@
     return btn;
   }
 
+
+  function ensurePortalUiStyle() {
+    if (document.getElementById("sk-internal-pro-style")) {
+      return;
+    }
+
+    var style = document.createElement("style");
+    style.id = "sk-internal-pro-style";
+    style.textContent =
+      "#sk-internal-root *{box-sizing:border-box;}" +
+      "#sk-internal-root input,#sk-internal-root select,#sk-internal-root textarea,#sk-internal-root button{font-family:Arial,sans-serif;}" +
+      "#sk-internal-root button{transition:background .15s ease,border-color .15s ease,transform .08s ease;}" +
+      "#sk-internal-root button:hover{transform:translateY(-1px);}" +
+      "#sk-internal-root .sk-app-shell{max-width:1240px;margin:24px auto;padding:22px;border:1px solid #e5e7eb;border-radius:22px;background:#fff;color:#111827;font-family:Arial,sans-serif;box-shadow:0 18px 50px rgba(15,23,42,.08);}" +
+      "#sk-internal-root .sk-topline{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid #eef2f7;}" +
+      "#sk-internal-root .sk-title{margin:0;font-size:30px;letter-spacing:-.03em;}" +
+      "#sk-internal-root .sk-subtitle{margin:6px 0 0 0;color:#64748b;line-height:1.5;max-width:760px;}" +
+      "#sk-internal-root .sk-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#ecfdf5;color:#14532d;font-weight:800;font-size:13px;border:1px solid #bbf7d0;white-space:nowrap;}" +
+      "#sk-internal-root .sk-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;padding:10px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;}" +
+      "#sk-internal-root .sk-tab-btn{border-radius:12px!important;padding:11px 14px!important;}" +
+      "#sk-internal-root .sk-content{margin-top:20px;}" +
+      "#sk-internal-root .sk-page-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px;}" +
+      "#sk-internal-root .sk-page-head h2{margin:0;font-size:24px;letter-spacing:-.02em;}" +
+      "#sk-internal-root .sk-page-head p{margin:5px 0 0 0;color:#64748b;line-height:1.5;max-width:780px;}" +
+      "#sk-internal-root .sk-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0;}" +
+      "#sk-internal-root .sk-card{padding:16px;border:1px solid #e5e7eb;border-radius:16px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.04);}" +
+      "#sk-internal-root .sk-card-label{color:#64748b;font-size:13px;font-weight:700;}" +
+      "#sk-internal-root .sk-card-value{display:block;margin-top:7px;font-size:26px;font-weight:900;letter-spacing:-.03em;}" +
+      "#sk-internal-root .sk-note{padding:13px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:14px;line-height:1.5;font-size:14px;}" +
+      "#sk-internal-root .sk-warning{padding:13px 14px;border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:14px;line-height:1.5;font-size:14px;}" +
+      "#sk-internal-root .sk-danger-zone{padding:14px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:14px;}" +
+      "#sk-internal-root .sk-two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:16px;align-items:start;}" +
+      "@media(max-width:820px){" +
+      "  #sk-internal-root .sk-app-shell{margin:10px auto;padding:14px;border-radius:16px;}" +
+      "  #sk-internal-root .sk-title{font-size:24px;}" +
+      "  #sk-internal-root .sk-tabs{overflow-x:auto;flex-wrap:nowrap;padding:8px;}" +
+      "  #sk-internal-root .sk-tab-btn{white-space:nowrap;}" +
+      "  #sk-internal-root .sk-two-col{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-page-head h2{font-size:21px;}" +
+      "}";
+    document.head.appendChild(style);
+  }
+
+  function createPageHeader(parent, title, description, badgeText) {
+    var wrap = el("div");
+    wrap.className = "sk-page-head";
+
+    var left = el("div");
+    var h2 = el("h2", title);
+    var p = el("p", description || "");
+
+    left.appendChild(h2);
+
+    if (description) {
+      left.appendChild(p);
+    }
+
+    wrap.appendChild(left);
+
+    if (badgeText) {
+      var badge = el("div", badgeText);
+      badge.className = "sk-badge";
+      wrap.appendChild(badge);
+    }
+
+    parent.appendChild(wrap);
+  }
+
+  function addProStatGrid(parent, cards) {
+    var grid = el("div");
+    grid.className = "sk-card-grid";
+
+    (cards || []).forEach(function (item) {
+      var card = el("div");
+      card.className = "sk-card";
+
+      var label = el("div", item.label);
+      label.className = "sk-card-label";
+
+      var value = el("strong", item.value);
+      value.className = "sk-card-value";
+
+      if (item.tone === "danger") {
+        card.style.borderColor = "#fecaca";
+        card.style.background = "#fef2f2";
+        value.style.color = "#991b1b";
+      }
+
+      if (item.tone === "warning") {
+        card.style.borderColor = "#fde68a";
+        card.style.background = "#fffbeb";
+        value.style.color = "#92400e";
+      }
+
+      if (item.tone === "ok") {
+        card.style.borderColor = "#bbf7d0";
+        card.style.background = "#f0fdf4";
+        value.style.color = "#166534";
+      }
+
+      card.appendChild(label);
+      card.appendChild(value);
+      grid.appendChild(card);
+    });
+
+    parent.appendChild(grid);
+  }
+
+  function addMobileAdvice(parent) {
+    var note = el("div", "Tips: Portalen fungerer på mobil, men store oppgaver som tilbud, produktvedlikehold og varetelling med mange linjer anbefales på PC for best oversikt.");
+    note.className = "sk-note";
+    note.style.marginBottom = "16px";
+    parent.appendChild(note);
+  }
+
+  function statusLabel(value) {
+    if (value === "draft") return "Utkast";
+    if (value === "sent") return "Sendt";
+    if (value === "accepted") return "Akseptert";
+    if (value === "declined") return "Avslått";
+    if (value === "expired") return "Utløpt";
+    if (value === "locked") return "Låst";
+    if (value === "in_progress") return "Pågår";
+    return value || "-";
+  }
+
+  function renderQuotesArchive(parent, data) {
+    createPageHeader(parent, "Kalkyler og tilbudsarkiv", "Oversikt over lagrede kalkyler og tilbud. Bruk kundetilbud-seksjonen for å skrive ut, kopiere eller redigere tilbud.");
+
+    addTable(parent, [
+      { key: "quote_number", label: "Tilbud" },
+      { key: "quote_type", label: "Type" },
+      { key: "customer_name", label: "Kunde" },
+      { key: "status", label: "Status" },
+      { key: "item_count", label: "Linjer" },
+      { key: "calculated_items_cost_ex_vat", label: "Kost eks.", format: "money" },
+      { key: "calculated_items_sales_ex_vat", label: "Salg eks.", format: "money" },
+      { key: "calculated_items_profit_ex_vat", label: "Fortjeneste", format: "money" }
+    ], data.quotes, "Ingen kalkyler funnet.");
+  }
+
+  function renderOverviewDashboard(parent, data) {
+    createPageHeader(parent, "Oversikt", "Rask status for produkter, tilbud og varetelling.", "Internt driftssystem");
+    addMobileAdvice(parent);
+
+    var products = data.products || [];
+    var quotes = data.customerQuotes || data.quotes || [];
+    var stockCounts = data.stockCounts || [];
+
+    var missingCost = products.filter(function (p) {
+      return Number(p.purchase_price_ex_vat || 0) <= 0 && Number(p.purchase_price_inc_vat || 0) <= 0;
+    }).length;
+
+    var lowProfit = products.filter(function (p) {
+      return p.low_profit_warning === true || Number(p.profit_margin_percent || 0) < 20;
+    }).length;
+
+    var latestStock = stockCounts.length ? stockCounts[0] : null;
+    var latestQuote = quotes.length ? quotes[0] : null;
+    var waitingQuotes = quotes.filter(function (q) {
+      return q.status === "sent" || q.status === "draft";
+    }).length;
+
+    addProStatGrid(parent, [
+      { label: "Produkter", value: String(products.length), tone: "ok" },
+      { label: "Mangler innpris", value: String(missingCost), tone: missingCost ? "warning" : "ok" },
+      { label: "Lav fortjeneste", value: String(lowProfit), tone: lowProfit ? "danger" : "ok" },
+      { label: "Tilbud åpne/utkast", value: String(waitingQuotes), tone: waitingQuotes ? "warning" : "ok" },
+      { label: "Siste varetelling", value: latestStock ? latestStock.count_number : "-", tone: latestStock && latestStock.quickbutik_updated_at ? "ok" : "warning" },
+      { label: "Quickbutik lager", value: latestStock && latestStock.quickbutik_updated_at ? "Oppdatert" : "Sjekk", tone: latestStock && latestStock.quickbutik_updated_at ? "ok" : "warning" }
+    ]);
+
+    var grid = el("div");
+    grid.className = "sk-two-col";
+
+    var left = el("div");
+    var right = el("div");
+
+    var tasks = createCollapsibleSection("📌 Viktige punkter", "Ting som bør sjekkes først.", true);
+    var ul = el("ul");
+    ul.style.marginTop = "0";
+    ul.style.lineHeight = "1.8";
+
+    if (missingCost) {
+      ul.appendChild(el("li", missingCost + " produkter mangler innpris."));
+    }
+
+    if (lowProfit) {
+      ul.appendChild(el("li", lowProfit + " produkter har lav fortjeneste."));
+    }
+
+    if (latestStock && !latestStock.quickbutik_updated_at) {
+      ul.appendChild(el("li", "Siste varetelling er ikke markert som oppdatert mot Quickbutik."));
+    }
+
+    if (!ul.childNodes.length) {
+      ul.appendChild(el("li", "Ingen kritiske varsler akkurat nå."));
+    }
+
+    tasks.body.appendChild(ul);
+    left.appendChild(tasks.wrap);
+
+    var recent = createCollapsibleSection("🧾 Siste tilbud", "Rask oversikt over de siste kundetilbudene.", true);
+    addTable(recent.body, [
+      { key: "quote_number", label: "Tilbud" },
+      { key: "customer_name", label: "Kunde" },
+      { key: "status", label: "Status" },
+      { key: "total_sales_inc_vat", label: "Sum inkl.", format: "money" }
+    ], (quotes || []).slice(0, 6), "Ingen tilbud funnet.");
+    left.appendChild(recent.wrap);
+
+    var stock = createCollapsibleSection("📦 Siste varetelling", "Status for siste varetelling.", true);
+    if (latestStock) {
+      addProStatGrid(stock.body, [
+        { label: "Telling", value: latestStock.count_number },
+        { label: "Status", value: statusLabel(latestStock.status) },
+        { label: "Linjer telt", value: String(Number(latestStock.counted_line_count || 0)) + "/" + String(Number(latestStock.line_count || 0)) },
+        { label: "Quickbutik", value: latestStock.quickbutik_updated_at ? "Oppdatert" : "Ikke oppdatert", tone: latestStock.quickbutik_updated_at ? "ok" : "warning" }
+      ]);
+    } else {
+      stock.body.appendChild(el("p", "Ingen varetellinger funnet."));
+    }
+    right.appendChild(stock.wrap);
+
+    grid.appendChild(left);
+    grid.appendChild(right);
+    parent.appendChild(grid);
+  }
+
+  function renderOffersHub(parent, data, sb) {
+    createPageHeader(parent, "Tilbud", "Lag tilbud, custom print-kalkyler og vis ferdige kundetilbud. Seksjonene er lukket for å holde siden ryddig.", "PC anbefales");
+    addMobileAdvice(parent);
+
+    var standard = createCollapsibleSection("🧾 Lag nytt tilbud", "Vanlig tilbudsbygger med produkter, frakt, rabatt og manuelle linjer.", true);
+    renderStandardQuoteBuilder(standard.body, data, sb);
+    parent.appendChild(standard.wrap);
+
+    var custom = createCollapsibleSection("🥏 Custom print-tilbud", "Kalkulator for custom stamp og klubb-/firmadisker.", false);
+    renderCustomStamp(custom.body, data, sb);
+    parent.appendChild(custom.wrap);
+
+    var customer = createCollapsibleSection("📄 Kundetilbud", "Vis, rediger, dupliser, skriv ut og kopier lagrede tilbud.", false);
+    renderCustomerOffer(customer.body, data, sb);
+    parent.appendChild(customer.wrap);
+
+    var archive = createCollapsibleSection("📚 Kalkyler og tilbudsarkiv", "Tabell over lagrede kalkyler og tilbud.", false);
+    renderQuotesArchive(archive.body, data);
+    parent.appendChild(archive.wrap);
+  }
+
+  function renderSettingsManager(parent, data, sb) {
+    createPageHeader(parent, "Innstillinger", "Standardverdier som brukes i tilbud og kundedokumenter.", "Systemoppsett");
+
+    var settings = settingsMap(data.settings || []);
+
+    var note = el("div", "Endringer her bør gjøres rolig og bevisst. Verdiene brukes som standard i tilbud, utskrift og kundedokumenter. Hvis lagring feiler, må vi legge til en egen Supabase-RPC for trygg lagring.");
+    note.className = "sk-warning";
+    note.style.marginBottom = "16px";
+    parent.appendChild(note);
+
+    var company = createCollapsibleSection("🏢 Firmainfo", "Navn, adresse, org.nr, logo og felles kontaktinfo.", true);
+    var companyGrid = el("div");
+    companyGrid.style.display = "grid";
+    companyGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(240px, 1fr))";
+    companyGrid.style.gap = "12px";
+
+    var companyName = el("input");
+    companyName.value = settings.company_display_name || "Golfkongen.no / Sportskongen AS";
+
+    var companyAddress = el("textarea");
+    companyAddress.value = settings.company_address || "Aanen O. Bergsakers gate 5, 4580 Lyngdal, Norway";
+    companyAddress.style.minHeight = "72px";
+
+    var companyOrg = el("input");
+    companyOrg.value = settings.company_org_number || "NO932482266";
+
+    var companyLogo = el("input");
+    companyLogo.value = settings.company_logo_url || "https://cdn.quickbutik.com/images/52923d/templates/swift/assets/logo.png?s=35368&auto=format&dpr=1";
+
+    addField(companyGrid, "Firmanavn", companyName);
+    addField(companyGrid, "Adresse", companyAddress);
+    addField(companyGrid, "Org.nr", companyOrg);
+    addField(companyGrid, "Logo URL", companyLogo);
+
+    company.body.appendChild(companyGrid);
+    parent.appendChild(company.wrap);
+
+    var quote = createCollapsibleSection("🧾 Tilbud og standarder", "Standard gyldighet, MVA, margin og tekst i kundetilbud.", true);
+    var quoteGrid = el("div");
+    quoteGrid.style.display = "grid";
+    quoteGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
+    quoteGrid.style.gap = "12px";
+
+    var validDays = el("input");
+    validDays.type = "number";
+    validDays.value = settings.quote_valid_days || "14";
+
+    var defaultVat = el("input");
+    defaultVat.type = "number";
+    defaultVat.value = settings.default_vat_percent || "25";
+
+    var defaultMargin = el("input");
+    defaultMargin.type = "number";
+    defaultMargin.value = settings.default_margin_percent || "25";
+
+    var footer = el("textarea");
+    footer.value = settings.quote_footer_custom_stamp || "";
+    footer.style.minHeight = "120px";
+
+    addField(quoteGrid, "Gyldighet tilbud, dager", validDays);
+    addField(quoteGrid, "Standard MVA %", defaultVat);
+    addField(quoteGrid, "Standard margin %", defaultMargin);
+    addField(quoteGrid, "Standard tilbudstekst / footer", footer);
+
+    quote.body.appendChild(quoteGrid);
+
+    var saveBtn = createPrimaryButton("Lagre innstillinger");
+    saveBtn.style.marginTop = "10px";
+    quote.body.appendChild(saveBtn);
+
+    var resultBox = el("pre");
+    resultBox.style.display = "none";
+    resultBox.style.marginTop = "12px";
+    resultBox.style.padding = "12px";
+    resultBox.style.background = "#111827";
+    resultBox.style.color = "#fff";
+    resultBox.style.borderRadius = "12px";
+    resultBox.style.whiteSpace = "pre-wrap";
+    quote.body.appendChild(resultBox);
+
+    saveBtn.onclick = function () {
+      var rows = [
+        { setting_key: "company_display_name", setting_value: companyName.value.trim() },
+        { setting_key: "company_address", setting_value: companyAddress.value.trim() },
+        { setting_key: "company_org_number", setting_value: companyOrg.value.trim() },
+        { setting_key: "company_logo_url", setting_value: companyLogo.value.trim() },
+        { setting_key: "quote_valid_days", setting_value: String(Number(validDays.value || 14)) },
+        { setting_key: "default_vat_percent", setting_value: String(Number(defaultVat.value || 25)) },
+        { setting_key: "default_margin_percent", setting_value: String(Number(defaultMargin.value || 25)) },
+        { setting_key: "quote_footer_custom_stamp", setting_value: footer.value }
+      ];
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Lagrer...";
+      resultBox.style.display = "none";
+
+      sb.from("internal_settings").upsert(rows, {
+        onConflict: "setting_key"
+      }).then(function (result) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Lagre innstillinger";
+        resultBox.style.display = "block";
+        resultBox.textContent = JSON.stringify(result, null, 2);
+
+        if (result.error) {
+          alert("Kunne ikke lagre innstillinger: " + result.error.message);
+          return;
+        }
+
+        alert("Innstillinger lagret.");
+        localStorage.setItem("sk_internal_active_tab", "settings");
+        window.location.reload();
+      });
+    };
+
+    parent.appendChild(quote.wrap);
+
+    var system = createCollapsibleSection("⚙️ Systeminfo", "Data portalen bruker akkurat nå.", false);
+    addProStatGrid(system.body, [
+      { label: "Produkter", value: String((data.products || []).length) },
+      { label: "Leverandører", value: String((data.suppliers || []).length) },
+      { label: "Tillegg", value: String((data.addons || []).length) },
+      { label: "Kunder", value: String((data.customers || []).length) },
+      { label: "Varetellinger", value: String((data.stockCounts || []).length) }
+    ]);
+    parent.appendChild(system.wrap);
+  }
+
+
   function renderShell(title, subtitle) {
+    ensurePortalUiStyle();
     clear(root);
 
     var app = el("div");
-    app.style.maxWidth = "1180px";
-    app.style.margin = "30px auto";
-    app.style.padding = "24px";
-    app.style.border = "1px solid #e5e7eb";
-    app.style.borderRadius = "18px";
-    app.style.background = "#fff";
-    app.style.color = "#111827";
-    app.style.fontFamily = "Arial, sans-serif";
-    app.style.boxShadow = "0 8px 25px rgba(0,0,0,0.04)";
+    app.className = "sk-app-shell";
+
+    var top = el("div");
+    top.className = "sk-topline";
+
+    var left = el("div");
 
     var h1 = el("h1", title);
-    h1.style.margin = "0 0 6px 0";
-    h1.style.fontSize = "30px";
+    h1.className = "sk-title";
 
     var p = el("p", subtitle);
-    p.style.margin = "0";
-    p.style.color = "#6b7280";
-    p.style.lineHeight = "1.5";
+    p.className = "sk-subtitle";
 
-    app.appendChild(h1);
-    app.appendChild(p);
+    left.appendChild(h1);
+    left.appendChild(p);
+
+    var badge = el("div", "🔒 Intern admin");
+    badge.className = "sk-badge";
+
+    top.appendChild(left);
+    top.appendChild(badge);
+
+    app.appendChild(top);
     root.appendChild(app);
 
     return app;
@@ -195,15 +577,10 @@
 
   function createTabs(app, tabs) {
     var tabWrap = el("div");
-    tabWrap.style.display = "flex";
-    tabWrap.style.gap = "8px";
-    tabWrap.style.flexWrap = "wrap";
-    tabWrap.style.marginTop = "24px";
-    tabWrap.style.borderBottom = "1px solid #e5e7eb";
-    tabWrap.style.paddingBottom = "10px";
+    tabWrap.className = "sk-tabs";
 
     var content = el("div");
-    content.style.marginTop = "22px";
+    content.className = "sk-content";
 
     var buttons = {};
 
@@ -226,6 +603,7 @@
 
     Object.keys(tabs).forEach(function (key) {
       var btn = createButton(tabs[key].label);
+      btn.className = "sk-tab-btn";
       buttons[key] = btn;
       btn.onclick = function () {
         activate(key);
@@ -5645,8 +6023,8 @@ renderStockReport();
   
   function renderPortal(sb, user, data) {
     var app = renderShell(
-      "Intern Sportskongen-portal",
-      "v2 test – struktur med faner. Data hentes fra Supabase."
+      "Sportskongen internportal",
+      "Drift, tilbud, produkter, varetelling og innstillinger samlet på én ryddig internside."
     );
 
     addUserBar(app, sb, user);
@@ -5655,81 +6033,37 @@ renderStockReport();
       overview: {
         label: "Oversikt",
         render: function (parent) {
-          addStatGrid(parent, [
-            { label: "Produkter", value: String(data.products.length) },
-            { label: "Leverandører", value: String((data.suppliers || []).length) },
-            { label: "Tillegg", value: String(data.addons.length) },
-            { label: "Kalkyler", value: String(data.quotes.length) },
-            { label: "Status", value: "OK" }
-          ]);
-
-          var info = el("p", "Neste steg blir å lagre kalkyler og lage kundetilbud uten innkjøpspriser.");
-          info.style.marginTop = "18px";
-          info.style.color = "#6b7280";
-          parent.appendChild(info);
+          renderOverviewDashboard(parent, data);
         }
       },
-      custom: {
-        label: "Custom stamp",
+      offers: {
+        label: "Tilbud",
         render: function (parent) {
-          renderCustomStamp(parent, data, sb);
+          renderOffersHub(parent, data, sb);
         }
       },
-      standardQuote: {
-  label: "Tilbudsbygger",
-  render: function (parent) {
-    renderStandardQuoteBuilder(parent, data, sb);
-  }
-},
+      stock: {
+        label: "Varetelling",
+        render: function (parent) {
+          renderStockCountsManager(parent, data, sb);
+        }
+      },
       products: {
-  label: "Produkter",
-  render: function (parent) {
-    renderProductsManager(parent, data, sb);
-  }
-},
-    stock: {
-  label: "Varetelling",
-  render: function (parent) {
-    renderStockCountsManager(parent, data, sb);
-  }
-},  
-      suppliers: {
-  label: "Leverandører / tillegg",
-  render: function (parent) {
-    renderSuppliersAddonsManager(parent, data, sb);
-  }
-},
-      quotes: {
-        label: "Kalkyler",
+        label: "Produkter",
         render: function (parent) {
-          addTable(parent, [
-            { key: "quote_number", label: "Tilbud" },
-            { key: "quote_type", label: "Type" },
-            { key: "customer_name", label: "Kunde" },
-            { key: "status", label: "Status" },
-            { key: "item_count", label: "Linjer" },
-            { key: "calculated_items_cost_ex_vat", label: "Kost eks.", format: "money" },
-            { key: "calculated_items_sales_ex_vat", label: "Salg eks.", format: "money" },
-            { key: "calculated_items_profit_ex_vat", label: "Fortjeneste", format: "money" }
-          ], data.quotes, "Ingen kalkyler funnet.");
+          renderProductsManager(parent, data, sb);
         }
       },
-      customer: {
-  label: "Kundetilbud",
-  render: function (parent) {
-    renderCustomerOffer(parent, data, sb);
-  }
-},
+      suppliers: {
+        label: "Leverandører og kostnader",
+        render: function (parent) {
+          renderSuppliersAddonsManager(parent, data, sb);
+        }
+      },
       settings: {
         label: "Innstillinger",
         render: function (parent) {
-          var h2 = el("h2", "Innstillinger");
-          h2.style.marginTop = "0";
-          parent.appendChild(h2);
-
-          var p = el("p", "Her legger vi senere standard mva, marginvalg, valuta og tilgangsstyring.");
-          p.style.color = "#6b7280";
-          parent.appendChild(p);
+          renderSettingsManager(parent, data, sb);
         }
       }
     });
