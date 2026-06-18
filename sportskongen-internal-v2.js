@@ -4851,13 +4851,13 @@ addTable(addonsSection.body, [
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
 
-  // ============================================================
+    // ============================================================
   // KAPITTEL 2 – Opprett ny varetelling
   // ============================================================
 
   var createSection = createCollapsibleSection(
     "➕ Ny varetelling",
-    "Velg om du vil telle alle produkter, en kategori, en leverandør eller et merke.",
+    "Velg om du vil telle alle produkter, en intern hovedkategori, en Quickbutik-kategori, en leverandør eller et merke.",
     false
   );
 
@@ -4871,8 +4871,9 @@ addTable(addonsSection.body, [
   titleInput.placeholder = "F.eks. Varetelling juni 2026";
 
   var scopeSelect = el("select");
-  addOption(scopeSelect, "all", "Alle produkter");
-  addOption(scopeSelect, "category", "Kategori");
+  addOption(scopeSelect, "all", "Alle fysiske produkter");
+  addOption(scopeSelect, "inventory_main_group", "Hovedkategori");
+  addOption(scopeSelect, "category", "Quickbutik-kategori");
   addOption(scopeSelect, "supplier", "Leverandør");
   addOption(scopeSelect, "brand", "Merke");
   addOption(scopeSelect, "manual", "Manuell / tom telling");
@@ -4891,11 +4892,29 @@ addTable(addonsSection.body, [
 
   createSection.body.appendChild(formGrid);
 
+  var createHelp = el("div");
+  createHelp.className = "sk-note";
+  createHelp.style.marginTop = "12px";
+  createHelp.textContent =
+    "Anbefalt bruk: Tell etter Hovedkategori for praktisk varetelling i butikk/lager. Quickbutik-kategori brukes bare hvis du vil telle nøyaktig slik produktene ligger kategorisert i nettbutikken.";
+  createSection.body.appendChild(createHelp);
+
   var createBtn = createPrimaryButton("Opprett varetelling");
   createBtn.style.marginTop = "10px";
   createSection.body.appendChild(createBtn);
 
   parent.appendChild(createSection.wrap);
+
+  var inventoryMainGroups = [
+    "Discer",
+    "Sekker og bager",
+    "Tilbehør",
+    "Dartutstyr",
+    "Golfballer",
+    "Golfhansker",
+    "Kurver",
+    "Annet"
+  ];
 
   function uniqueValues(key) {
     var map = {};
@@ -4934,6 +4953,15 @@ addTable(addonsSection.body, [
 
     valueSelect.disabled = false;
 
+    addOption(valueSelect, "", "Velg");
+
+    if (scope === "inventory_main_group") {
+      inventoryMainGroups.forEach(function (value) {
+        addOption(valueSelect, value, value);
+      });
+      return;
+    }
+
     var key = "category";
 
     if (scope === "supplier") {
@@ -4943,8 +4971,6 @@ addTable(addonsSection.body, [
     if (scope === "brand") {
       key = "brand";
     }
-
-    addOption(valueSelect, "", "Velg");
 
     uniqueValues(key).forEach(function (value) {
       addOption(valueSelect, value, value);
@@ -4964,7 +4990,15 @@ addTable(addonsSection.body, [
       return;
     }
 
-    if ((scope === "category" || scope === "supplier" || scope === "brand") && !value) {
+    if (
+      (
+        scope === "category" ||
+        scope === "supplier" ||
+        scope === "brand" ||
+        scope === "inventory_main_group"
+      ) &&
+      !value
+    ) {
       alert("Velg utvalg først.");
       return;
     }
@@ -5005,7 +5039,6 @@ addTable(addonsSection.body, [
       window.location.reload();
     });
   };
-
   // ============================================================
   // KAPITTEL 3 – Velg varetelling
   // ============================================================
