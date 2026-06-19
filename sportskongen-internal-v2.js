@@ -6535,6 +6535,267 @@ renderStockCountDetails();
     parent.appendChild(box);
   }
 
+function renderProductControlDashboard(parent, data) {
+  createPageHeader(
+    parent,
+    "Produktkontroll",
+    "Kontroller som hjelper oss å finne feil før de blir et problem i butikk, varetelling eller produktvedlikehold.",
+    "Kvalitetssjekk"
+  );
+
+  var issues = data.productControlIssues || [];
+
+  var dangerCount = issues.filter(function (x) {
+    return x.severity === "danger";
+  }).length;
+
+  var warningCount = issues.filter(function (x) {
+    return x.severity === "warning";
+  }).length;
+
+  var negativeProductStock = issues.filter(function (x) {
+    return x.issue_type === "negative_product_stock";
+  }).length;
+
+  var negativeVariantStock = issues.filter(function (x) {
+    return x.issue_type === "negative_variant_stock";
+  }).length;
+
+  var missingFlight = issues.filter(function (x) {
+    return x.issue_type === "disc_missing_flight";
+  }).length;
+
+  var missingGroup = issues.filter(function (x) {
+    return x.issue_type === "missing_inventory_group";
+  }).length;
+
+  var lowMargin = issues.filter(function (x) {
+    return x.issue_type === "low_margin";
+  }).length;
+
+  addProStatGrid(parent, [
+    { label: "Kritiske avvik", value: String(dangerCount), tone: dangerCount ? "danger" : "ok" },
+    { label: "Advarsler", value: String(warningCount), tone: warningCount ? "warning" : "ok" },
+    { label: "Minus produktlager", value: String(negativeProductStock), tone: negativeProductStock ? "danger" : "ok" },
+    { label: "Minus variantlager", value: String(negativeVariantStock), tone: negativeVariantStock ? "danger" : "ok" },
+    { label: "Discer uten flight", value: String(missingFlight), tone: missingFlight ? "warning" : "ok" },
+    { label: "Uten varetellingsgruppe", value: String(missingGroup), tone: missingGroup ? "warning" : "ok" },
+    { label: "Lav margin", value: String(lowMargin), tone: lowMargin ? "warning" : "ok" }
+  ]);
+
+  var note = el("div");
+  note.className = dangerCount ? "sk-danger-zone" : "sk-note";
+  note.style.marginBottom = "16px";
+
+  if (dangerCount) {
+    note.textContent = "Det finnes kritiske avvik som bør rettes først. Start med minusbeholdning før du jobber med lav margin.";
+  } else if (warningCount) {
+    note.textContent = "Ingen kritiske avvik funnet. Det finnes noen advarsler som kan ryddes etter hvert.";
+  } else {
+    note.textContent = "Alt ser ryddig ut akkurat nå. Ingen produktavvik funnet.";
+  }
+
+  parent.appendChild(note);
+
+  var toolbar = el("div");
+  toolbar.style.display = "flex";
+  toolbar.style.gap = "8px";
+  toolbar.style.flexWrap = "wrap";
+  toolbar.style.marginBottom = "14px";
+
+  var tableArea = el("div");
+
+  function button(label, filterKey) {
+    var btn = createButton(label);
+    btn.onclick = function () {
+      renderRows(filterKey);
+    };
+    toolbar.appendChild(btn);
+  }
+
+  button("Alle", "all");
+  button("Kritiske", "danger");
+  button("Advarsler", "warning");
+  button("Minusbeholdning", "negative_stock");
+  button("Mangler flight", "disc_missing_flight");
+  button("Mangler gruppe", "missing_inventory_group");
+  button("Lav margin", "low_margin");
+
+  parent.appendChild(toolbar);
+  parent.appendChild(tableArea);
+
+  function issueMatchesFilter(issue, filterKey) {
+    if (filterKey === "all") return true;
+    if (filterKey === "danger") return issue.severity === "danger";
+    if (filterKey === "warning") return issue.severity === "warning";
+
+    if (filterKey === "negative_stock") {
+      return issue.issue_type === "negative_product_stock" || issue.issue_type === "negative_variant_stock";
+    }
+
+    return issue.issue_type === filterKey;
+  }
+
+  function createSeverityBadge(issue) {
+    var badge = el("span", issue.severity === "danger" ? "Kritisk" : "Advarsel");
+    badge.style.display = "inline-flex";
+    badge.style.padding = "5px 8px";
+    badge.style.borderRadius = "999px";
+    badge.style.fontSize = "12px";
+    badge.style.fontWeight = "800";
+
+    if (issue.severity === "danger") {
+      badge.style.background = "#fef2f2";
+      badge.style.color = "#991b1b";
+      badge.style.border = "1px solid #fecaca";
+    } else {
+      badge.style.background = "#fffbeb";
+      badge.style.color = "#92400e";
+      badge.style.border = "1px solid #fde68a";
+    }
+
+    return badge;
+  }
+
+  function renderRows(filterKey) {
+    clear(tableArea);
+
+    var filtered = issues.filter(function (issue) {
+      return issueMatchesFilter(issue, filterKey || "all");
+    });
+
+    if (!filtered.length) {
+      var empty = el("div", "Ingen avvik i dette filteret.");
+      empty.className = "sk-note";
+      tableArea.appendChild(empty);
+      return;
+    }
+
+    var wrap = el("div");
+    wrap.style.overflowX = "auto";
+    wrap.style.border = "1px solid #e5e7eb";
+    wrap.style.borderRadius = "14px";
+
+    var table = el("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.fontSize = "14px";
+
+    var thead = el("thead");
+    var headTr = el("tr");
+
+    ["Status", "Avvik", "Produkt", "Variant", "Gruppe", "Beholdning", "Handling"].forEach(function (label) {
+      var th = el("th", label);
+      th.style.textAlign = "left";
+      th.style.padding = "11px";
+      th.style.borderBottom = "1px solid #e5e7eb";
+      th.style.background = "#f9fafb";
+      th.style.whiteSpace = "nowrap";
+      headTr.appendChild(th);
+    });
+
+    thead.appendChild(headTr);
+    table.appendChild(thead);
+
+    var tbody = el("tbody");
+
+    filtered.forEach(function (issue) {
+      var tr = el("tr");
+
+      function tdNode(node) {
+        var td = el("td");
+        td.style.padding = "11px";
+        td.style.borderBottom = "1px solid #f3f4f6";
+        td.style.verticalAlign = "top";
+        td.appendChild(node);
+        tr.appendChild(td);
+      }
+
+      function tdText(value) {
+        tdNode(el("span", value === null || value === undefined || value === "" ? "-" : String(value)));
+      }
+
+      tdNode(createSeverityBadge(issue));
+
+      var issueBox = el("div");
+      var label = el("strong", issue.issue_label || "-");
+      var msg = el("div", issue.message || "");
+      msg.style.color = "#64748b";
+      msg.style.fontSize = "13px";
+      msg.style.marginTop = "3px";
+      issueBox.appendChild(label);
+      issueBox.appendChild(msg);
+      tdNode(issueBox);
+
+      var productBox = el("div");
+      var productName = el("strong", issue.product_name || "-");
+      productBox.appendChild(productName);
+
+      var meta = el("div", [
+        issue.brand || "",
+        issue.quickbutik_product_id ? "QB " + issue.quickbutik_product_id : ""
+      ].filter(Boolean).join(" · "));
+      meta.style.color = "#64748b";
+      meta.style.fontSize = "13px";
+      meta.style.marginTop = "3px";
+      productBox.appendChild(meta);
+
+      tdNode(productBox);
+
+      tdText(issue.variant_name || issue.quickbutik_variant_id || "-");
+      tdText(issue.inventory_main_group || "-");
+
+      var stockText = issue.stock_quantity === null || issue.stock_quantity === undefined ? "-" : String(issue.stock_quantity);
+      var stockSpan = el("strong", stockText);
+
+      if (Number(issue.stock_quantity || 0) < 0) {
+        stockSpan.style.color = "#991b1b";
+      }
+
+      tdNode(stockSpan);
+
+      var actionBox = el("div");
+      actionBox.style.display = "flex";
+      actionBox.style.gap = "8px";
+      actionBox.style.flexWrap = "wrap";
+
+      if (issue.product_url) {
+        var open = el("a", "Åpne produkt");
+        open.href = issue.product_url;
+        open.target = "_blank";
+        open.rel = "noopener";
+        open.style.display = "inline-flex";
+        open.style.padding = "8px 10px";
+        open.style.borderRadius = "9px";
+        open.style.border = "1px solid #d1d5db";
+        open.style.background = "#fff";
+        open.style.color = "#111827";
+        open.style.textDecoration = "none";
+        open.style.fontWeight = "700";
+        actionBox.appendChild(open);
+      }
+
+      var copy = createButton("Kopier ID");
+      copy.style.padding = "8px 10px";
+      copy.onclick = function () {
+        navigator.clipboard.writeText(String(issue.quickbutik_product_id || ""));
+        alert("Kopierte produkt-ID: " + String(issue.quickbutik_product_id || ""));
+      };
+      actionBox.appendChild(copy);
+
+      tdNode(actionBox);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    tableArea.appendChild(wrap);
+  }
+
+  renderRows("all");
+}
+  
   function renderPortal(sb, user, data) {
     var app = renderShell(
       "Sportskongen internportal",
@@ -6562,10 +6823,16 @@ renderStockCountDetails();
           renderStockCountsManager(parent, data, sb);
         }
       },
-      products: {
+            products: {
         label: "Produkter",
         render: function (parent) {
           renderProductsManager(parent, data, sb);
+        }
+      },
+      productControl: {
+        label: "Produktkontroll",
+        render: function (parent) {
+          renderProductControlDashboard(parent, data);
         }
       },
       suppliers: {
@@ -6643,19 +6910,20 @@ renderStockCountDetails();
   return fetchPage();
 }
   
-  function loadPortalData(sb, user) {
+ function loadPortalData(sb, user) {
   Promise.all([
-  sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
-  sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
-  sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
-  sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
-  sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
-  sb.from("internal_settings_view").select("*"),
-  sb.from("internal_suppliers_view").select("*").order("name", { ascending: true }),
-  sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false }),
-  sb.from("internal_stock_counts_view").select("*").order("created_at", { ascending: false }),
-fetchAllRows(sb, "internal_stock_count_items_view", "name", true)  
-]).then(function (results) {
+    sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
+    sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
+    sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
+    sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
+    sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
+    sb.from("internal_settings_view").select("*"),
+    sb.from("internal_suppliers_view").select("*").order("name", { ascending: true }),
+    sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false }),
+    sb.from("internal_stock_counts_view").select("*").order("created_at", { ascending: false }),
+    sb.from("internal_product_control_view").select("*").order("severity", { ascending: true }).order("issue_label", { ascending: true }).order("product_name", { ascending: true }),
+    fetchAllRows(sb, "internal_stock_count_items_view", "name", true)
+  ]).then(function (results) {
     if (results[0].error) {
       renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
       return;
@@ -6692,34 +6960,40 @@ fetchAllRows(sb, "internal_stock_count_items_view", "name", true)
     }
 
     if (results[7].error) {
-  renderError("Kunne ikke hente kunder: " + results[7].error.message);
-  return;
-}
+      renderError("Kunne ikke hente kunder: " + results[7].error.message);
+      return;
+    }
 
     if (results[8].error) {
-  renderError("Kunne ikke hente varetellinger: " + results[8].error.message);
-  return;
-}
+      renderError("Kunne ikke hente varetellinger: " + results[8].error.message);
+      return;
+    }
 
-if (results[9].error) {
-  renderError("Kunne ikke hente varetellingslinjer: " + results[9].error.message);
-  return;
-}
+    if (results[9].error) {
+      renderError("Kunne ikke hente produktkontroll: " + results[9].error.message);
+      return;
+    }
+
+    if (results[10].error) {
+      renderError("Kunne ikke hente varetellingslinjer: " + results[10].error.message);
+      return;
+    }
 
     renderPortal(sb, user, {
-  addons: results[0].data || [],
-  products: results[1].data || [],
-  quotes: results[2].data || [],
-  customerQuotes: results[3].data || [],
-  customerQuoteItems: results[4].data || [],
-  settings: results[5].data || [],
-  suppliers: results[6].data || [],
-  customers: results[7].data || [],
-stockCounts: results[8].data || [],
-stockCountItems: results[9].data || []
-});
+      addons: results[0].data || [],
+      products: results[1].data || [],
+      quotes: results[2].data || [],
+      customerQuotes: results[3].data || [],
+      customerQuoteItems: results[4].data || [],
+      settings: results[5].data || [],
+      suppliers: results[6].data || [],
+      customers: results[7].data || [],
+      stockCounts: results[8].data || [],
+      productControlIssues: results[9].data || [],
+      stockCountItems: results[10].data || []
+    });
   });
-}
+} 
 
   function startPortal() {
     if (!window.supabase || !window.supabase.createClient) {
