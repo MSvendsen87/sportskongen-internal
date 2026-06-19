@@ -2614,11 +2614,12 @@ function renderProductSyncBox(parent, sb) {
           offset += limit;
           offsetInput.value = String(offset);
 
-          return new Promise(function (resolve) {
+                    return new Promise(function (resolve) {
             setTimeout(function () {
               resolve(nextBatch());
             }, 500);
           });
+        });
       }
 
       return nextBatch();
