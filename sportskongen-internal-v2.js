@@ -2605,7 +2605,7 @@ function renderProductSyncBox(parent, sb) {
             }
           });
 
-          if (Number(data.count || 0) === 0 || Number(data.count || 0) < limit) {
+                    if (data.is_final_page === true) {
             return {
               done: true
             };
@@ -2619,7 +2619,6 @@ function renderProductSyncBox(parent, sb) {
               resolve(nextBatch());
             }, 500);
           });
-        });
       }
 
       return nextBatch();
