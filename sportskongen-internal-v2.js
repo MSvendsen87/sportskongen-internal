@@ -7285,6 +7285,11 @@ function renderProductControlDashboard(parent, data) {
           card.appendChild(stockInfo);
         }
 
+        var candidateActions = el("div");
+        candidateActions.style.display = "flex";
+        candidateActions.style.gap = "8px";
+        candidateActions.style.flexWrap = "wrap";
+
         if (candidate.url) {
           var openCandidate = el(
             "a",
@@ -7311,8 +7316,146 @@ function renderProductControlDashboard(parent, data) {
           openCandidate.style.textDecoration =
             "none";
 
-          card.appendChild(openCandidate);
+          candidateActions.appendChild(
+            openCandidate
+          );
         }
+
+        var saveSuggestionButton =
+          createPrimaryButton(
+            "Lagre forslag"
+          );
+
+        saveSuggestionButton.style.padding =
+          "8px 11px";
+
+        saveSuggestionButton.onclick =
+          function () {
+            var competitor =
+              (data.priceCompetitors || [])
+                .find(function (row) {
+                  var baseUrl =
+                    String(
+                      row.base_url || ""
+                    ).toLowerCase();
+
+                  var name =
+                    String(
+                      row.name || ""
+                    ).toLowerCase();
+
+                  var store =
+                    String(
+                      candidate.store || ""
+                    ).toLowerCase();
+
+                  return (
+                    row.is_active !== false &&
+                    (
+                      baseUrl.includes(store) ||
+                      store.includes(
+                        baseUrl
+                          .replace(/^https?:\/\//, "")
+                          .replace(/^www\./, "")
+                          .replace(/\/+$/, "")
+                      ) ||
+                      (
+                        store === "krokholdgs.no" &&
+                        name.includes("krokhol")
+                      )
+                    )
+                  );
+                });
+
+            if (!competitor) {
+              alert(
+                "Fant ikke aktiv konkurrent i registeret for " +
+                  String(
+                    candidate.store ||
+                    "denne butikken"
+                  ) +
+                  "."
+              );
+              return;
+            }
+
+            saveSuggestionButton.disabled = true;
+            saveSuggestionButton.textContent =
+              "Lagrer...";
+
+            sb.rpc(
+              "internal_save_price_check_suggestion",
+              {
+                p_product_id:
+                  productResult.productId,
+                p_competitor_id:
+                  competitor.id,
+                p_competitor_product_name:
+                  candidate.name || null,
+                p_competitor_product_url:
+                  candidate.url,
+                p_competitor_price_inc_vat:
+                  candidate.price,
+                p_competitor_shipping_inc_vat:
+                  0,
+                p_competitor_in_stock:
+                  candidate.inStock,
+                p_match_confidence:
+                  candidate.matchConfidence,
+                p_raw_data: {
+                  source:
+                    candidate.source || null,
+                  source_label:
+                    candidate.sourceLabel || null,
+                  store:
+                    candidate.store || null,
+                  quantity:
+                    candidate.quantity ?? null,
+                  image:
+                    candidate.image || null,
+                  worker_version:
+                    result.version || null,
+                  checked_at:
+                    result.generatedAt || null
+                }
+              }
+            )
+              .then(function (rpcResult) {
+                if (rpcResult.error) {
+                  throw rpcResult.error;
+                }
+
+                saveSuggestionButton.textContent =
+                  "Forslag lagret";
+                saveSuggestionButton.disabled = true;
+
+                card.style.border =
+                  "1px solid #86efac";
+                card.style.background =
+                  "#ecfdf5";
+              })
+              .catch(function (error) {
+                saveSuggestionButton.disabled = false;
+                saveSuggestionButton.textContent =
+                  "Lagre forslag";
+
+                alert(
+                  "Kunne ikke lagre forslaget: " +
+                    (
+                      error.message ||
+                      String(error)
+                    )
+                );
+              });
+          };
+
+        candidateActions.appendChild(
+          saveSuggestionButton
+        );
+
+        card.appendChild(
+          candidateActions
+        );
 
         workerResult.appendChild(card);
       });
@@ -8005,6 +8148,7 @@ var competitors = data.priceCompetitors || [];
 
   document.head.appendChild(script);
 })();
+
 
 
 
