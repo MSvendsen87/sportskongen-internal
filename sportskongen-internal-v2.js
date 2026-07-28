@@ -6922,7 +6922,15 @@ function renderProductControlDashboard(parent, data) {
     sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false }),
     sb.from("internal_stock_counts_view").select("*").order("created_at", { ascending: false }),
     sb.from("internal_product_control_view").select("*").order("severity", { ascending: true }).order("issue_label", { ascending: true }).order("product_name", { ascending: true }),
-    fetchAllRows(sb, "internal_stock_count_items_view", "name", true)
+    fetchAllRows(sb, "internal_stock_count_items_view", "name", true),
+    sb
+      .from("internal_price_comparison_view")
+      .select("*")
+      .order("price_difference_inc_vat", {
+        ascending: false,
+        nullsFirst: false
+      })
+
   ]).then(function (results) {
     if (results[0].error) {
       renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
@@ -6979,6 +6987,11 @@ function renderProductControlDashboard(parent, data) {
       return;
     }
 
+    if (results[11].error) {
+      renderError("Kunne ikke hente prissjekk: " + results[11].error.message);
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -6990,7 +7003,8 @@ function renderProductControlDashboard(parent, data) {
       customers: results[7].data || [],
       stockCounts: results[8].data || [],
       productControlIssues: results[9].data || [],
-      stockCountItems: results[10].data || []
+      stockCountItems: results[10].data || [],
+      priceComparisons: results[11].data || []
     });
   });
 } 
@@ -7043,3 +7057,4 @@ function renderProductControlDashboard(parent, data) {
 
   document.head.appendChild(script);
 })();
+
