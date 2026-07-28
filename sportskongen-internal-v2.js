@@ -7520,7 +7520,414 @@ function renderProductControlDashboard(parent, data) {
 
 var competitors = data.priceCompetitors || [];
 
-    var competitorSection = createCollapsibleSection(
+        var priceSuggestions =
+      data.priceSuggestions || [];
+
+    var suggestionSection =
+      createCollapsibleSection(
+        "📋 Lagrede prisforslag (" +
+          String(priceSuggestions.length) +
+          ")",
+        "Kontroller forslag før de påvirker prissammenligningen.",
+        true
+      );
+
+    var suggestionFilter = el("select");
+    suggestionFilter.style.marginBottom = "14px";
+
+    [
+      {
+        value: "probable",
+        label: "Venter på kontroll"
+      },
+      {
+        value: "confirmed",
+        label: "Godkjente"
+      },
+      {
+        value: "rejected",
+        label: "Avviste"
+      },
+      {
+        value: "all",
+        label: "Alle"
+      }
+    ].forEach(function (item) {
+      var option = el(
+        "option",
+        item.label
+      );
+
+      option.value = item.value;
+      suggestionFilter.appendChild(option);
+    });
+
+    suggestionSection.body.appendChild(
+      suggestionFilter
+    );
+
+    var suggestionList = el("div");
+
+    suggestionSection.body.appendChild(
+      suggestionList
+    );
+
+    function priceSuggestionStatusText(status) {
+      if (status === "confirmed") {
+        return "Godkjent";
+      }
+
+      if (status === "rejected") {
+        return "Avvist";
+      }
+
+      return "Forslag";
+    }
+
+    function updatePriceSuggestion(
+      suggestion,
+      status,
+      button
+    ) {
+      var originalText =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        status === "confirmed"
+          ? "Godkjenner..."
+          : "Avviser...";
+
+      sb.rpc(
+        "internal_set_price_match_status",
+        {
+          p_match_id:
+            suggestion.price_match_id,
+          p_match_status: status
+        }
+      )
+        .then(function (result) {
+          if (result.error) {
+            throw result.error;
+          }
+
+          localStorage.setItem(
+            "sk_internal_active_tab",
+            "priceCheck"
+          );
+
+          window.location.reload();
+        })
+        .catch(function (error) {
+          button.disabled = false;
+          button.textContent =
+            originalText;
+
+          alert(
+            "Kunne ikke oppdatere forslaget: " +
+              (
+                error.message ||
+                String(error)
+              )
+          );
+        });
+    }
+
+    function renderPriceSuggestions() {
+      clear(suggestionList);
+
+      var selectedStatus =
+        suggestionFilter.value;
+
+      var visibleSuggestions =
+        priceSuggestions.filter(
+          function (suggestion) {
+            return (
+              selectedStatus === "all" ||
+              suggestion.match_status ===
+                selectedStatus
+            );
+          }
+        );
+
+      if (!visibleSuggestions.length) {
+        var empty = el(
+          "div",
+          selectedStatus === "probable"
+            ? "Ingen forslag venter på kontroll."
+            : "Ingen forslag med denne statusen."
+        );
+
+        empty.className = "sk-note";
+        suggestionList.appendChild(empty);
+        return;
+      }
+
+      visibleSuggestions.forEach(
+        function (suggestion) {
+          var card = el("div");
+
+          card.style.padding = "14px";
+          card.style.marginBottom = "12px";
+          card.style.border =
+            "1px solid #d1d5db";
+          card.style.borderRadius = "14px";
+          card.style.background = "#ffffff";
+
+          var title = el(
+            "h3",
+            (
+              suggestion.product_brand
+                ? suggestion.product_brand +
+                  " – "
+                : ""
+            ) +
+              (
+                suggestion.product_name ||
+                "Ukjent produkt"
+              )
+          );
+
+          title.style.margin = "0 0 6px 0";
+          card.appendChild(title);
+
+          var competitorText = el(
+            "div",
+            (
+              suggestion.competitor_name ||
+              "Ukjent konkurrent"
+            ) +
+              " · " +
+              (
+                suggestion
+                  .competitor_product_name ||
+                "Ukjent produkt"
+              )
+          );
+
+          competitorText.style.color =
+            "#475569";
+
+          card.appendChild(competitorText);
+
+          var status = el(
+            "div",
+            priceSuggestionStatusText(
+              suggestion.match_status
+            )
+          );
+
+          status.style.display =
+            "inline-block";
+          status.style.marginTop = "10px";
+          status.style.padding = "5px 9px";
+          status.style.borderRadius =
+            "999px";
+          status.style.fontWeight = "800";
+          status.style.fontSize = "12px";
+
+          if (
+            suggestion.match_status ===
+            "confirmed"
+          ) {
+            status.style.background =
+              "#dcfce7";
+            status.style.color =
+              "#166534";
+          } else if (
+            suggestion.match_status ===
+            "rejected"
+          ) {
+            status.style.background =
+              "#fee2e2";
+            status.style.color =
+              "#991b1b";
+          } else {
+            status.style.background =
+              "#fef3c7";
+            status.style.color =
+              "#92400e";
+          }
+
+          card.appendChild(status);
+
+          var prices = el("div");
+
+          prices.style.display = "grid";
+          prices.style.gridTemplateColumns =
+            "repeat(auto-fit, minmax(120px, 1fr))";
+          prices.style.gap = "8px";
+          prices.style.margin = "14px 0";
+
+          [
+            {
+              label: "GolfKongen",
+              value:
+                formatPriceCheckMoney(
+                  suggestion
+                    .golfkongen_price_inc_vat
+                )
+            },
+            {
+              label: "Konkurrent",
+              value:
+                formatPriceCheckMoney(
+                  suggestion
+                    .competitor_total_inc_vat
+                )
+            },
+            {
+              label: "Forskjell",
+              value:
+                formatPriceCheckMoney(
+                  suggestion
+                    .price_difference_inc_vat
+                )
+            },
+            {
+              label: "Treff",
+              value:
+                String(
+                  suggestion
+                    .match_confidence || 0
+                ) + "%"
+            }
+          ].forEach(function (item) {
+            var box = el("div");
+
+            box.style.padding = "10px";
+            box.style.background =
+              "#f8fafc";
+            box.style.borderRadius =
+              "10px";
+
+            var label = el(
+              "div",
+              item.label
+            );
+
+            label.style.fontSize = "11px";
+            label.style.color = "#64748b";
+
+            var value = el(
+              "div",
+              item.value
+            );
+
+            value.style.fontWeight = "800";
+            value.style.marginTop = "3px";
+
+            box.appendChild(label);
+            box.appendChild(value);
+            prices.appendChild(box);
+          });
+
+          card.appendChild(prices);
+
+          var actions = el("div");
+
+          actions.style.display = "flex";
+          actions.style.gap = "8px";
+          actions.style.flexWrap = "wrap";
+
+          if (
+            suggestion
+              .competitor_product_url
+          ) {
+            var openLink = el(
+              "a",
+              "Åpne konkurrentprodukt"
+            );
+
+            openLink.href =
+              suggestion
+                .competitor_product_url;
+            openLink.target = "_blank";
+            openLink.rel = "noopener";
+            openLink.style.display =
+              "inline-flex";
+            openLink.style.padding =
+              "8px 11px";
+            openLink.style.border =
+              "1px solid #d1d5db";
+            openLink.style.borderRadius =
+              "9px";
+            openLink.style.background =
+              "#ffffff";
+            openLink.style.color =
+              "#111827";
+            openLink.style.fontWeight =
+              "700";
+            openLink.style.textDecoration =
+              "none";
+
+            actions.appendChild(openLink);
+          }
+
+          if (
+            suggestion.match_status !==
+            "confirmed"
+          ) {
+            var approve =
+              createPrimaryButton(
+                "Godkjenn"
+              );
+
+            approve.onclick = function () {
+              updatePriceSuggestion(
+                suggestion,
+                "confirmed",
+                approve
+              );
+            };
+
+            actions.appendChild(approve);
+          }
+
+          if (
+            suggestion.match_status !==
+            "rejected"
+          ) {
+            var reject =
+              createButton("Avvis");
+
+            reject.onclick = function () {
+              if (
+                !window.confirm(
+                  "Avvise dette prisforslaget?"
+                )
+              ) {
+                return;
+              }
+
+              updatePriceSuggestion(
+                suggestion,
+                "rejected",
+                reject
+              );
+            };
+
+            actions.appendChild(reject);
+          }
+
+          card.appendChild(actions);
+          suggestionList.appendChild(card);
+        }
+      );
+    }
+
+    suggestionFilter.addEventListener(
+      "change",
+      renderPriceSuggestions
+    );
+
+    renderPriceSuggestions();
+
+    parent.appendChild(
+      suggestionSection.wrap
+    );
+
+var competitorSection = createCollapsibleSection(
       "🏪 Konkurrentbutikker",
       "Legg inn norske butikker som skal brukes i prissammenligningen.",
       false
@@ -8013,7 +8420,14 @@ var competitors = data.priceCompetitors || [];
     sb
       .from("internal_price_competitors")
       .select("*")
-      .order("name", { ascending: true })
+      .order("name", { ascending: true }),
+    sb
+      .from("internal_price_suggestions_view")
+      .select("*")
+      .order("checked_at", {
+        ascending: false,
+        nullsFirst: false
+      })
 
 
   ]).then(function (results) {
@@ -8082,6 +8496,11 @@ var competitors = data.priceCompetitors || [];
       return;
     }
 
+    if (results[13].error) {
+      renderError("Kunne ikke hente prisforslag: " + results[13].error.message);
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -8095,7 +8514,8 @@ var competitors = data.priceCompetitors || [];
       productControlIssues: results[9].data || [],
       stockCountItems: results[10].data || [],
       priceComparisons: results[11].data || [],
-      priceCompetitors: results[12].data || []
+      priceCompetitors: results[12].data || [],
+      priceSuggestions: results[13].data || []
     });
   });
 } 
@@ -8148,6 +8568,7 @@ var competitors = data.priceCompetitors || [];
 
   document.head.appendChild(script);
 })();
+
 
 
 
