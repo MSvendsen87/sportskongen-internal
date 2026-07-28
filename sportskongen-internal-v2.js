@@ -8298,6 +8298,575 @@ function renderProductControlDashboard(parent, data) {
       batchSection.wrap
     );
 
+    var checkAllSection =
+      createCollapsibleSection(
+        "🚀 Kjør prissjekk på alle",
+        "Kontroller produkter i puljer på 20. Sikre treff lagres som forslag som må godkjennes manuelt.",
+        false
+      );
+
+    var checkAllWarning = el(
+      "div",
+      "Ingen priser endres automatisk. Treff lagres kun som forslag. En full kontroll av alle produkter kan ta en god stund."
+    );
+
+    checkAllWarning.className = "sk-note";
+    checkAllWarning.style.marginBottom =
+      "12px";
+
+    checkAllSection.body.appendChild(
+      checkAllWarning
+    );
+
+    var checkAllControls = el("div");
+
+    checkAllControls.style.display = "grid";
+    checkAllControls.style.gridTemplateColumns =
+      "minmax(180px, 1fr) auto auto";
+    checkAllControls.style.gap = "10px";
+    checkAllControls.style.alignItems = "end";
+
+    var checkAllLimit = el("select");
+
+    [
+      {
+        value: "20",
+        label: "Test med 20 produkter"
+      },
+      {
+        value: "100",
+        label: "Kontroller 100 produkter"
+      },
+      {
+        value: "all",
+        label: "Kontroller alle produkter"
+      }
+    ].forEach(function (item) {
+      var option = el(
+        "option",
+        item.label
+      );
+
+      option.value = item.value;
+
+      checkAllLimit.appendChild(
+        option
+      );
+    });
+
+    addField(
+      checkAllControls,
+      "Omfang",
+      checkAllLimit
+    );
+
+    var startCheckAllButton =
+      createPrimaryButton(
+        "Start kontroll"
+      );
+
+    var stopCheckAllButton =
+      createButton(
+        "Stopp etter puljen"
+      );
+
+    stopCheckAllButton.disabled = true;
+
+    checkAllControls.appendChild(
+      startCheckAllButton
+    );
+
+    checkAllControls.appendChild(
+      stopCheckAllButton
+    );
+
+    checkAllSection.body.appendChild(
+      checkAllControls
+    );
+
+    var checkAllProgress = el("div");
+
+    checkAllProgress.className = "sk-note";
+    checkAllProgress.style.display = "none";
+    checkAllProgress.style.marginTop = "12px";
+    checkAllProgress.style.whiteSpace =
+      "pre-wrap";
+
+    checkAllSection.body.appendChild(
+      checkAllProgress
+    );
+
+    var checkAllBarOuter = el("div");
+
+    checkAllBarOuter.style.display = "none";
+    checkAllBarOuter.style.height = "14px";
+    checkAllBarOuter.style.marginTop = "10px";
+    checkAllBarOuter.style.borderRadius =
+      "999px";
+    checkAllBarOuter.style.background =
+      "#e5e7eb";
+    checkAllBarOuter.style.overflow =
+      "hidden";
+
+    var checkAllBarInner = el("div");
+
+    checkAllBarInner.style.width = "0%";
+    checkAllBarInner.style.height = "100%";
+    checkAllBarInner.style.background =
+      "#16a34a";
+    checkAllBarInner.style.transition =
+      "width 0.25s ease";
+
+    checkAllBarOuter.appendChild(
+      checkAllBarInner
+    );
+
+    checkAllSection.body.appendChild(
+      checkAllBarOuter
+    );
+
+    var checkAllRefreshButton =
+      createButton(
+        "Last inn lagrede forslag"
+      );
+
+    checkAllRefreshButton.style.display =
+      "none";
+    checkAllRefreshButton.style.marginTop =
+      "12px";
+
+    checkAllRefreshButton.onclick =
+      function () {
+        localStorage.setItem(
+          "sk_internal_active_tab",
+          "priceCheck"
+        );
+
+        window.location.reload();
+      };
+
+    checkAllSection.body.appendChild(
+      checkAllRefreshButton
+    );
+
+    var checkAllRunning = false;
+    var checkAllStopRequested = false;
+
+    function waitPriceCheck(ms) {
+      return new Promise(function (resolve) {
+        window.setTimeout(resolve, ms);
+      });
+    }
+
+    function saveAutomaticSuggestion(
+      productResult,
+      candidate,
+      workerResult
+    ) {
+      var competitor =
+        findPriceCompetitor(candidate);
+
+      if (!competitor) {
+        return Promise.resolve({
+          saved: false,
+          reason: "competitor_not_found"
+        });
+      }
+
+      return sb.rpc(
+        "internal_save_price_check_suggestion",
+        {
+          p_product_id:
+            productResult.productId,
+
+          p_competitor_id:
+            competitor.id,
+
+          p_competitor_product_name:
+            candidate.name || null,
+
+          p_competitor_product_url:
+            candidate.url,
+
+          p_competitor_price_inc_vat:
+            candidate.price,
+
+          p_competitor_shipping_inc_vat:
+            0,
+
+          p_competitor_in_stock:
+            candidate.inStock,
+
+          p_match_confidence:
+            candidate.matchConfidence,
+
+          p_raw_data: {
+            source:
+              candidate.source || null,
+
+            source_label:
+              candidate.sourceLabel || null,
+
+            store:
+              candidate.store || null,
+
+            quantity:
+              candidate.quantity ?? null,
+
+            image:
+              candidate.image || null,
+
+            worker_version:
+              workerResult.version || null,
+
+            checked_at:
+              workerResult.generatedAt || null,
+
+            automatic_batch:
+              true
+          }
+        }
+      ).then(function (rpcResult) {
+        if (rpcResult.error) {
+          throw rpcResult.error;
+        }
+
+        return {
+          saved: true
+        };
+      });
+    }
+
+    function saveWorkerBatchSuggestions(
+      workerResult
+    ) {
+      var productResults =
+        workerResult.productResults || [];
+
+      var tasks = [];
+
+      productResults.forEach(
+        function (productResult) {
+          var candidates =
+            productResult.candidates || [];
+
+          candidates.forEach(
+            function (candidate) {
+              tasks.push(
+                saveAutomaticSuggestion(
+                  productResult,
+                  candidate,
+                  workerResult
+                )
+                  .then(function (result) {
+                    return result;
+                  })
+                  .catch(function (error) {
+                    return {
+                      saved: false,
+                      reason: "save_error",
+                      error:
+                        error.message ||
+                        String(error)
+                    };
+                  })
+              );
+            }
+          );
+        }
+      );
+
+      return Promise.all(tasks);
+    }
+
+    function updateCheckAllProgress(
+      total,
+      checked,
+      suggestions,
+      saved,
+      skipped,
+      errors,
+      message
+    ) {
+      var percent =
+        total > 0
+          ? Math.min(
+              100,
+              Math.round(
+                checked / total * 100
+              )
+            )
+          : 0;
+
+      checkAllBarInner.style.width =
+        String(percent) + "%";
+
+      checkAllProgress.textContent =
+        message +
+        "\n\nProdukter kontrollert: " +
+        String(checked) +
+        " av " +
+        String(total) +
+        "\nSikre treff: " +
+        String(suggestions) +
+        "\nForslag lagret: " +
+        String(saved) +
+        "\nHoppet over: " +
+        String(skipped) +
+        "\nFeil: " +
+        String(errors);
+    }
+
+    stopCheckAllButton.onclick =
+      function () {
+        checkAllStopRequested = true;
+
+        stopCheckAllButton.disabled =
+          true;
+
+        stopCheckAllButton.textContent =
+          "Stopper etter puljen...";
+      };
+
+    startCheckAllButton.onclick =
+      function () {
+        if (checkAllRunning) {
+          return;
+        }
+
+        var requestedLimit =
+          checkAllLimit.value;
+
+        var productsToCheck =
+          relevantProducts.slice();
+
+        if (requestedLimit !== "all") {
+          productsToCheck =
+            productsToCheck.slice(
+              0,
+              Number(requestedLimit)
+            );
+        }
+
+        if (!productsToCheck.length) {
+          alert(
+            "Fant ingen produkter som kan kontrolleres."
+          );
+          return;
+        }
+
+        var confirmed = window.confirm(
+          "Starte prissjekk av " +
+          String(productsToCheck.length) +
+          " produkter?\n\nSikre treff lagres som forslag, men blir ikke godkjent automatisk."
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        checkAllRunning = true;
+        checkAllStopRequested = false;
+
+        startCheckAllButton.disabled =
+          true;
+
+        checkAllLimit.disabled = true;
+
+        stopCheckAllButton.disabled =
+          false;
+
+        stopCheckAllButton.textContent =
+          "Stopp etter puljen";
+
+        checkAllRefreshButton.style.display =
+          "none";
+
+        checkAllProgress.style.display =
+          "block";
+
+        checkAllBarOuter.style.display =
+          "block";
+
+        checkAllBarInner.style.width =
+          "0%";
+
+        var total =
+          productsToCheck.length;
+
+        var checked = 0;
+        var suggestions = 0;
+        var saved = 0;
+        var skipped = 0;
+        var errors = 0;
+        var batchIndex = 0;
+
+        var batches = [];
+
+        for (
+          var index = 0;
+          index < productsToCheck.length;
+          index += 20
+        ) {
+          batches.push(
+            productsToCheck.slice(
+              index,
+              index + 20
+            )
+          );
+        }
+
+        function runNextBatch() {
+          if (
+            checkAllStopRequested ||
+            batchIndex >= batches.length
+          ) {
+            return Promise.resolve();
+          }
+
+          var batch =
+            batches[batchIndex];
+
+          batchIndex += 1;
+
+          updateCheckAllProgress(
+            total,
+            checked,
+            suggestions,
+            saved,
+            skipped,
+            errors,
+            "Kjører pulje " +
+              String(batchIndex) +
+              " av " +
+              String(batches.length) +
+              "..."
+          );
+
+          return callPriceCheckWorker({
+            mode: "selected",
+
+            product_ids:
+              batch.map(function (product) {
+                return product.id;
+              })
+          })
+            .then(function (workerResult) {
+              checked +=
+                Number(
+                  workerResult.checkedProducts ||
+                  0
+                );
+
+              suggestions +=
+                Number(
+                  workerResult.totalSuggestions ||
+                  0
+                );
+
+              return saveWorkerBatchSuggestions(
+                workerResult
+              ).then(function (saveResults) {
+                saveResults.forEach(
+                  function (saveResult) {
+                    if (saveResult.saved) {
+                      saved += 1;
+                    } else if (
+                      saveResult.reason ===
+                      "competitor_not_found"
+                    ) {
+                      skipped += 1;
+                    } else {
+                      errors += 1;
+                    }
+                  }
+                );
+
+                if (
+                  workerResult
+                    .stoppedBecauseRateLimited
+                ) {
+                  checkAllStopRequested =
+                    true;
+                }
+              });
+            })
+            .catch(function () {
+              errors += batch.length;
+              checked += batch.length;
+            })
+            .then(function () {
+              updateCheckAllProgress(
+                total,
+                checked,
+                suggestions,
+                saved,
+                skipped,
+                errors,
+                checkAllStopRequested
+                  ? "Stopper etter fullført pulje..."
+                  : "Pulje " +
+                    String(batchIndex) +
+                    " er ferdig."
+              );
+
+              if (
+                checkAllStopRequested ||
+                batchIndex >= batches.length
+              ) {
+                return;
+              }
+
+              return waitPriceCheck(
+                1500
+              ).then(runNextBatch);
+            });
+        }
+
+        runNextBatch()
+          .then(function () {
+            var completed =
+              !checkAllStopRequested &&
+              batchIndex >= batches.length;
+
+            updateCheckAllProgress(
+              total,
+              checked,
+              suggestions,
+              saved,
+              skipped,
+              errors,
+              completed
+                ? "Prissjekken er ferdig."
+                : "Prissjekken ble stoppet."
+            );
+
+            checkAllRefreshButton.style.display =
+              saved > 0
+                ? "inline-block"
+                : "none";
+          })
+          .finally(function () {
+            checkAllRunning = false;
+
+            startCheckAllButton.disabled =
+              false;
+
+            checkAllLimit.disabled =
+              false;
+
+            stopCheckAllButton.disabled =
+              true;
+
+            stopCheckAllButton.textContent =
+              "Stopp etter puljen";
+          });
+      };
+
+    parent.appendChild(
+      checkAllSection.wrap
+    );
+
 var competitors = data.priceCompetitors || [];
 
         var priceSuggestions =
@@ -9348,6 +9917,7 @@ var competitorSection = createCollapsibleSection(
 
   document.head.appendChild(script);
 })();
+
 
 
 
