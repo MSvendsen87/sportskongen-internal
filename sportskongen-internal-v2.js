@@ -6795,6 +6795,86 @@ function renderProductControlDashboard(parent, data) {
 
   renderRows("all");
 }
+  function renderPriceCheckDashboard(parent, data) {
+    var rows = data.priceComparisons || [];
+
+    createPageHeader(
+      parent,
+      "Prissjekk",
+      "Sammenlign prisene på GolfKongens lagerførte produkter med norske konkurrenter.",
+      rows.length + " produkter med lager"
+    );
+
+    var missing = rows.filter(function (row) {
+      return row.price_status === "Mangler prissjekk";
+    }).length;
+
+    var expensive = rows.filter(function (row) {
+      return row.price_status === "GolfKongen dyrere";
+    }).length;
+
+    var cheapest = rows.filter(function (row) {
+      return row.price_status === "GolfKongen billigst";
+    }).length;
+
+    addProStatGrid(parent, [
+      {
+        label: "Produkter med lager",
+        value: String(rows.length),
+        tone: "ok"
+      },
+      {
+        label: "Mangler prissjekk",
+        value: String(missing),
+        tone: missing ? "warning" : "ok"
+      },
+      {
+        label: "GolfKongen dyrere",
+        value: String(expensive),
+        tone: expensive ? "danger" : "ok"
+      },
+      {
+        label: "GolfKongen billigst",
+        value: String(cheapest),
+        tone: "ok"
+      }
+    ]);
+
+    var note = el(
+      "div",
+      "Dette er første versjon. Foreløpig mangler produktene konkurrenttreff. Neste steg blir å legge inn konkurrentbutikker og produktlenker."
+    );
+    note.className = "sk-note";
+    note.style.marginBottom = "16px";
+    parent.appendChild(note);
+
+    addTable(
+      parent,
+      [
+        { key: "name", label: "Produkt" },
+        { key: "brand", label: "Merke" },
+        { key: "stock_quantity", label: "Lager" },
+        {
+          key: "golfkongen_price_inc_vat",
+          label: "GolfKongen",
+          format: "money"
+        },
+        {
+          key: "competitor_total_inc_vat",
+          label: "Laveste konkurrent",
+          format: "money"
+        },
+        {
+          key: "price_difference_inc_vat",
+          label: "Forskjell",
+          format: "money"
+        },
+        { key: "price_status", label: "Status" }
+      ],
+      rows,
+      "Ingen lagerførte produkter funnet."
+    );
+  }
   
   function renderPortal(sb, user, data) {
     var app = renderShell(
@@ -6835,6 +6915,13 @@ function renderProductControlDashboard(parent, data) {
           renderProductControlDashboard(parent, data);
         }
       },
+      priceCheck: {
+        label: "Prissjekk",
+        render: function (parent) {
+          renderPriceCheckDashboard(parent, data);
+        }
+      },
+      
       suppliers: {
         label: "Leverandører og kostnader",
         render: function (parent) {
