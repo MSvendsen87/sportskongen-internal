@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   var allowedPath = "/sider/sportskongen-admin";
 
   if (window.location.pathname !== allowedPath) {
@@ -6845,12 +6845,406 @@ function renderProductControlDashboard(parent, data) {
     note.className = "sk-note";
     note.style.marginBottom = "16px";
     parent.appendChild(note);
-    var competitors = data.priceCompetitors || [];
+        var workerTestSection = createCollapsibleSection(
+      "🔎 Kjør prissjekk",
+      "Velg ett produkt og kontroller konkurrenttreffene.",
+      false
+    );
+
+    var relevantProducts = (data.products || [])
+      .filter(function (product) {
+        return (
+          product &&
+          product.is_active !== false &&
+          product.quickbutik_status === "visible" &&
+          [
+            "disc",
+            "tilbehor",
+            "kurv"
+          ].indexOf(product.category) !== -1
+        );
+      })
+      .sort(function (a, b) {
+        return String(a.name || "").localeCompare(
+          String(b.name || ""),
+          "nb"
+        );
+      });
+
+    var workerControls = el("div");
+    workerControls.style.display = "grid";
+    workerControls.style.gridTemplateColumns =
+      "minmax(240px, 1fr) auto";
+    workerControls.style.gap = "10px";
+    workerControls.style.alignItems = "end";
+
+    var productSelect = el("select");
+    productSelect.style.width = "100%";
+
+    var emptyOption = el(
+      "option",
+      "Velg produkt..."
+    );
+    emptyOption.value = "";
+    productSelect.appendChild(emptyOption);
+
+    relevantProducts.forEach(function (product) {
+      var option = el(
+        "option",
+        (product.brand
+          ? product.brand + " – "
+          : "") +
+          product.name +
+          " (" +
+          formatMoney(
+            product.sales_price_inc_vat
+          ) +
+          ")"
+      );
+
+      option.value = product.id;
+      productSelect.appendChild(option);
+    });
+
+    addField(
+      workerControls,
+      "Produkt",
+      productSelect
+    );
+
+    var checkProductButton =
+      createPrimaryButton(
+        "Sjekk valgt produkt"
+      );
+
+    workerControls.appendChild(
+      checkProductButton
+    );
+
+    workerTestSection.body.appendChild(
+      workerControls
+    );
+
+    var workerStatus = el("div");
+    workerStatus.className = "sk-note";
+    workerStatus.style.display = "none";
+    workerStatus.style.marginTop = "14px";
+
+    workerTestSection.body.appendChild(
+      workerStatus
+    );
+
+    var workerResult = el("div");
+    workerResult.style.display = "none";
+    workerResult.style.marginTop = "14px";
+
+    workerTestSection.body.appendChild(
+      workerResult
+    );
+
+    function getPriceCheckToken() {
+      return sb.auth
+        .getSession()
+        .then(function (sessionResult) {
+          if (sessionResult.error) {
+            throw sessionResult.error;
+          }
+
+          var session =
+            sessionResult.data &&
+            sessionResult.data.session;
+
+          var token =
+            session &&
+            session.access_token;
+
+          if (!token) {
+            throw new Error(
+              "Fant ikke aktiv Supabase-session."
+            );
+          }
+
+          return token;
+        });
+    }
+
+    function callPriceCheckWorker(payload) {
+      return getPriceCheckToken()
+        .then(function (token) {
+          return fetch(
+            "https://golfkongen-price-check.post-cd6.workers.dev/check",
+            {
+              method: "POST",
+              headers: {
+                "Authorization":
+                  "Bearer " + token,
+                "Content-Type":
+                  "application/json"
+              },
+              body: JSON.stringify(payload)
+            }
+          );
+        })
+        .then(function (response) {
+          return response
+            .json()
+            .then(function (responseData) {
+              if (!response.ok) {
+                throw new Error(
+                  responseData.error ||
+                  "Prissjekken svarte HTTP " +
+                    response.status
+                );
+              }
+
+              return responseData;
+            });
+        });
+    }
+
+    function renderPriceCheckWorkerResult(result) {
+      clear(workerResult);
+      workerResult.style.display = "block";
+
+      var productResult =
+        result &&
+        result.productResults &&
+        result.productResults[0];
+
+      if (!productResult) {
+        workerResult.appendChild(
+          el(
+            "div",
+            "Prissjekken returnerte ikke noe produktresultat."
+          )
+        );
+        return;
+      }
+
+      var summary = el("div");
+      summary.style.padding = "14px";
+      summary.style.border =
+        "1px solid #d1d5db";
+      summary.style.borderRadius = "14px";
+      summary.style.background = "#f8fafc";
+
+      var summaryTitle = el(
+        "h3",
+        productResult.productName ||
+          "Produktresultat"
+      );
+
+      summaryTitle.style.margin =
+        "0 0 10px 0";
+
+      summary.appendChild(summaryTitle);
+
+      var ownPrice = el(
+        "p",
+        "GolfKongen-pris: " +
+          formatMoney(
+            productResult.golfkongenPrice
+          )
+      );
+
+      ownPrice.style.margin = "4px 0";
+      summary.appendChild(ownPrice);
+
+      var sourceText = el(
+        "p",
+        "Krokhol: " +
+          (
+            productResult.sourceStatus &&
+            productResult.sourceStatus.krokhol &&
+            productResult.sourceStatus.krokhol.ok
+              ? String(
+                  productResult.sourceStatus
+                    .krokhol.productsFound || 0
+                ) + " søkeresultater"
+              : "Feil"
+          ) +
+          " · DiscInStock: " +
+          (
+            productResult.sourceStatus &&
+            productResult.sourceStatus.discinstock &&
+            productResult.sourceStatus.discinstock.ok
+              ? String(
+                  productResult.sourceStatus
+                    .discinstock.cardsFound || 0
+                ) + " kort"
+              : "Feil"
+          )
+      );
+
+      sourceText.style.margin = "4px 0";
+      sourceText.style.color = "#475569";
+
+      summary.appendChild(sourceText);
+      workerResult.appendChild(summary);
+
+      var candidates =
+        productResult.candidates || [];
+
+      if (!candidates.length) {
+        var noCandidates = el(
+          "div",
+          "Ingen sikre konkurrenttreff ble funnet."
+        );
+
+        noCandidates.className = "sk-note";
+        noCandidates.style.marginTop = "12px";
+
+        workerResult.appendChild(noCandidates);
+        return;
+      }
+
+      candidates.forEach(function (candidate) {
+        var card = el("div");
+
+        card.style.marginTop = "12px";
+        card.style.padding = "14px";
+        card.style.border =
+          "1px solid #bbf7d0";
+        card.style.borderRadius = "14px";
+        card.style.background = "#f0fdf4";
+
+        var candidateTitle = el(
+          "h3",
+          candidate.name ||
+            "Konkurrentprodukt"
+        );
+
+        candidateTitle.style.margin =
+          "0 0 8px 0";
+
+        card.appendChild(candidateTitle);
+
+        var details = el(
+          "div",
+          (candidate.store ||
+            "Ukjent butikk") +
+            " · " +
+            formatMoney(candidate.price) +
+            " · Treff: " +
+            String(
+              candidate.matchConfidence || 0
+            ) +
+            "%"
+        );
+
+        details.style.fontWeight = "700";
+        details.style.marginBottom = "10px";
+
+        card.appendChild(details);
+
+        if (candidate.quantity !== null &&
+            candidate.quantity !== undefined) {
+          var stockInfo = el(
+            "div",
+            "Konkurrentlager: " +
+              String(candidate.quantity)
+          );
+
+          stockInfo.style.marginBottom = "10px";
+          card.appendChild(stockInfo);
+        }
+
+        if (candidate.url) {
+          var openCandidate = el(
+            "a",
+            "Åpne hos konkurrent"
+          );
+
+          openCandidate.href = candidate.url;
+          openCandidate.target = "_blank";
+          openCandidate.rel = "noopener";
+          openCandidate.style.display =
+            "inline-flex";
+          openCandidate.style.padding =
+            "8px 11px";
+          openCandidate.style.borderRadius =
+            "9px";
+          openCandidate.style.border =
+            "1px solid #86efac";
+          openCandidate.style.background =
+            "#ffffff";
+          openCandidate.style.color =
+            "#166534";
+          openCandidate.style.fontWeight =
+            "800";
+          openCandidate.style.textDecoration =
+            "none";
+
+          card.appendChild(openCandidate);
+        }
+
+        workerResult.appendChild(card);
+      });
+    }
+
+    checkProductButton.onclick = function () {
+      var productId =
+        productSelect.value;
+
+      if (!productId) {
+        alert(
+          "Velg et produkt som skal prissjekkes."
+        );
+        return;
+      }
+
+      checkProductButton.disabled = true;
+      checkProductButton.textContent =
+        "Sjekker...";
+
+      workerStatus.style.display = "block";
+      workerStatus.textContent =
+        "Søker hos Krokhol og DiscInStock...";
+
+      workerResult.style.display = "none";
+      clear(workerResult);
+
+      callPriceCheckWorker({
+        mode: "single",
+        product_id: productId
+      })
+        .then(function (result) {
+          workerStatus.textContent =
+            "Prissjekken er ferdig. " +
+            String(
+              result.totalSuggestions || 0
+            ) +
+            " sikkert treff funnet.";
+
+          renderPriceCheckWorkerResult(
+            result
+          );
+        })
+        .catch(function (error) {
+          workerStatus.textContent =
+            "Feil: " +
+            (
+              error.message ||
+              String(error)
+            );
+        })
+        .finally(function () {
+          checkProductButton.disabled = false;
+          checkProductButton.textContent =
+            "Sjekk valgt produkt";
+        });
+    };
+
+    parent.appendChild(
+      workerTestSection.wrap
+    );
+
+var competitors = data.priceCompetitors || [];
 
     var competitorSection = createCollapsibleSection(
       "🏪 Konkurrentbutikker",
       "Legg inn norske butikker som skal brukes i prissammenligningen.",
-      true
+      false
     );
 
     var competitorIntro = el(
@@ -7475,4 +7869,5 @@ function renderProductControlDashboard(parent, data) {
 
   document.head.appendChild(script);
 })();
+
 
