@@ -742,12 +742,10 @@ activate(savedTab);
       columns.forEach(function (col) {
         var value = row[col.key];
 
-        if (col.format === "money") {
-          value = money(value) + " kr";
-        }
-
         if (value === null || value === undefined || value === "") {
           value = "-";
+        } else if (col.format === "money") {
+          value = money(value) + " kr";
         }
 
         var td = el("td", value);
