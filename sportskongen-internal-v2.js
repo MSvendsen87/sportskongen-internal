@@ -6794,6 +6794,31 @@ function renderProductControlDashboard(parent, data) {
   renderRows("all");
 }
   function renderPriceCheckDashboard(parent, data, sb) {
+    function formatPriceCheckMoney(value) {
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return "-";
+      }
+
+      var number = Number(value);
+
+      if (!Number.isFinite(number)) {
+        return "-";
+      }
+
+      return new Intl.NumberFormat(
+        "nb-NO",
+        {
+          style: "currency",
+          currency: "NOK",
+          maximumFractionDigits: 0
+        }
+      ).format(number);
+    }
+
     var rows = data.priceComparisons || [];
 
     createPageHeader(
@@ -6896,7 +6921,7 @@ function renderProductControlDashboard(parent, data) {
           : "") +
           product.name +
           " (" +
-          formatMoney(
+          formatPriceCheckMoney(
             product.sales_price_inc_vat
           ) +
           ")"
@@ -7042,7 +7067,7 @@ function renderProductControlDashboard(parent, data) {
       var ownPrice = el(
         "p",
         "GolfKongen-pris: " +
-          formatMoney(
+          formatPriceCheckMoney(
             productResult.golfkongenPrice
           )
       );
@@ -7124,7 +7149,7 @@ function renderProductControlDashboard(parent, data) {
           (candidate.store ||
             "Ukjent butikk") +
             " · " +
-            formatMoney(candidate.price) +
+            formatPriceCheckMoney(candidate.price) +
             " · Treff: " +
             String(
               candidate.matchConfidence || 0
@@ -7869,5 +7894,6 @@ var competitors = data.priceCompetitors || [];
 
   document.head.appendChild(script);
 })();
+
 
 
