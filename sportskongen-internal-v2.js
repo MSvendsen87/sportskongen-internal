@@ -7514,8 +7514,788 @@ function renderProductControlDashboard(parent, data) {
         });
     };
 
+    var batchSection =
+      createCollapsibleSection(
+        "☑️ Sjekk valgte produkter",
+        "Velg opptil 20 produkter og kjør én samlet prissjekk.",
+        false
+      );
+
+    var selectedProductIds = {};
+
+    var batchSearchInput = el("input");
+    batchSearchInput.type = "search";
+    batchSearchInput.placeholder =
+      "Søk etter produkt eller merke";
+    batchSearchInput.autocomplete = "off";
+    batchSearchInput.style.width = "100%";
+    batchSearchInput.style.marginBottom = "10px";
+
+    batchSection.body.appendChild(
+      batchSearchInput
+    );
+
+    var batchToolbar = el("div");
+    batchToolbar.style.display = "flex";
+    batchToolbar.style.gap = "8px";
+    batchToolbar.style.flexWrap = "wrap";
+    batchToolbar.style.marginBottom = "10px";
+
+    var selectVisibleButton =
+      createButton("Velg synlige");
+
+    var clearSelectedButton =
+      createButton("Fjern alle valg");
+
+    var selectedCount = el(
+      "span",
+      "0 valgt"
+    );
+
+    selectedCount.style.display = "inline-flex";
+    selectedCount.style.alignItems = "center";
+    selectedCount.style.padding = "7px 10px";
+    selectedCount.style.borderRadius = "999px";
+    selectedCount.style.background = "#f1f5f9";
+    selectedCount.style.fontWeight = "800";
+
+    batchToolbar.appendChild(
+      selectVisibleButton
+    );
+
+    batchToolbar.appendChild(
+      clearSelectedButton
+    );
+
+    batchToolbar.appendChild(
+      selectedCount
+    );
+
+    batchSection.body.appendChild(
+      batchToolbar
+    );
+
+    var batchProductList = el("div");
+
+    batchProductList.style.maxHeight = "420px";
+    batchProductList.style.overflowY = "auto";
+    batchProductList.style.border =
+      "1px solid #e5e7eb";
+    batchProductList.style.borderRadius =
+      "12px";
+    batchProductList.style.padding = "8px";
+    batchProductList.style.background =
+      "#ffffff";
+
+    batchSection.body.appendChild(
+      batchProductList
+    );
+
+    var batchInfo = el("div");
+
+    batchInfo.className = "sk-note";
+    batchInfo.style.marginTop = "10px";
+
+    batchSection.body.appendChild(
+      batchInfo
+    );
+
+    var runSelectedButton =
+      createPrimaryButton(
+        "Sjekk valgte"
+      );
+
+    runSelectedButton.style.marginTop =
+      "12px";
+
+    batchSection.body.appendChild(
+      runSelectedButton
+    );
+
+    var batchStatus = el("div");
+
+    batchStatus.className = "sk-note";
+    batchStatus.style.display = "none";
+    batchStatus.style.marginTop = "12px";
+
+    batchSection.body.appendChild(
+      batchStatus
+    );
+
+    var batchResults = el("div");
+
+    batchResults.style.display = "none";
+    batchResults.style.marginTop = "12px";
+
+    batchSection.body.appendChild(
+      batchResults
+    );
+
+    function getSelectedProductIds() {
+      return Object.keys(
+        selectedProductIds
+      ).filter(function (id) {
+        return selectedProductIds[id] === true;
+      });
+    }
+
+    function updateSelectedCount() {
+      var count =
+        getSelectedProductIds().length;
+
+      selectedCount.textContent =
+        String(count) + " valgt";
+
+      if (count > 20) {
+        selectedCount.style.background =
+          "#fee2e2";
+        selectedCount.style.color =
+          "#991b1b";
+      } else {
+        selectedCount.style.background =
+          "#f1f5f9";
+        selectedCount.style.color =
+          "#111827";
+      }
+    }
+
+    function getFilteredBatchProducts() {
+      var searchText =
+        String(
+          batchSearchInput.value || ""
+        )
+          .toLowerCase()
+          .trim();
+
+      return relevantProducts.filter(
+        function (product) {
+          if (!searchText) {
+            return true;
+          }
+
+          var haystack = (
+            String(product.name || "") +
+            " " +
+            String(product.brand || "") +
+            " " +
+            String(
+              product.quickbutik_sku || ""
+            )
+          ).toLowerCase();
+
+          return haystack.includes(
+            searchText
+          );
+        }
+      );
+    }
+
+    function renderBatchProductList() {
+      clear(batchProductList);
+
+      var filteredProducts =
+        getFilteredBatchProducts();
+
+      batchInfo.textContent =
+        String(filteredProducts.length) +
+        " produkter vises. Maks 20 kan sjekkes per kjøring.";
+
+      if (!filteredProducts.length) {
+        batchProductList.appendChild(
+          el(
+            "div",
+            "Ingen produkter matcher søket."
+          )
+        );
+        return;
+      }
+
+      filteredProducts.forEach(
+        function (product) {
+          var row = el("label");
+
+          row.style.display = "grid";
+          row.style.gridTemplateColumns =
+            "24px minmax(0, 1fr) auto";
+          row.style.gap = "8px";
+          row.style.alignItems = "center";
+          row.style.padding = "9px";
+          row.style.borderBottom =
+            "1px solid #f1f5f9";
+          row.style.cursor = "pointer";
+
+          var checkbox = el("input");
+
+          checkbox.type = "checkbox";
+          checkbox.checked =
+            selectedProductIds[product.id] ===
+            true;
+          checkbox.style.width = "18px";
+          checkbox.style.height = "18px";
+
+          checkbox.addEventListener(
+            "change",
+            function () {
+              selectedProductIds[
+                product.id
+              ] = checkbox.checked;
+
+              updateSelectedCount();
+            }
+          );
+
+          var textWrap = el("div");
+
+          var productName = el(
+            "div",
+            (
+              product.brand
+                ? product.brand + " – "
+                : ""
+            ) +
+              product.name
+          );
+
+          productName.style.fontWeight =
+            "700";
+
+          var productMeta = el(
+            "div",
+            "SKU: " +
+              String(
+                product.quickbutik_sku ||
+                "-"
+              )
+          );
+
+          productMeta.style.fontSize =
+            "11px";
+          productMeta.style.color =
+            "#64748b";
+
+          textWrap.appendChild(
+            productName
+          );
+
+          textWrap.appendChild(
+            productMeta
+          );
+
+          var price = el(
+            "div",
+            formatPriceCheckMoney(
+              product.sales_price_inc_vat
+            )
+          );
+
+          price.style.fontWeight = "800";
+          price.style.whiteSpace = "nowrap";
+
+          row.appendChild(checkbox);
+          row.appendChild(textWrap);
+          row.appendChild(price);
+
+          batchProductList.appendChild(
+            row
+          );
+        }
+      );
+    }
+
+    batchSearchInput.addEventListener(
+      "input",
+      renderBatchProductList
+    );
+
+    selectVisibleButton.onclick =
+      function () {
+        var filteredProducts =
+          getFilteredBatchProducts();
+
+        var currentIds =
+          getSelectedProductIds();
+
+        var remaining =
+          Math.max(
+            0,
+            20 - currentIds.length
+          );
+
+        filteredProducts
+          .filter(function (product) {
+            return (
+              selectedProductIds[
+                product.id
+              ] !== true
+            );
+          })
+          .slice(0, remaining)
+          .forEach(function (product) {
+            selectedProductIds[
+              product.id
+            ] = true;
+          });
+
+        updateSelectedCount();
+        renderBatchProductList();
+      };
+
+    clearSelectedButton.onclick =
+      function () {
+        selectedProductIds = {};
+
+        updateSelectedCount();
+        renderBatchProductList();
+      };
+
+    function findPriceCompetitor(
+      candidate
+    ) {
+      return (
+        data.priceCompetitors || []
+      ).find(function (row) {
+        var baseUrl =
+          String(
+            row.base_url || ""
+          ).toLowerCase();
+
+        var name =
+          String(
+            row.name || ""
+          ).toLowerCase();
+
+        var store =
+          String(
+            candidate.store || ""
+          ).toLowerCase();
+
+        var normalizedBase =
+          baseUrl
+            .replace(/^https?:\/\//, "")
+            .replace(/^www\./, "")
+            .replace(/\/+$/, "");
+
+        return (
+          row.is_active !== false &&
+          (
+            baseUrl.includes(store) ||
+            store.includes(
+              normalizedBase
+            ) ||
+            (
+              store ===
+                "krokholdgs.no" &&
+              name.includes("krokhol")
+            )
+          )
+        );
+      });
+    }
+
+    function saveBatchSuggestion(
+      productResult,
+      candidate,
+      workerResult,
+      button,
+      card
+    ) {
+      var competitor =
+        findPriceCompetitor(candidate);
+
+      if (!competitor) {
+        alert(
+          "Fant ikke aktiv konkurrent for " +
+            String(
+              candidate.store ||
+              "denne butikken"
+            )
+        );
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Lagrer...";
+
+      sb.rpc(
+        "internal_save_price_check_suggestion",
+        {
+          p_product_id:
+            productResult.productId,
+          p_competitor_id:
+            competitor.id,
+          p_competitor_product_name:
+            candidate.name || null,
+          p_competitor_product_url:
+            candidate.url,
+          p_competitor_price_inc_vat:
+            candidate.price,
+          p_competitor_shipping_inc_vat:
+            0,
+          p_competitor_in_stock:
+            candidate.inStock,
+          p_match_confidence:
+            candidate.matchConfidence,
+          p_raw_data: {
+            source:
+              candidate.source || null,
+            source_label:
+              candidate.sourceLabel || null,
+            store:
+              candidate.store || null,
+            quantity:
+              candidate.quantity ?? null,
+            image:
+              candidate.image || null,
+            worker_version:
+              workerResult.version || null,
+            checked_at:
+              workerResult.generatedAt || null
+          }
+        }
+      )
+        .then(function (rpcResult) {
+          if (rpcResult.error) {
+            throw rpcResult.error;
+          }
+
+          button.textContent =
+            "Forslag lagret";
+          button.disabled = true;
+
+          card.style.background =
+            "#ecfdf5";
+          card.style.border =
+            "1px solid #86efac";
+        })
+        .catch(function (error) {
+          button.disabled = false;
+          button.textContent =
+            "Lagre forslag";
+
+          alert(
+            "Kunne ikke lagre forslaget: " +
+              (
+                error.message ||
+                String(error)
+              )
+          );
+        });
+    }
+
+    function renderBatchResults(result) {
+      clear(batchResults);
+
+      batchResults.style.display =
+        "block";
+
+      var productResults =
+        result.productResults || [];
+
+      if (!productResults.length) {
+        batchResults.appendChild(
+          el(
+            "div",
+            "Ingen produktresultater ble returnert."
+          )
+        );
+        return;
+      }
+
+      productResults.forEach(
+        function (productResult) {
+          var productCard = el("div");
+
+          productCard.style.padding =
+            "14px";
+          productCard.style.marginBottom =
+            "14px";
+          productCard.style.border =
+            "1px solid #d1d5db";
+          productCard.style.borderRadius =
+            "14px";
+          productCard.style.background =
+            "#f8fafc";
+
+          var title = el(
+            "h3",
+            productResult.productName ||
+              "Ukjent produkt"
+          );
+
+          title.style.margin =
+            "0 0 5px 0";
+
+          productCard.appendChild(title);
+
+          var ownPrice = el(
+            "div",
+            "GolfKongen: " +
+              formatPriceCheckMoney(
+                productResult.golfkongenPrice
+              )
+          );
+
+          ownPrice.style.fontWeight =
+            "700";
+          ownPrice.style.marginBottom =
+            "10px";
+
+          productCard.appendChild(
+            ownPrice
+          );
+
+          if (productResult.error) {
+            var errorText = el(
+              "div",
+              "Feil: " +
+                productResult.error
+            );
+
+            errorText.style.color =
+              "#991b1b";
+
+            productCard.appendChild(
+              errorText
+            );
+
+            batchResults.appendChild(
+              productCard
+            );
+
+            return;
+          }
+
+          var candidates =
+            productResult.candidates || [];
+
+          if (!candidates.length) {
+            var noResult = el(
+              "div",
+              "Ingen sikre konkurrenttreff."
+            );
+
+            noResult.className = "sk-note";
+
+            productCard.appendChild(
+              noResult
+            );
+
+            batchResults.appendChild(
+              productCard
+            );
+
+            return;
+          }
+
+          candidates.forEach(
+            function (candidate) {
+              var candidateCard =
+                el("div");
+
+              candidateCard.style.padding =
+                "12px";
+              candidateCard.style.marginTop =
+                "10px";
+              candidateCard.style.border =
+                "1px solid #bbf7d0";
+              candidateCard.style.borderRadius =
+                "12px";
+              candidateCard.style.background =
+                "#f0fdf4";
+
+              var candidateTitle = el(
+                "div",
+                candidate.name ||
+                  "Konkurrentprodukt"
+              );
+
+              candidateTitle.style.fontWeight =
+                "800";
+
+              candidateCard.appendChild(
+                candidateTitle
+              );
+
+              var candidateMeta = el(
+                "div",
+                String(
+                  candidate.store ||
+                  "Ukjent butikk"
+                ) +
+                  " · " +
+                  formatPriceCheckMoney(
+                    candidate.price
+                  ) +
+                  " · Treff: " +
+                  String(
+                    candidate.matchConfidence ||
+                    0
+                  ) +
+                  "%"
+              );
+
+              candidateMeta.style.margin =
+                "5px 0 10px 0";
+
+              candidateCard.appendChild(
+                candidateMeta
+              );
+
+              var actions = el("div");
+
+              actions.style.display =
+                "flex";
+              actions.style.gap = "8px";
+              actions.style.flexWrap =
+                "wrap";
+
+              if (candidate.url) {
+                var openLink = el(
+                  "a",
+                  "Åpne konkurrentprodukt"
+                );
+
+                openLink.href =
+                  candidate.url;
+                openLink.target =
+                  "_blank";
+                openLink.rel =
+                  "noopener";
+                openLink.style.padding =
+                  "8px 10px";
+                openLink.style.border =
+                  "1px solid #86efac";
+                openLink.style.borderRadius =
+                  "9px";
+                openLink.style.background =
+                  "#ffffff";
+                openLink.style.color =
+                  "#166534";
+                openLink.style.fontWeight =
+                  "700";
+                openLink.style.textDecoration =
+                  "none";
+
+                actions.appendChild(
+                  openLink
+                );
+              }
+
+              var saveButton =
+                createPrimaryButton(
+                  "Lagre forslag"
+                );
+
+              saveButton.onclick =
+                function () {
+                  saveBatchSuggestion(
+                    productResult,
+                    candidate,
+                    result,
+                    saveButton,
+                    candidateCard
+                  );
+                };
+
+              actions.appendChild(
+                saveButton
+              );
+
+              candidateCard.appendChild(
+                actions
+              );
+
+              productCard.appendChild(
+                candidateCard
+              );
+            }
+          );
+
+          batchResults.appendChild(
+            productCard
+          );
+        }
+      );
+    }
+
+    runSelectedButton.onclick =
+      function () {
+        var ids =
+          getSelectedProductIds();
+
+        if (!ids.length) {
+          alert(
+            "Velg minst ett produkt."
+          );
+          return;
+        }
+
+        if (ids.length > 20) {
+          alert(
+            "Maks 20 produkter kan sjekkes per kjøring."
+          );
+          return;
+        }
+
+        runSelectedButton.disabled =
+          true;
+        runSelectedButton.textContent =
+          "Sjekker...";
+
+        batchStatus.style.display =
+          "block";
+        batchStatus.textContent =
+          "Sjekker " +
+          String(ids.length) +
+          " produkter. Dette kan ta litt tid...";
+
+        batchResults.style.display =
+          "none";
+        clear(batchResults);
+
+        callPriceCheckWorker({
+          mode: "selected",
+          product_ids: ids
+        })
+          .then(function (result) {
+            batchStatus.textContent =
+              "Ferdig. " +
+              String(
+                result.checkedProducts || 0
+              ) +
+              " produkter kontrollert og " +
+              String(
+                result.totalSuggestions || 0
+              ) +
+              " sikre treff funnet.";
+
+            renderBatchResults(result);
+          })
+          .catch(function (error) {
+            batchStatus.textContent =
+              "Feil: " +
+              (
+                error.message ||
+                String(error)
+              );
+          })
+          .finally(function () {
+            runSelectedButton.disabled =
+              false;
+            runSelectedButton.textContent =
+              "Sjekk valgte";
+          });
+      };
+
+    updateSelectedCount();
+    renderBatchProductList();
+
     parent.appendChild(
       workerTestSection.wrap
+    );
+
+    parent.appendChild(
+      batchSection.wrap
     );
 
 var competitors = data.priceCompetitors || [];
@@ -8568,6 +9348,7 @@ var competitorSection = createCollapsibleSection(
 
   document.head.appendChild(script);
 })();
+
 
 
 
