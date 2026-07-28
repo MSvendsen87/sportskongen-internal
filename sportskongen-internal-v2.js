@@ -6793,7 +6793,7 @@ function renderProductControlDashboard(parent, data) {
 
   renderRows("all");
 }
-  function renderPriceCheckDashboard(parent, data) {
+  function renderPriceCheckDashboard(parent, data, sb) {
     var rows = data.priceComparisons || [];
 
     createPageHeader(
@@ -6845,6 +6845,328 @@ function renderProductControlDashboard(parent, data) {
     note.className = "sk-note";
     note.style.marginBottom = "16px";
     parent.appendChild(note);
+    var competitors = data.priceCompetitors || [];
+
+    var competitorSection = createCollapsibleSection(
+      "🏪 Konkurrentbutikker",
+      "Legg inn norske butikker som skal brukes i prissammenligningen.",
+      true
+    );
+
+    var competitorIntro = el(
+      "div",
+      "Konkurrentbutikker administreres her. Du bestemmer selv hvilke butikker som skal brukes."
+    );
+    competitorIntro.className = "sk-note";
+    competitorIntro.style.marginBottom = "14px";
+    competitorSection.body.appendChild(competitorIntro);
+
+    var competitorForm = el("div");
+    competitorForm.style.display = "grid";
+    competitorForm.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(220px, 1fr))";
+    competitorForm.style.gap = "12px";
+    competitorForm.style.padding = "14px";
+    competitorForm.style.border = "1px solid #e5e7eb";
+    competitorForm.style.borderRadius = "14px";
+    competitorForm.style.background = "#f8fafc";
+
+    var competitorNameInput = el("input");
+    competitorNameInput.type = "text";
+    competitorNameInput.placeholder = "F.eks. Frisbeebutikken";
+
+    var competitorUrlInput = el("input");
+    competitorUrlInput.type = "url";
+    competitorUrlInput.placeholder = "https://eksempel.no";
+
+    addField(
+      competitorForm,
+      "Navn på konkurrent",
+      competitorNameInput
+    );
+
+    addField(
+      competitorForm,
+      "Nettadresse",
+      competitorUrlInput
+    );
+
+    var activeWrap = el("label");
+    activeWrap.style.display = "flex";
+    activeWrap.style.alignItems = "center";
+    activeWrap.style.gap = "9px";
+    activeWrap.style.padding = "10px 0";
+    activeWrap.style.fontWeight = "700";
+
+    var competitorActiveInput = el("input");
+    competitorActiveInput.type = "checkbox";
+    competitorActiveInput.checked = true;
+    competitorActiveInput.style.width = "18px";
+    competitorActiveInput.style.height = "18px";
+
+    activeWrap.appendChild(competitorActiveInput);
+    activeWrap.appendChild(el("span", "Aktiv konkurrent"));
+    competitorForm.appendChild(activeWrap);
+
+    competitorSection.body.appendChild(competitorForm);
+
+    var competitorActions = el("div");
+    competitorActions.style.display = "flex";
+    competitorActions.style.gap = "10px";
+    competitorActions.style.flexWrap = "wrap";
+    competitorActions.style.marginTop = "12px";
+
+    var saveCompetitorButton = createPrimaryButton(
+      "Legg til konkurrent"
+    );
+
+    var cancelCompetitorButton = createButton(
+      "Avbryt redigering"
+    );
+    cancelCompetitorButton.style.display = "none";
+
+    competitorActions.appendChild(saveCompetitorButton);
+    competitorActions.appendChild(cancelCompetitorButton);
+    competitorSection.body.appendChild(competitorActions);
+
+    var competitorList = el("div");
+    competitorList.style.marginTop = "18px";
+    competitorSection.body.appendChild(competitorList);
+
+    var editingCompetitorId = null;
+
+    function resetCompetitorForm() {
+      editingCompetitorId = null;
+      competitorNameInput.value = "";
+      competitorUrlInput.value = "";
+      competitorActiveInput.checked = true;
+      saveCompetitorButton.textContent = "Legg til konkurrent";
+      cancelCompetitorButton.style.display = "none";
+    }
+
+    function editCompetitor(competitor) {
+      editingCompetitorId = competitor.id;
+      competitorNameInput.value = competitor.name || "";
+      competitorUrlInput.value = competitor.base_url || "";
+      competitorActiveInput.checked =
+        competitor.is_active !== false;
+
+      saveCompetitorButton.textContent =
+        "Lagre endringer";
+
+      cancelCompetitorButton.style.display =
+        "inline-block";
+
+      competitorForm.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }
+
+    function renderCompetitorList() {
+      clear(competitorList);
+
+      var title = el(
+        "h3",
+        "Registrerte konkurrenter (" +
+          competitors.length +
+          ")"
+      );
+      title.style.margin = "0 0 10px 0";
+      competitorList.appendChild(title);
+
+      if (!competitors.length) {
+        var empty = el(
+          "p",
+          "Ingen konkurrentbutikker er registrert ennå."
+        );
+        empty.style.color = "#64748b";
+        competitorList.appendChild(empty);
+        return;
+      }
+
+      var wrap = el("div");
+      wrap.style.overflowX = "auto";
+      wrap.style.border = "1px solid #e5e7eb";
+      wrap.style.borderRadius = "14px";
+
+      var table = el("table");
+      table.style.width = "100%";
+      table.style.borderCollapse = "collapse";
+      table.style.fontSize = "14px";
+
+      var thead = el("thead");
+      var headRow = el("tr");
+
+      [
+        "Butikk",
+        "Nettadresse",
+        "Status",
+        "Handling"
+      ].forEach(function (label) {
+        var th = el("th", label);
+        th.style.textAlign = "left";
+        th.style.padding = "11px";
+        th.style.background = "#f8fafc";
+        th.style.borderBottom = "1px solid #e5e7eb";
+        th.style.whiteSpace = "nowrap";
+        headRow.appendChild(th);
+      });
+
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      var tbody = el("tbody");
+
+      competitors.forEach(function (competitor) {
+        var tr = el("tr");
+
+        var nameTd = el(
+          "td",
+          competitor.name || "-"
+        );
+
+        var urlTd = el("td");
+
+        if (competitor.base_url) {
+          var urlLink = el(
+            "a",
+            competitor.base_url
+          );
+          urlLink.href = competitor.base_url;
+          urlLink.target = "_blank";
+          urlLink.rel = "noopener";
+          urlTd.appendChild(urlLink);
+        } else {
+          urlTd.textContent = "-";
+        }
+
+        var statusTd = el("td");
+        var statusBadge = el(
+          "span",
+          competitor.is_active
+            ? "Aktiv"
+            : "Deaktivert"
+        );
+
+        statusBadge.style.display = "inline-block";
+        statusBadge.style.padding = "6px 9px";
+        statusBadge.style.borderRadius = "999px";
+        statusBadge.style.fontWeight = "800";
+        statusBadge.style.fontSize = "12px";
+
+        if (competitor.is_active) {
+          statusBadge.style.background = "#f0fdf4";
+          statusBadge.style.color = "#166534";
+          statusBadge.style.border =
+            "1px solid #bbf7d0";
+        } else {
+          statusBadge.style.background = "#f1f5f9";
+          statusBadge.style.color = "#475569";
+          statusBadge.style.border =
+            "1px solid #cbd5e1";
+        }
+
+        statusTd.appendChild(statusBadge);
+
+        var actionTd = el("td");
+        var editButton = createButton("Rediger");
+        editButton.style.padding = "7px 10px";
+
+        editButton.onclick = function () {
+          editCompetitor(competitor);
+        };
+
+        actionTd.appendChild(editButton);
+
+        [
+          nameTd,
+          urlTd,
+          statusTd,
+          actionTd
+        ].forEach(function (td) {
+          td.style.padding = "11px";
+          td.style.borderBottom =
+            "1px solid #f3f4f6";
+        });
+
+        tr.appendChild(nameTd);
+        tr.appendChild(urlTd);
+        tr.appendChild(statusTd);
+        tr.appendChild(actionTd);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      competitorList.appendChild(wrap);
+    }
+
+    cancelCompetitorButton.onclick = function () {
+      resetCompetitorForm();
+    };
+
+    saveCompetitorButton.onclick = function () {
+      var name = competitorNameInput.value.trim();
+      var baseUrl = competitorUrlInput.value.trim();
+
+      if (!name) {
+        alert("Skriv inn navn på konkurrenten.");
+        return;
+      }
+
+      if (
+        baseUrl &&
+        !/^https?:\/\//i.test(baseUrl)
+      ) {
+        alert(
+          "Nettadressen må starte med https:// eller http://"
+        );
+        return;
+      }
+
+      saveCompetitorButton.disabled = true;
+      saveCompetitorButton.textContent = "Lagrer...";
+
+      sb.rpc("internal_save_price_competitor", {
+        p_id: editingCompetitorId,
+        p_name: name,
+        p_base_url: baseUrl || null,
+        p_is_active: competitorActiveInput.checked
+      }).then(function (result) {
+        saveCompetitorButton.disabled = false;
+
+        if (result.error) {
+          saveCompetitorButton.textContent =
+            editingCompetitorId
+              ? "Lagre endringer"
+              : "Legg til konkurrent";
+
+          alert(
+            "Kunne ikke lagre konkurrent: " +
+              result.error.message
+          );
+          return;
+        }
+
+        localStorage.setItem(
+          "sk_internal_active_tab",
+          "priceCheck"
+        );
+
+        alert(
+          editingCompetitorId
+            ? "Konkurrenten er oppdatert."
+            : "Konkurrenten er lagt til."
+        );
+
+        window.location.reload();
+      });
+    };
+
+    renderCompetitorList();
+    parent.appendChild(competitorSection.wrap);
+
 
     addTable(
       parent,
@@ -6916,7 +7238,7 @@ function renderProductControlDashboard(parent, data) {
       priceCheck: {
         label: "Prissjekk",
         render: function (parent) {
-          renderPriceCheckDashboard(parent, data);
+          renderPriceCheckDashboard(parent, data, sb);
         }
       },
       
