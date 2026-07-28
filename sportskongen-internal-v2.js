@@ -6903,33 +6903,144 @@ function renderProductControlDashboard(parent, data) {
     workerControls.style.gap = "10px";
     workerControls.style.alignItems = "end";
 
+    var productSearchWrap = el("label");
+    productSearchWrap.style.display = "grid";
+    productSearchWrap.style.gap = "6px";
+    productSearchWrap.style.gridColumn = "1 / -1";
+
+    var productSearchLabel = el(
+      "span",
+      "Søk etter produkt"
+    );
+    productSearchLabel.style.fontWeight = "700";
+    productSearchLabel.style.fontSize = "13px";
+
+    var productSearchInput = el("input");
+    productSearchInput.type = "search";
+    productSearchInput.placeholder =
+      "Skriv produktnavn eller merke, f.eks. Neutron Control";
+    productSearchInput.autocomplete = "off";
+    productSearchInput.style.width = "100%";
+
+    productSearchWrap.appendChild(
+      productSearchLabel
+    );
+    productSearchWrap.appendChild(
+      productSearchInput
+    );
+
+    workerControls.appendChild(
+      productSearchWrap
+    );
+
     var productSelect = el("select");
     productSelect.style.width = "100%";
 
-    var emptyOption = el(
-      "option",
-      "Velg produkt..."
-    );
-    emptyOption.value = "";
-    productSelect.appendChild(emptyOption);
-
-    relevantProducts.forEach(function (product) {
-      var option = el(
-        "option",
+    function getProductOptionLabel(product) {
+      return (
         (product.brand
           ? product.brand + " – "
           : "") +
-          product.name +
-          " (" +
-          formatPriceCheckMoney(
-            product.sales_price_inc_vat
-          ) +
-          ")"
+        product.name +
+        " (" +
+        formatPriceCheckMoney(
+          product.sales_price_inc_vat
+        ) +
+        ")"
+      );
+    }
+
+    function rebuildProductOptions(searchText) {
+      var previousValue =
+        productSelect.value;
+
+      clear(productSelect);
+
+      var emptyOption = el(
+        "option",
+        "Velg produkt..."
       );
 
-      option.value = product.id;
-      productSelect.appendChild(option);
-    });
+      emptyOption.value = "";
+      productSelect.appendChild(
+        emptyOption
+      );
+
+      var normalizedSearch =
+        String(searchText || "")
+          .toLowerCase()
+          .trim();
+
+      var filteredProducts =
+        relevantProducts.filter(
+          function (product) {
+            if (!normalizedSearch) {
+              return true;
+            }
+
+            var haystack = (
+              String(product.name || "") +
+              " " +
+              String(product.brand || "") +
+              " " +
+              String(product.quickbutik_sku || "")
+            ).toLowerCase();
+
+            return haystack.includes(
+              normalizedSearch
+            );
+          }
+        );
+
+      filteredProducts.forEach(
+        function (product) {
+          var option = el(
+            "option",
+            getProductOptionLabel(product)
+          );
+
+          option.value = product.id;
+
+          productSelect.appendChild(
+            option
+          );
+        }
+      );
+
+      if (
+        previousValue &&
+        filteredProducts.some(
+          function (product) {
+            return (
+              String(product.id) ===
+              String(previousValue)
+            );
+          }
+        )
+      ) {
+        productSelect.value =
+          previousValue;
+      }
+
+      if (
+        normalizedSearch &&
+        filteredProducts.length === 1
+      ) {
+        productSelect.value =
+          filteredProducts[0].id;
+      }
+    }
+
+    productSearchInput.addEventListener(
+      "input",
+      function () {
+        rebuildProductOptions(
+          productSearchInput.value
+        );
+      }
+    );
+
+    rebuildProductOptions("");
 
     addField(
       workerControls,
@@ -7894,6 +8005,7 @@ var competitors = data.priceCompetitors || [];
 
   document.head.appendChild(script);
 })();
+
 
 
 
