@@ -7014,7 +7014,12 @@ function renderProductControlDashboard(parent, data) {
       .order("price_difference_inc_vat", {
         ascending: false,
         nullsFirst: false
-      })
+      }),
+    sb
+      .from("internal_price_competitors")
+      .select("*")
+      .order("name", { ascending: true })
+
 
   ]).then(function (results) {
     if (results[0].error) {
@@ -7077,6 +7082,11 @@ function renderProductControlDashboard(parent, data) {
       return;
     }
 
+    if (results[12].error) {
+      renderError("Kunne ikke hente konkurrentbutikker: " + results[12].error.message);
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -7089,7 +7099,8 @@ function renderProductControlDashboard(parent, data) {
       stockCounts: results[8].data || [],
       productControlIssues: results[9].data || [],
       stockCountItems: results[10].data || [],
-      priceComparisons: results[11].data || []
+      priceComparisons: results[11].data || [],
+      priceCompetitors: results[12].data || []
     });
   });
 } 
