@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   var allowedPath = "/sider/sportskongen-admin";
 
   if (window.location.pathname !== allowedPath) {
@@ -6865,7 +6865,7 @@ function renderProductControlDashboard(parent, data) {
 
     var note = el(
       "div",
-      "Dette er første versjon. Foreløpig mangler produktene konkurrenttreff. Neste steg blir å legge inn konkurrentbutikker og produktlenker."
+      "Prissjekken søker hos registrerte konkurrenter via DiscInStock og Krokhol. Treff lagres som forslag og må godkjennes manuelt før de påvirker prissammenligningen."
     );
     note.className = "sk-note";
     note.style.marginBottom = "16px";
@@ -8550,29 +8550,104 @@ function renderProductControlDashboard(parent, data) {
           var candidates =
             productResult.candidates || [];
 
+          var bestByCompetitor = {};
+
           candidates.forEach(
             function (candidate) {
-              tasks.push(
-                saveAutomaticSuggestion(
-                  productResult,
-                  candidate,
-                  workerResult
+              var competitor =
+                findPriceCompetitor(candidate);
+
+              if (!competitor) {
+                tasks.push(
+                  Promise.resolve({
+                    saved: false,
+                    reason:
+                      "competitor_not_found"
+                  })
+                );
+
+                return;
+              }
+
+              var key =
+                String(competitor.id || "");
+
+              var existing =
+                bestByCompetitor[key];
+
+              if (!existing) {
+                bestByCompetitor[key] =
+                  candidate;
+
+                return;
+              }
+
+              var candidateConfidence =
+                Number(
+                  candidate.matchConfidence ||
+                  0
+                );
+
+              var existingConfidence =
+                Number(
+                  existing.matchConfidence ||
+                  0
+                );
+
+              var candidatePrice =
+                candidate.price === null ||
+                candidate.price === undefined
+                  ? Number.POSITIVE_INFINITY
+                  : Number(candidate.price);
+
+              var existingPrice =
+                existing.price === null ||
+                existing.price === undefined
+                  ? Number.POSITIVE_INFINITY
+                  : Number(existing.price);
+
+              if (
+                candidateConfidence >
+                  existingConfidence ||
+                (
+                  candidateConfidence ===
+                    existingConfidence &&
+                  candidatePrice <
+                    existingPrice
                 )
-                  .then(function (result) {
-                    return result;
-                  })
-                  .catch(function (error) {
-                    return {
-                      saved: false,
-                      reason: "save_error",
-                      error:
-                        error.message ||
-                        String(error)
-                    };
-                  })
-              );
+              ) {
+                bestByCompetitor[key] =
+                  candidate;
+              }
             }
           );
+
+          Object.keys(
+            bestByCompetitor
+          ).forEach(function (key) {
+            var candidate =
+              bestByCompetitor[key];
+
+            tasks.push(
+              saveAutomaticSuggestion(
+                productResult,
+                candidate,
+                workerResult
+              )
+                .then(function (result) {
+                  return result;
+                })
+                .catch(function (error) {
+                  return {
+                    saved: false,
+                    reason: "save_error",
+                    error:
+                      error.message ||
+                      String(error)
+                  };
+                })
+            );
+          });
         }
       );
 
@@ -8607,9 +8682,9 @@ function renderProductControlDashboard(parent, data) {
         String(checked) +
         " av " +
         String(total) +
-        "\nSikre treff: " +
+        "\nKandidater funnet: " +
         String(suggestions) +
-        "\nForslag lagret: " +
+        "\nBeste forslag lagret: " +
         String(saved) +
         "\nHoppet over: " +
         String(skipped) +
