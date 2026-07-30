@@ -8944,20 +8944,80 @@ function renderProductControlDashboard(parent, data) {
 
 var competitors = data.priceCompetitors || [];
 
-        var priceSuggestions =
+    var priceSuggestions =
       data.priceSuggestions || [];
+
+    var reviewReasons =
+      data.priceReviewReasons || [];
 
     var suggestionSection =
       createCollapsibleSection(
         "📋 Lagrede prisforslag (" +
           String(priceSuggestions.length) +
           ")",
-        "Kontroller forslag før de påvirker prissammenligningen.",
+        "Filtrer, sorter og kontroller forslag før de påvirker prissammenligningen.",
         true
       );
 
-    var suggestionFilter = el("select");
-    suggestionFilter.style.marginBottom = "14px";
+    var suggestionFilterGrid = el("div");
+
+    suggestionFilterGrid.style.display = "grid";
+    suggestionFilterGrid.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(180px, 1fr))";
+    suggestionFilterGrid.style.gap = "10px";
+    suggestionFilterGrid.style.marginBottom = "12px";
+    suggestionFilterGrid.style.padding = "12px";
+    suggestionFilterGrid.style.border =
+      "1px solid #e5e7eb";
+    suggestionFilterGrid.style.borderRadius = "12px";
+    suggestionFilterGrid.style.background = "#f8fafc";
+
+    function addSuggestionFilter(
+      labelText,
+      input
+    ) {
+      var wrap = el("div");
+
+      var label = el(
+        "label",
+        labelText
+      );
+
+      label.style.display = "block";
+      label.style.marginBottom = "5px";
+      label.style.fontSize = "12px";
+      label.style.fontWeight = "800";
+      label.style.color = "#475569";
+
+      input.style.width = "100%";
+      input.style.padding = "9px";
+      input.style.border =
+        "1px solid #cbd5e1";
+      input.style.borderRadius = "9px";
+      input.style.background = "#ffffff";
+      input.style.boxSizing = "border-box";
+
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+
+      suggestionFilterGrid.appendChild(
+        wrap
+      );
+    }
+
+    var suggestionSearch = el("input");
+
+    suggestionSearch.type = "search";
+    suggestionSearch.placeholder =
+      "Produkt, merke eller konkurrent";
+
+    addSuggestionFilter(
+      "Søk",
+      suggestionSearch
+    );
+
+    var suggestionStatusFilter =
+      el("select");
 
     [
       {
@@ -8974,20 +9034,235 @@ var competitors = data.priceCompetitors || [];
       },
       {
         value: "all",
-        label: "Alle"
+        label: "Alle statuser"
       }
     ].forEach(function (item) {
-      var option = el(
-        "option",
+      addOption(
+        suggestionStatusFilter,
+        item.value,
         item.label
       );
-
-      option.value = item.value;
-      suggestionFilter.appendChild(option);
     });
 
+    addSuggestionFilter(
+      "Status",
+      suggestionStatusFilter
+    );
+
+    var suggestionConfidenceFilter =
+      el("select");
+
+    [
+      {
+        value: "all",
+        label: "Alle treffprosenter"
+      },
+      {
+        value: "100",
+        label: "100 %"
+      },
+      {
+        value: "90-99",
+        label: "90–99 %"
+      },
+      {
+        value: "80-89",
+        label: "80–89 %"
+      },
+      {
+        value: "70-79",
+        label: "70–79 %"
+      },
+      {
+        value: "under-70",
+        label: "Under 70 %"
+      }
+    ].forEach(function (item) {
+      addOption(
+        suggestionConfidenceFilter,
+        item.value,
+        item.label
+      );
+    });
+
+    addSuggestionFilter(
+      "Treffsikkerhet",
+      suggestionConfidenceFilter
+    );
+
+    var suggestionCompetitorFilter =
+      el("select");
+
+    addOption(
+      suggestionCompetitorFilter,
+      "all",
+      "Alle konkurrenter"
+    );
+
+    var suggestionCompetitorNames = {};
+
+    priceSuggestions.forEach(
+      function (suggestion) {
+        if (suggestion.competitor_name) {
+          suggestionCompetitorNames[
+            suggestion.competitor_name
+          ] = true;
+        }
+      }
+    );
+
+    Object.keys(
+      suggestionCompetitorNames
+    )
+      .sort(function (a, b) {
+        return a.localeCompare(
+          b,
+          "nb-NO"
+        );
+      })
+      .forEach(function (name) {
+        addOption(
+          suggestionCompetitorFilter,
+          name,
+          name
+        );
+      });
+
+    addSuggestionFilter(
+      "Konkurrent",
+      suggestionCompetitorFilter
+    );
+
+    var suggestionPriceFilter =
+      el("select");
+
+    [
+      {
+        value: "all",
+        label: "Alle prisposisjoner"
+      },
+      {
+        value: "golfkongen-expensive",
+        label: "GolfKongen dyrere"
+      },
+      {
+        value: "same",
+        label: "Samme pris"
+      },
+      {
+        value: "golfkongen-cheaper",
+        label: "GolfKongen billigere"
+      },
+      {
+        value: "missing",
+        label: "Mangler pris"
+      }
+    ].forEach(function (item) {
+      addOption(
+        suggestionPriceFilter,
+        item.value,
+        item.label
+      );
+    });
+
+    addSuggestionFilter(
+      "Prisposisjon",
+      suggestionPriceFilter
+    );
+
+    var suggestionReasonFilter =
+      el("select");
+
+    addOption(
+      suggestionReasonFilter,
+      "all",
+      "Alle avvisningsgrunner"
+    );
+
+    reviewReasons.forEach(
+      function (reason) {
+        addOption(
+          suggestionReasonFilter,
+          reason.code,
+          reason.label
+        );
+      }
+    );
+
+    addSuggestionFilter(
+      "Avvisningsgrunn",
+      suggestionReasonFilter
+    );
+
+    var suggestionSort = el("select");
+
+    [
+      {
+        value: "difference-desc",
+        label:
+          "Størst avvik – GolfKongen dyrere"
+      },
+      {
+        value: "absolute-desc",
+        label:
+          "Størst absolutt prisavvik"
+      },
+      {
+        value: "confidence-desc",
+        label:
+          "Høyeste treffsikkerhet"
+      },
+      {
+        value: "confidence-asc",
+        label:
+          "Laveste treffsikkerhet"
+      },
+      {
+        value: "competitor-price-asc",
+        label:
+          "Laveste konkurrentpris"
+      },
+      {
+        value: "product-asc",
+        label:
+          "Produktnavn A–Å"
+      },
+      {
+        value: "checked-desc",
+        label:
+          "Nyest kontrollert"
+      }
+    ].forEach(function (item) {
+      addOption(
+        suggestionSort,
+        item.value,
+        item.label
+      );
+    });
+
+    addSuggestionFilter(
+      "Sortering",
+      suggestionSort
+    );
+
     suggestionSection.body.appendChild(
-      suggestionFilter
+      suggestionFilterGrid
+    );
+
+    var suggestionResultCount =
+      el("div");
+
+    suggestionResultCount.style.marginBottom =
+      "12px";
+    suggestionResultCount.style.color =
+      "#475569";
+    suggestionResultCount.style.fontSize =
+      "13px";
+    suggestionResultCount.style.fontWeight =
+      "700";
+
+    suggestionSection.body.appendChild(
+      suggestionResultCount
     );
 
     var suggestionList = el("div");
@@ -8996,7 +9271,29 @@ var competitors = data.priceCompetitors || [];
       suggestionList
     );
 
-    function priceSuggestionStatusText(status) {
+    function suggestionNumberOrNull(
+      value
+    ) {
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return null;
+      }
+
+      var number = Number(value);
+
+      if (!Number.isFinite(number)) {
+        return null;
+      }
+
+      return number;
+    }
+
+    function priceSuggestionStatusText(
+      status
+    ) {
       if (status === "confirmed") {
         return "Godkjent";
       }
@@ -9008,26 +9305,299 @@ var competitors = data.priceCompetitors || [];
       return "Forslag";
     }
 
-    function updatePriceSuggestion(
+    function getReviewReason(
+      reasonCode
+    ) {
+      var found = null;
+
+      reviewReasons.forEach(
+        function (reason) {
+          if (reason.code === reasonCode) {
+            found = reason;
+          }
+        }
+      );
+
+      return found;
+    }
+
+    function suggestionConfidenceMatches(
+      suggestion
+    ) {
+      var selected =
+        suggestionConfidenceFilter.value;
+
+      if (selected === "all") {
+        return true;
+      }
+
+      var confidence = Number(
+        suggestion.match_confidence || 0
+      );
+
+      if (selected === "100") {
+        return confidence === 100;
+      }
+
+      if (selected === "90-99") {
+        return (
+          confidence >= 90 &&
+          confidence < 100
+        );
+      }
+
+      if (selected === "80-89") {
+        return (
+          confidence >= 80 &&
+          confidence < 90
+        );
+      }
+
+      if (selected === "70-79") {
+        return (
+          confidence >= 70 &&
+          confidence < 80
+        );
+      }
+
+      if (selected === "under-70") {
+        return confidence < 70;
+      }
+
+      return true;
+    }
+
+    function suggestionPriceMatches(
+      suggestion
+    ) {
+      var selected =
+        suggestionPriceFilter.value;
+
+      if (selected === "all") {
+        return true;
+      }
+
+      var difference =
+        suggestionNumberOrNull(
+          suggestion
+            .price_difference_inc_vat
+        );
+
+      if (selected === "missing") {
+        return difference === null;
+      }
+
+      if (difference === null) {
+        return false;
+      }
+
+      if (
+        selected ===
+        "golfkongen-expensive"
+      ) {
+        return difference > 0;
+      }
+
+      if (selected === "same") {
+        return difference === 0;
+      }
+
+      if (
+        selected ===
+        "golfkongen-cheaper"
+      ) {
+        return difference < 0;
+      }
+
+      return true;
+    }
+
+    function compareSuggestionNumbers(
+      firstValue,
+      secondValue,
+      descending
+    ) {
+      var first =
+        suggestionNumberOrNull(
+          firstValue
+        );
+
+      var second =
+        suggestionNumberOrNull(
+          secondValue
+        );
+
+      if (
+        first === null &&
+        second === null
+      ) {
+        return 0;
+      }
+
+      if (first === null) {
+        return 1;
+      }
+
+      if (second === null) {
+        return -1;
+      }
+
+      return descending
+        ? second - first
+        : first - second;
+    }
+
+    function sortPriceSuggestions(
+      suggestions
+    ) {
+      var selected =
+        suggestionSort.value;
+
+      suggestions.sort(
+        function (a, b) {
+          if (
+            selected ===
+            "difference-desc"
+          ) {
+            return compareSuggestionNumbers(
+              a.price_difference_inc_vat,
+              b.price_difference_inc_vat,
+              true
+            );
+          }
+
+          if (
+            selected ===
+            "absolute-desc"
+          ) {
+            var firstDifference =
+              suggestionNumberOrNull(
+                a.price_difference_inc_vat
+              );
+
+            var secondDifference =
+              suggestionNumberOrNull(
+                b.price_difference_inc_vat
+              );
+
+            return compareSuggestionNumbers(
+              firstDifference === null
+                ? null
+                : Math.abs(firstDifference),
+              secondDifference === null
+                ? null
+                : Math.abs(secondDifference),
+              true
+            );
+          }
+
+          if (
+            selected ===
+            "confidence-desc"
+          ) {
+            return compareSuggestionNumbers(
+              a.match_confidence,
+              b.match_confidence,
+              true
+            );
+          }
+
+          if (
+            selected ===
+            "confidence-asc"
+          ) {
+            return compareSuggestionNumbers(
+              a.match_confidence,
+              b.match_confidence,
+              false
+            );
+          }
+
+          if (
+            selected ===
+            "competitor-price-asc"
+          ) {
+            return compareSuggestionNumbers(
+              a.competitor_total_inc_vat,
+              b.competitor_total_inc_vat,
+              false
+            );
+          }
+
+          if (
+            selected ===
+            "product-asc"
+          ) {
+            return String(
+              a.product_name || ""
+            ).localeCompare(
+              String(
+                b.product_name || ""
+              ),
+              "nb-NO"
+            );
+          }
+
+          var firstDate =
+            a.checked_at
+              ? new Date(
+                  a.checked_at
+                ).getTime()
+              : 0;
+
+          var secondDate =
+            b.checked_at
+              ? new Date(
+                  b.checked_at
+                ).getTime()
+              : 0;
+
+          return secondDate - firstDate;
+        }
+      );
+
+      return suggestions;
+    }
+
+    function updatePriceSuggestionReview(
       suggestion,
       status,
-      button
+      button,
+      reasonCode,
+      comment,
+      useForLearning,
+      successCallback
     ) {
       var originalText =
         button.textContent;
 
       button.disabled = true;
-      button.textContent =
-        status === "confirmed"
-          ? "Godkjenner..."
-          : "Avviser...";
+
+      if (status === "confirmed") {
+        button.textContent =
+          "Godkjenner...";
+      } else if (
+        status === "rejected"
+      ) {
+        button.textContent =
+          "Avviser...";
+      } else {
+        button.textContent =
+          "Oppdaterer...";
+      }
 
       sb.rpc(
-        "internal_set_price_match_status",
+        "internal_review_price_match",
         {
           p_match_id:
             suggestion.price_match_id,
-          p_match_status: status
+          p_match_status: status,
+          p_reason_code:
+            reasonCode || null,
+          p_comment:
+            comment || null,
+          p_use_for_learning:
+            Boolean(useForLearning)
         }
       )
         .then(function (result) {
@@ -9035,12 +9605,58 @@ var competitors = data.priceCompetitors || [];
             throw result.error;
           }
 
-          localStorage.setItem(
-            "sk_internal_active_tab",
-            "priceCheck"
-          );
+          suggestion.match_status =
+            status;
 
-          window.location.reload();
+          if (status === "rejected") {
+            var reason =
+              getReviewReason(
+                reasonCode
+              );
+
+            suggestion.review_reason_code =
+              reasonCode;
+
+            suggestion.review_reason_label =
+              reason
+                ? reason.label
+                : reasonCode;
+
+            suggestion.review_learning_dimension =
+              reason
+                ? reason.learning_dimension
+                : null;
+
+            suggestion.review_comment =
+              comment || null;
+
+            suggestion.review_use_for_learning =
+              Boolean(useForLearning);
+
+            suggestion.reviewed_at =
+              new Date().toISOString();
+          } else {
+            suggestion.review_reason_code =
+              null;
+
+            suggestion.review_reason_label =
+              null;
+
+            suggestion.review_learning_dimension =
+              null;
+
+            suggestion.review_comment =
+              null;
+
+            suggestion.review_use_for_learning =
+              false;
+          }
+
+          if (successCallback) {
+            successCallback();
+          }
+
+          renderPriceSuggestions();
         })
         .catch(function (error) {
           button.disabled = false;
@@ -9057,33 +9673,438 @@ var competitors = data.priceCompetitors || [];
         });
     }
 
+    function openRejectSuggestionDialog(
+      suggestion
+    ) {
+      if (!reviewReasons.length) {
+        alert(
+          "Fant ingen avvisningsgrunner. Last siden på nytt og prøv igjen."
+        );
+
+        return;
+      }
+
+      var previousBodyOverflow =
+        document.body.style.overflow;
+
+      var overlay = el("div");
+
+      overlay.style.position = "fixed";
+      overlay.style.inset = "0";
+      overlay.style.zIndex = "999999";
+      overlay.style.background =
+        "rgba(15,23,42,.72)";
+      overlay.style.display = "flex";
+      overlay.style.alignItems = "center";
+      overlay.style.justifyContent =
+        "center";
+      overlay.style.padding = "18px";
+
+      var dialog = el("div");
+
+      dialog.style.width = "100%";
+      dialog.style.maxWidth = "620px";
+      dialog.style.maxHeight = "90vh";
+      dialog.style.overflowY = "auto";
+      dialog.style.padding = "20px";
+      dialog.style.background = "#ffffff";
+      dialog.style.borderRadius = "16px";
+      dialog.style.boxShadow =
+        "0 24px 70px rgba(0,0,0,.30)";
+
+      var title = el(
+        "h2",
+        "Avvis som feil funn"
+      );
+
+      title.style.margin = "0 0 6px 0";
+
+      dialog.appendChild(title);
+
+      var comparison = el(
+        "div",
+        (
+          suggestion.product_name ||
+          "Ukjent GolfKongen-produkt"
+        ) +
+          " → " +
+          (
+            suggestion
+              .competitor_product_name ||
+            "Ukjent konkurrentprodukt"
+          )
+      );
+
+      comparison.style.marginBottom =
+        "16px";
+      comparison.style.color =
+        "#475569";
+      comparison.style.lineHeight =
+        "1.5";
+
+      dialog.appendChild(comparison);
+
+      var reasonSelect = el("select");
+
+      addOption(
+        reasonSelect,
+        "",
+        "Velg avvisningsgrunn"
+      );
+
+      reviewReasons.forEach(
+        function (reason) {
+          addOption(
+            reasonSelect,
+            reason.code,
+            reason.label
+          );
+        }
+      );
+
+      addField(
+        dialog,
+        "Hva er feil med treffet?",
+        reasonSelect
+      );
+
+      var reasonDescription =
+        el("div");
+
+      reasonDescription.className =
+        "sk-note";
+      reasonDescription.style.display =
+        "none";
+      reasonDescription.style.marginBottom =
+        "14px";
+
+      dialog.appendChild(
+        reasonDescription
+      );
+
+      var comment = el("textarea");
+
+      comment.rows = 4;
+      comment.placeholder =
+        "Valgfri forklaring. Påkrevd når du velger Annet.";
+
+      addField(
+        dialog,
+        "Kommentar",
+        comment
+      );
+
+      var learningLabel = el("label");
+
+      learningLabel.style.display = "flex";
+      learningLabel.style.gap = "9px";
+      learningLabel.style.alignItems =
+        "flex-start";
+      learningLabel.style.padding =
+        "12px";
+      learningLabel.style.border =
+        "1px solid #bfdbfe";
+      learningLabel.style.borderRadius =
+        "12px";
+      learningLabel.style.background =
+        "#eff6ff";
+      learningLabel.style.cursor =
+        "pointer";
+
+      var learningInput = el("input");
+
+      learningInput.type = "checkbox";
+      learningInput.checked = true;
+      learningInput.style.marginTop =
+        "3px";
+
+      var learningContent = el("span");
+
+      var learningTitle = el(
+        "strong",
+        "Bruk som læringseksempel"
+      );
+
+      var learningHelp = el(
+        "div",
+        "Dette lagres som et negativt eksempel for produktet. Det påvirker ikke søket før Worker-læringen kobles inn."
+      );
+
+      learningHelp.style.marginTop =
+        "3px";
+      learningHelp.style.fontSize =
+        "12px";
+      learningHelp.style.color =
+        "#475569";
+      learningHelp.style.lineHeight =
+        "1.45";
+
+      learningContent.appendChild(
+        learningTitle
+      );
+
+      learningContent.appendChild(
+        learningHelp
+      );
+
+      learningLabel.appendChild(
+        learningInput
+      );
+
+      learningLabel.appendChild(
+        learningContent
+      );
+
+      dialog.appendChild(
+        learningLabel
+      );
+
+      var actions = el("div");
+
+      actions.style.display = "flex";
+      actions.style.justifyContent =
+        "flex-end";
+      actions.style.gap = "10px";
+      actions.style.flexWrap = "wrap";
+      actions.style.marginTop = "18px";
+
+      var cancel =
+        createButton("Avbryt");
+
+      var submit =
+        createPrimaryButton(
+          "Avvis forslag"
+        );
+
+      actions.appendChild(cancel);
+      actions.appendChild(submit);
+
+      dialog.appendChild(actions);
+      overlay.appendChild(dialog);
+
+      document.body.appendChild(overlay);
+
+      document.body.style.overflow =
+        "hidden";
+
+      function closeDialog() {
+        document.body.style.overflow =
+          previousBodyOverflow;
+
+        window.removeEventListener(
+          "keydown",
+          escapeHandler
+        );
+
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(
+            overlay
+          );
+        }
+      }
+
+      function escapeHandler(event) {
+        if (event.key === "Escape") {
+          closeDialog();
+        }
+      }
+
+      reasonSelect.onchange = function () {
+        var selectedReason =
+          getReviewReason(
+            reasonSelect.value
+          );
+
+        if (
+          selectedReason &&
+          selectedReason.description
+        ) {
+          reasonDescription.style.display =
+            "block";
+
+          reasonDescription.textContent =
+            selectedReason.description;
+        } else {
+          reasonDescription.style.display =
+            "none";
+
+          reasonDescription.textContent =
+            "";
+        }
+      };
+
+      cancel.onclick = closeDialog;
+
+      overlay.onclick = function (event) {
+        if (event.target === overlay) {
+          closeDialog();
+        }
+      };
+
+      submit.onclick = function () {
+        var reasonCode =
+          reasonSelect.value;
+
+        var commentValue =
+          comment.value.trim();
+
+        if (!reasonCode) {
+          alert(
+            "Velg en avvisningsgrunn."
+          );
+
+          return;
+        }
+
+        if (
+          reasonCode === "other" &&
+          !commentValue
+        ) {
+          alert(
+            "Skriv en kommentar når årsaken er Annet."
+          );
+
+          return;
+        }
+
+        updatePriceSuggestionReview(
+          suggestion,
+          "rejected",
+          submit,
+          reasonCode,
+          commentValue,
+          learningInput.checked,
+          closeDialog
+        );
+      };
+
+      window.addEventListener(
+        "keydown",
+        escapeHandler
+      );
+
+      reasonSelect.focus();
+    }
+
     function renderPriceSuggestions() {
       clear(suggestionList);
 
       var selectedStatus =
-        suggestionFilter.value;
+        suggestionStatusFilter.value;
+
+      var selectedCompetitor =
+        suggestionCompetitorFilter.value;
+
+      var selectedReason =
+        suggestionReasonFilter.value;
+
+      var searchText = String(
+        suggestionSearch.value || ""
+      )
+        .toLowerCase()
+        .trim();
 
       var visibleSuggestions =
         priceSuggestions.filter(
           function (suggestion) {
-            return (
-              selectedStatus === "all" ||
-              suggestion.match_status ===
+            if (
+              selectedStatus !== "all" &&
+              suggestion.match_status !==
                 selectedStatus
-            );
+            ) {
+              return false;
+            }
+
+            if (
+              selectedCompetitor !==
+                "all" &&
+              suggestion.competitor_name !==
+                selectedCompetitor
+            ) {
+              return false;
+            }
+
+            if (
+              selectedReason !== "all" &&
+              suggestion
+                .review_reason_code !==
+                selectedReason
+            ) {
+              return false;
+            }
+
+            if (
+              !suggestionConfidenceMatches(
+                suggestion
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              !suggestionPriceMatches(
+                suggestion
+              )
+            ) {
+              return false;
+            }
+
+            if (searchText) {
+              var searchable = [
+                suggestion.product_name,
+                suggestion.product_brand,
+                suggestion.competitor_name,
+                suggestion
+                  .competitor_product_name,
+                suggestion
+                  .review_reason_label,
+                suggestion.review_comment
+              ]
+                .join(" ")
+                .toLowerCase();
+
+              if (
+                searchable.indexOf(
+                  searchText
+                ) === -1
+              ) {
+                return false;
+              }
+            }
+
+            return true;
           }
         );
+
+      sortPriceSuggestions(
+        visibleSuggestions
+      );
+
+      suggestionResultCount.textContent =
+        "Viser " +
+        String(
+          visibleSuggestions.length
+        ) +
+        " av " +
+        String(
+          priceSuggestions.length
+        ) +
+        " forslag.";
 
       if (!visibleSuggestions.length) {
         var empty = el(
           "div",
           selectedStatus === "probable"
-            ? "Ingen forslag venter på kontroll."
-            : "Ingen forslag med denne statusen."
+            ? "Ingen forslag venter på kontroll med valgte filtre."
+            : "Ingen forslag med valgte filtre."
         );
 
         empty.className = "sk-note";
-        suggestionList.appendChild(empty);
+
+        suggestionList.appendChild(
+          empty
+        );
+
         return;
       }
 
@@ -9095,8 +10116,10 @@ var competitors = data.priceCompetitors || [];
           card.style.marginBottom = "12px";
           card.style.border =
             "1px solid #d1d5db";
-          card.style.borderRadius = "14px";
-          card.style.background = "#ffffff";
+          card.style.borderRadius =
+            "14px";
+          card.style.background =
+            "#ffffff";
 
           var title = el(
             "h3",
@@ -9112,7 +10135,9 @@ var competitors = data.priceCompetitors || [];
               )
           );
 
-          title.style.margin = "0 0 6px 0";
+          title.style.margin =
+            "0 0 6px 0";
+
           card.appendChild(title);
 
           var competitorText = el(
@@ -9132,7 +10157,9 @@ var competitors = data.priceCompetitors || [];
           competitorText.style.color =
             "#475569";
 
-          card.appendChild(competitorText);
+          card.appendChild(
+            competitorText
+          );
 
           var status = el(
             "div",
@@ -9144,11 +10171,14 @@ var competitors = data.priceCompetitors || [];
           status.style.display =
             "inline-block";
           status.style.marginTop = "10px";
-          status.style.padding = "5px 9px";
+          status.style.padding =
+            "5px 9px";
           status.style.borderRadius =
             "999px";
-          status.style.fontWeight = "800";
-          status.style.fontSize = "12px";
+          status.style.fontWeight =
+            "800";
+          status.style.fontSize =
+            "12px";
 
           if (
             suggestion.match_status ===
@@ -9175,6 +10205,66 @@ var competitors = data.priceCompetitors || [];
 
           card.appendChild(status);
 
+          if (
+            suggestion.match_status ===
+              "rejected" &&
+            suggestion
+              .review_reason_label
+          ) {
+            var reviewBox = el("div");
+
+            reviewBox.style.marginTop =
+              "10px";
+            reviewBox.style.padding =
+              "10px 12px";
+            reviewBox.style.border =
+              "1px solid #fecaca";
+            reviewBox.style.borderRadius =
+              "10px";
+            reviewBox.style.background =
+              "#fef2f2";
+            reviewBox.style.color =
+              "#7f1d1d";
+            reviewBox.style.fontSize =
+              "13px";
+            reviewBox.style.lineHeight =
+              "1.5";
+
+            reviewBox.appendChild(
+              el(
+                "strong",
+                "Avvist: " +
+                  suggestion
+                    .review_reason_label
+              )
+            );
+
+            if (
+              suggestion.review_comment
+            ) {
+              reviewBox.appendChild(
+                el(
+                  "div",
+                  suggestion.review_comment
+                )
+              );
+            }
+
+            if (
+              suggestion
+                .review_use_for_learning
+            ) {
+              reviewBox.appendChild(
+                el(
+                  "div",
+                  "✓ Lagret som læringseksempel"
+                )
+              );
+            }
+
+            card.appendChild(reviewBox);
+          }
+
           var prices = el("div");
 
           prices.style.display = "grid";
@@ -9182,6 +10272,12 @@ var competitors = data.priceCompetitors || [];
             "repeat(auto-fit, minmax(120px, 1fr))";
           prices.style.gap = "8px";
           prices.style.margin = "14px 0";
+
+          var difference =
+            suggestionNumberOrNull(
+              suggestion
+                .price_difference_inc_vat
+            );
 
           [
             {
@@ -9206,7 +10302,8 @@ var competitors = data.priceCompetitors || [];
                 formatPriceCheckMoney(
                   suggestion
                     .price_difference_inc_vat
-                )
+                ),
+              difference: true
             },
             {
               label: "Treff",
@@ -9230,19 +10327,39 @@ var competitors = data.priceCompetitors || [];
               item.label
             );
 
-            label.style.fontSize = "11px";
-            label.style.color = "#64748b";
+            label.style.fontSize =
+              "11px";
+            label.style.color =
+              "#64748b";
 
             var value = el(
               "div",
               item.value
             );
 
-            value.style.fontWeight = "800";
-            value.style.marginTop = "3px";
+            value.style.fontWeight =
+              "800";
+            value.style.marginTop =
+              "3px";
+
+            if (
+              item.difference &&
+              difference !== null
+            ) {
+              if (difference > 0) {
+                value.style.color =
+                  "#b91c1c";
+              } else if (
+                difference < 0
+              ) {
+                value.style.color =
+                  "#166534";
+              }
+            }
 
             box.appendChild(label);
             box.appendChild(value);
+
             prices.appendChild(box);
           });
 
@@ -9252,45 +10369,88 @@ var competitors = data.priceCompetitors || [];
 
           actions.style.display = "flex";
           actions.style.gap = "8px";
-          actions.style.flexWrap = "wrap";
+          actions.style.flexWrap =
+            "wrap";
+
+          if (
+            suggestion
+              .golfkongen_product_url
+          ) {
+            var golfkongenLink = el(
+              "a",
+              "Åpne GolfKongen-produkt"
+            );
+
+            golfkongenLink.href =
+              suggestion
+                .golfkongen_product_url;
+            golfkongenLink.target =
+              "_blank";
+            golfkongenLink.rel =
+              "noopener";
+            golfkongenLink.style.display =
+              "inline-flex";
+            golfkongenLink.style.padding =
+              "8px 11px";
+            golfkongenLink.style.border =
+              "1px solid #d1d5db";
+            golfkongenLink.style.borderRadius =
+              "9px";
+            golfkongenLink.style.color =
+              "#111827";
+            golfkongenLink.style.background =
+              "#ffffff";
+            golfkongenLink.style.fontWeight =
+              "700";
+            golfkongenLink.style.textDecoration =
+              "none";
+
+            actions.appendChild(
+              golfkongenLink
+            );
+          }
 
           if (
             suggestion
               .competitor_product_url
           ) {
-            var openLink = el(
+            var competitorLink = el(
               "a",
               "Åpne konkurrentprodukt"
             );
 
-            openLink.href =
+            competitorLink.href =
               suggestion
                 .competitor_product_url;
-            openLink.target = "_blank";
-            openLink.rel = "noopener";
-            openLink.style.display =
+            competitorLink.target =
+              "_blank";
+            competitorLink.rel =
+              "noopener";
+            competitorLink.style.display =
               "inline-flex";
-            openLink.style.padding =
+            competitorLink.style.padding =
               "8px 11px";
-            openLink.style.border =
+            competitorLink.style.border =
               "1px solid #d1d5db";
-            openLink.style.borderRadius =
+            competitorLink.style.borderRadius =
               "9px";
-            openLink.style.background =
-              "#ffffff";
-            openLink.style.color =
+            competitorLink.style.color =
               "#111827";
-            openLink.style.fontWeight =
+            competitorLink.style.background =
+              "#ffffff";
+            competitorLink.style.fontWeight =
               "700";
-            openLink.style.textDecoration =
+            competitorLink.style.textDecoration =
               "none";
 
-            actions.appendChild(openLink);
+            actions.appendChild(
+              competitorLink
+            );
           }
 
           if (
-            suggestion.match_status !==
-            "confirmed"
+            suggestion.match_status ===
+            "probable"
           ) {
             var approve =
               createPrimaryButton(
@@ -9298,50 +10458,91 @@ var competitors = data.priceCompetitors || [];
               );
 
             approve.onclick = function () {
-              updatePriceSuggestion(
+              updatePriceSuggestionReview(
                 suggestion,
                 "confirmed",
-                approve
+                approve,
+                null,
+                null,
+                false,
+                null
               );
             };
 
             actions.appendChild(approve);
-          }
 
-          if (
-            suggestion.match_status !==
-            "rejected"
-          ) {
             var reject =
-              createButton("Avvis");
+              createButton(
+                "Avvis / feil funn"
+              );
 
             reject.onclick = function () {
-              if (
-                !window.confirm(
-                  "Avvise dette prisforslaget?"
-                )
-              ) {
-                return;
-              }
-
-              updatePriceSuggestion(
-                suggestion,
-                "rejected",
-                reject
+              openRejectSuggestionDialog(
+                suggestion
               );
             };
 
             actions.appendChild(reject);
+          } else {
+            var undo = createButton(
+              suggestion.match_status ===
+                "rejected"
+                ? "Angre avvisning"
+                : "Tilbake til kontroll"
+            );
+
+            undo.onclick = function () {
+              var message =
+                suggestion.match_status ===
+                  "rejected"
+                  ? "Angre avvisningen og flytte forslaget tilbake til kontroll?"
+                  : "Flytte det godkjente forslaget tilbake til kontroll?";
+
+              if (
+                !window.confirm(message)
+              ) {
+                return;
+              }
+
+              updatePriceSuggestionReview(
+                suggestion,
+                "probable",
+                undo,
+                null,
+                null,
+                false,
+                null
+              );
+            };
+
+            actions.appendChild(undo);
           }
 
           card.appendChild(actions);
-          suggestionList.appendChild(card);
+
+          suggestionList.appendChild(
+            card
+          );
         }
       );
     }
 
-    suggestionFilter.addEventListener(
-      "change",
+    [
+      suggestionStatusFilter,
+      suggestionConfidenceFilter,
+      suggestionCompetitorFilter,
+      suggestionPriceFilter,
+      suggestionReasonFilter,
+      suggestionSort
+    ].forEach(function (input) {
+      input.addEventListener(
+        "change",
+        renderPriceSuggestions
+      );
+    });
+
+    suggestionSearch.addEventListener(
+      "input",
       renderPriceSuggestions
     );
 
@@ -9851,6 +11052,13 @@ var competitorSection = createCollapsibleSection(
       .order("checked_at", {
         ascending: false,
         nullsFirst: false
+      }),
+    sb
+      .from("internal_price_review_reasons")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order", {
+        ascending: true
       })
 
 
@@ -9925,6 +11133,14 @@ var competitorSection = createCollapsibleSection(
       return;
     }
 
+    if (results[14].error) {
+      renderError(
+        "Kunne ikke hente avvisningsgrunner: " +
+          results[14].error.message
+      );
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -9939,7 +11155,8 @@ var competitorSection = createCollapsibleSection(
       stockCountItems: results[10].data || [],
       priceComparisons: results[11].data || [],
       priceCompetitors: results[12].data || [],
-      priceSuggestions: results[13].data || []
+      priceSuggestions: results[13].data || [],
+      priceReviewReasons: results[14].data || []
     });
   });
 } 
