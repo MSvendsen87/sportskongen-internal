@@ -8950,6 +8950,1122 @@ var competitors = data.priceCompetitors || [];
     var reviewReasons =
       data.priceReviewReasons || [];
 
+    var priceFollowUps =
+      data.priceFollowUps || [];
+
+    function priceFollowUpNumberOrNull(value) {
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return null;
+      }
+
+      var number = Number(value);
+
+      return Number.isFinite(number)
+        ? number
+        : null;
+    }
+
+    function formatPriceFollowUpDate(value) {
+      if (!value) {
+        return "-";
+      }
+
+      var date = new Date(value);
+
+      if (isNaN(date.getTime())) {
+        return "-";
+      }
+
+      return date.toLocaleString(
+        "nb-NO",
+        {
+          dateStyle: "short",
+          timeStyle: "short"
+        }
+      );
+    }
+
+    function priceFollowUpShippingText(
+      value,
+      isKnown
+    ) {
+      if (isKnown !== true) {
+        return "Frakt ikke verifisert";
+      }
+
+      return formatPriceCheckMoney(value);
+    }
+
+    var readyPriceFollowUps =
+      priceFollowUps.filter(
+        function (item) {
+          return item.needs_follow_up === true;
+        }
+      );
+
+    var plannedPriceFollowUps =
+      priceFollowUps.filter(
+        function (item) {
+          return item.needs_follow_up !== true;
+        }
+      );
+
+    var changedPriceFollowUps =
+      readyPriceFollowUps.filter(
+        function (item) {
+          var golfkongenChange =
+            priceFollowUpNumberOrNull(
+              item
+                .golfkongen_price_change_since_review
+            );
+
+          var competitorChange =
+            priceFollowUpNumberOrNull(
+              item
+                .competitor_price_change_since_review
+            );
+
+          var shippingChange =
+            priceFollowUpNumberOrNull(
+              item.shipping_change_since_review
+            );
+
+          return (
+            (golfkongenChange !== null &&
+              golfkongenChange !== 0) ||
+            (competitorChange !== null &&
+              competitorChange !== 0) ||
+            (shippingChange !== null &&
+              shippingChange !== 0) ||
+            item.competitor_in_stock !==
+              item
+                .last_reviewed_competitor_in_stock
+          );
+        }
+      );
+
+    var duePriceFollowUps =
+      readyPriceFollowUps.filter(
+        function (item) {
+          return (
+            item.follow_up_reason ===
+            "Planlagt oppfølging er forfalt"
+          );
+        }
+      );
+
+    var followUpSection =
+      createCollapsibleSection(
+        "⏰ Prisoppfølging (" +
+          String(
+            readyPriceFollowUps.length
+          ) +
+          " klare nå)",
+        "Godkjent betyr at produktkoblingen er riktig. Her kommer treff tilbake når pris, frakt eller lagerstatus endres, eller når planlagt oppfølging forfaller.",
+        true
+      );
+
+    addProStatGrid(
+      followUpSection.body,
+      [
+        {
+          label: "Klare nå",
+          value: String(
+            readyPriceFollowUps.length
+          ),
+          tone:
+            readyPriceFollowUps.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label: "Planlagt senere",
+          value: String(
+            plannedPriceFollowUps.length
+          ),
+          tone: "ok"
+        },
+        {
+          label: "Pris/lager endret",
+          value: String(
+            changedPriceFollowUps.length
+          ),
+          tone:
+            changedPriceFollowUps.length
+              ? "danger"
+              : "ok"
+        },
+        {
+          label: "Forfalt kontroll",
+          value: String(
+            duePriceFollowUps.length
+          ),
+          tone:
+            duePriceFollowUps.length
+              ? "warning"
+              : "ok"
+        }
+      ]
+    );
+
+    var followUpIntro = el(
+      "div",
+      "Velg «Behold prisen» når du ikke gjør noe nå. Produktet planlegges da på nytt etter 7, 14 eller 30 dager. Velg «Jeg har endret pris» når GolfKongen-prisen er justert."
+    );
+
+    followUpIntro.className = "sk-note";
+    followUpIntro.style.marginBottom =
+      "14px";
+
+    followUpSection.body.appendChild(
+      followUpIntro
+    );
+
+    var followUpFilterGrid = el("div");
+
+    followUpFilterGrid.style.display =
+      "grid";
+    followUpFilterGrid.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(180px, 1fr))";
+    followUpFilterGrid.style.gap = "10px";
+    followUpFilterGrid.style.marginBottom =
+      "12px";
+    followUpFilterGrid.style.padding =
+      "12px";
+    followUpFilterGrid.style.border =
+      "1px solid #e5e7eb";
+    followUpFilterGrid.style.borderRadius =
+      "12px";
+    followUpFilterGrid.style.background =
+      "#f8fafc";
+
+    function addPriceFollowUpFilter(
+      labelText,
+      input
+    ) {
+      var wrap = el("div");
+      var label = el("label", labelText);
+
+      label.style.display = "block";
+      label.style.marginBottom = "5px";
+      label.style.fontSize = "12px";
+      label.style.fontWeight = "800";
+      label.style.color = "#475569";
+
+      input.style.width = "100%";
+      input.style.padding = "9px";
+      input.style.border =
+        "1px solid #cbd5e1";
+      input.style.borderRadius = "9px";
+      input.style.background = "#ffffff";
+      input.style.boxSizing = "border-box";
+
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+
+      followUpFilterGrid.appendChild(
+        wrap
+      );
+    }
+
+    var followUpSearch = el("input");
+
+    followUpSearch.type = "search";
+    followUpSearch.placeholder =
+      "Produkt, merke eller konkurrent";
+
+    addPriceFollowUpFilter(
+      "Søk",
+      followUpSearch
+    );
+
+    var followUpStatusFilter =
+      el("select");
+
+    [
+      {
+        value: "ready",
+        label:
+          "Klare til oppfølging nå"
+      },
+      {
+        value: "planned",
+        label:
+          "Planlagt senere"
+      },
+      {
+        value: "all",
+        label:
+          "Alle godkjente koblinger"
+      }
+    ].forEach(function (item) {
+      addOption(
+        followUpStatusFilter,
+        item.value,
+        item.label
+      );
+    });
+
+    addPriceFollowUpFilter(
+      "Vis",
+      followUpStatusFilter
+    );
+
+    var followUpCompetitorFilter =
+      el("select");
+
+    addOption(
+      followUpCompetitorFilter,
+      "all",
+      "Alle konkurrenter"
+    );
+
+    var followUpCompetitorNames = {};
+
+    priceFollowUps.forEach(
+      function (item) {
+        if (item.competitor_name) {
+          followUpCompetitorNames[
+            item.competitor_name
+          ] = true;
+        }
+      }
+    );
+
+    Object.keys(
+      followUpCompetitorNames
+    )
+      .sort(function (a, b) {
+        return a.localeCompare(
+          b,
+          "nb-NO"
+        );
+      })
+      .forEach(function (name) {
+        addOption(
+          followUpCompetitorFilter,
+          name,
+          name
+        );
+      });
+
+    addPriceFollowUpFilter(
+      "Konkurrent",
+      followUpCompetitorFilter
+    );
+
+    var followUpSort = el("select");
+
+    [
+      {
+        value: "priority",
+        label:
+          "Viktigste oppfølging først"
+      },
+      {
+        value: "difference-desc",
+        label:
+          "GolfKongen mest dyrere"
+      },
+      {
+        value: "next-asc",
+        label:
+          "Neste dato først"
+      },
+      {
+        value: "product-asc",
+        label:
+          "Produktnavn A–Å"
+      }
+    ].forEach(function (item) {
+      addOption(
+        followUpSort,
+        item.value,
+        item.label
+      );
+    });
+
+    addPriceFollowUpFilter(
+      "Sortering",
+      followUpSort
+    );
+
+    followUpSection.body.appendChild(
+      followUpFilterGrid
+    );
+
+    var followUpResultCount =
+      el("div");
+
+    followUpResultCount.style.marginBottom =
+      "12px";
+    followUpResultCount.style.color =
+      "#475569";
+    followUpResultCount.style.fontSize =
+      "13px";
+    followUpResultCount.style.fontWeight =
+      "700";
+
+    followUpSection.body.appendChild(
+      followUpResultCount
+    );
+
+    var followUpList = el("div");
+
+    followUpSection.body.appendChild(
+      followUpList
+    );
+
+    function updatePriceFollowUp(
+      item,
+      days,
+      actionCode,
+      button
+    ) {
+      var originalText =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent = "Lagrer...";
+
+      sb.rpc(
+        "internal_set_price_follow_up",
+        {
+          p_match_id:
+            item.price_match_id,
+          p_follow_up_days: days,
+          p_action_code:
+            actionCode,
+          p_comment: null
+        }
+      )
+        .then(function (result) {
+          if (result.error) {
+            throw result.error;
+          }
+
+          var saved =
+            result.data &&
+            result.data[0]
+              ? result.data[0]
+              : null;
+
+          item.follow_up_interval_days =
+            days;
+
+          item.next_follow_up_at =
+            saved &&
+            saved
+              .saved_next_follow_up_at
+              ? saved
+                  .saved_next_follow_up_at
+              : new Date(
+                  Date.now() +
+                    days *
+                      24 *
+                      60 *
+                      60 *
+                      1000
+                ).toISOString();
+
+          item.last_price_reviewed_at =
+            new Date().toISOString();
+
+          item
+            .last_reviewed_golfkongen_price_inc_vat =
+            item
+              .golfkongen_price_inc_vat;
+
+          item
+            .last_reviewed_competitor_price_inc_vat =
+            item
+              .competitor_price_inc_vat;
+
+          item
+            .last_reviewed_shipping_inc_vat =
+            item
+              .competitor_shipping_inc_vat;
+
+          item
+            .last_reviewed_total_inc_vat =
+            item
+              .competitor_total_inc_vat;
+
+          item
+            .last_reviewed_competitor_in_stock =
+            item.competitor_in_stock;
+
+          item.last_price_action_code =
+            actionCode;
+
+          item
+            .golfkongen_price_change_since_review =
+            0;
+
+          item
+            .competitor_price_change_since_review =
+            0;
+
+          item.shipping_change_since_review =
+            0;
+
+          item.total_change_since_review =
+            0;
+
+          item.needs_follow_up = false;
+          item.follow_up_reason =
+            "Ingen oppfølging nødvendig";
+
+          localStorage.setItem(
+            "sk_internal_active_tab",
+            "priceCheck"
+          );
+
+          window.location.reload();
+        })
+        .catch(function (error) {
+          button.disabled = false;
+          button.textContent =
+            originalText;
+
+          alert(
+            "Kunne ikke lagre oppfølging: " +
+              (
+                error.message ||
+                String(error)
+              )
+          );
+        });
+    }
+
+    function createPriceFollowUpAction(
+      item,
+      text,
+      days,
+      actionCode,
+      primary
+    ) {
+      var button = primary
+        ? createPrimaryButton(text)
+        : createButton(text);
+
+      button.onclick = function () {
+        updatePriceFollowUp(
+          item,
+          days,
+          actionCode,
+          button
+        );
+      };
+
+      return button;
+    }
+
+    function renderPriceFollowUps() {
+      clear(followUpList);
+
+      var selectedStatus =
+        followUpStatusFilter.value;
+
+      var selectedCompetitor =
+        followUpCompetitorFilter.value;
+
+      var searchText = String(
+        followUpSearch.value || ""
+      )
+        .toLowerCase()
+        .trim();
+
+      var visible = priceFollowUps.filter(
+        function (item) {
+          if (
+            selectedStatus === "ready" &&
+            item.needs_follow_up !== true
+          ) {
+            return false;
+          }
+
+          if (
+            selectedStatus === "planned" &&
+            item.needs_follow_up === true
+          ) {
+            return false;
+          }
+
+          if (
+            selectedCompetitor !== "all" &&
+            item.competitor_name !==
+              selectedCompetitor
+          ) {
+            return false;
+          }
+
+          if (searchText) {
+            var haystack = (
+              String(
+                item.product_name || ""
+              ) +
+              " " +
+              String(
+                item.product_brand || ""
+              ) +
+              " " +
+              String(
+                item.competitor_name || ""
+              ) +
+              " " +
+              String(
+                item
+                  .competitor_product_name ||
+                  ""
+              )
+            ).toLowerCase();
+
+            if (
+              haystack.indexOf(
+                searchText
+              ) === -1
+            ) {
+              return false;
+            }
+          }
+
+          return true;
+        }
+      );
+
+      visible.sort(
+        function (a, b) {
+          if (
+            followUpSort.value ===
+            "difference-desc"
+          ) {
+            return (
+              Number(
+                b
+                  .price_difference_inc_vat ||
+                  0
+              ) -
+              Number(
+                a
+                  .price_difference_inc_vat ||
+                  0
+              )
+            );
+          }
+
+          if (
+            followUpSort.value ===
+            "next-asc"
+          ) {
+            var first =
+              a.next_follow_up_at
+                ? new Date(
+                    a.next_follow_up_at
+                  ).getTime()
+                : Number.MAX_SAFE_INTEGER;
+
+            var second =
+              b.next_follow_up_at
+                ? new Date(
+                    b.next_follow_up_at
+                  ).getTime()
+                : Number.MAX_SAFE_INTEGER;
+
+            return first - second;
+          }
+
+          if (
+            followUpSort.value ===
+            "product-asc"
+          ) {
+            return String(
+              a.product_name || ""
+            ).localeCompare(
+              String(
+                b.product_name || ""
+              ),
+              "nb-NO"
+            );
+          }
+
+          var priorityDifference =
+            Number(
+              a.follow_up_priority || 99
+            ) -
+            Number(
+              b.follow_up_priority || 99
+            );
+
+          if (priorityDifference !== 0) {
+            return priorityDifference;
+          }
+
+          return (
+            Number(
+              b
+                .price_difference_inc_vat ||
+                0
+            ) -
+            Number(
+              a
+                .price_difference_inc_vat ||
+                0
+            )
+          );
+        }
+      );
+
+      followUpResultCount.textContent =
+        "Viser " +
+        String(visible.length) +
+        " av " +
+        String(priceFollowUps.length) +
+        " godkjente koblinger.";
+
+      if (!visible.length) {
+        var empty = el(
+          "div",
+          selectedStatus === "ready"
+            ? "Ingen godkjente treff trenger oppfølging akkurat nå. De kommer tilbake når noe endres eller oppfølgingsdatoen nås."
+            : "Ingen oppfølginger passer med filtrene."
+        );
+
+        empty.className = "sk-note";
+        followUpList.appendChild(empty);
+        return;
+      }
+
+      visible.forEach(function (item) {
+        var card = el("div");
+
+        card.style.padding = "16px";
+        card.style.border =
+          item.needs_follow_up === true
+            ? "1px solid #f59e0b"
+            : "1px solid #e5e7eb";
+        card.style.borderRadius =
+          "14px";
+        card.style.background =
+          item.needs_follow_up === true
+            ? "#fffbeb"
+            : "#ffffff";
+        card.style.marginBottom =
+          "12px";
+
+        var top = el("div");
+
+        top.style.display = "flex";
+        top.style.justifyContent =
+          "space-between";
+        top.style.gap = "12px";
+        top.style.alignItems =
+          "flex-start";
+        top.style.flexWrap = "wrap";
+
+        var titleWrap = el("div");
+
+        var title = el(
+          "strong",
+          item.product_name ||
+            "Ukjent produkt"
+        );
+
+        title.style.display = "block";
+        title.style.fontSize = "16px";
+
+        var subtitle = el(
+          "div",
+          (
+            item.product_brand
+              ? item.product_brand +
+                " · "
+              : ""
+          ) +
+            (
+              item.competitor_name ||
+              "Ukjent konkurrent"
+            ) +
+            " → " +
+            (
+              item
+                .competitor_product_name ||
+              "Ukjent produkt"
+            )
+        );
+
+        subtitle.style.marginTop =
+          "4px";
+        subtitle.style.color =
+          "#64748b";
+        subtitle.style.lineHeight =
+          "1.45";
+
+        titleWrap.appendChild(title);
+        titleWrap.appendChild(subtitle);
+
+        var reasonBadge = el(
+          "div",
+          item.needs_follow_up === true
+            ? (
+                item.follow_up_reason ||
+                "Klar til oppfølging"
+              )
+            : "Planlagt " +
+                formatPriceFollowUpDate(
+                  item.next_follow_up_at
+                )
+        );
+
+        reasonBadge.style.display =
+          "inline-flex";
+        reasonBadge.style.padding =
+          "7px 10px";
+        reasonBadge.style.borderRadius =
+          "999px";
+        reasonBadge.style.fontWeight =
+          "800";
+        reasonBadge.style.fontSize =
+          "12px";
+        reasonBadge.style.background =
+          item.needs_follow_up === true
+            ? "#fef3c7"
+            : "#ecfdf5";
+        reasonBadge.style.color =
+          item.needs_follow_up === true
+            ? "#92400e"
+            : "#166534";
+        reasonBadge.style.border =
+          item.needs_follow_up === true
+            ? "1px solid #fcd34d"
+            : "1px solid #bbf7d0";
+
+        top.appendChild(titleWrap);
+        top.appendChild(reasonBadge);
+
+        card.appendChild(top);
+
+        var priceGrid = el("div");
+
+        priceGrid.style.display =
+          "grid";
+        priceGrid.style.gridTemplateColumns =
+          "repeat(auto-fit, minmax(150px, 1fr))";
+        priceGrid.style.gap = "8px";
+        priceGrid.style.margin =
+          "14px 0";
+
+        [
+          {
+            label: "GolfKongen nå",
+            value:
+              formatPriceCheckMoney(
+                item
+                  .golfkongen_price_inc_vat
+              ),
+            previous:
+              item
+                .last_reviewed_golfkongen_price_inc_vat
+          },
+          {
+            label:
+              "Konkurrent nå",
+            value:
+              formatPriceCheckMoney(
+                item
+                  .competitor_price_inc_vat
+              ),
+            previous:
+              item
+                .last_reviewed_competitor_price_inc_vat
+          },
+          {
+            label: "Frakt nå",
+            value:
+              priceFollowUpShippingText(
+                item
+                  .competitor_shipping_inc_vat,
+                item.shipping_is_known
+              ),
+            previous:
+              item
+                .last_reviewed_shipping_inc_vat,
+            previousShipping: true
+          },
+          {
+            label:
+              "Konkurrent totalt",
+            value:
+              formatPriceCheckMoney(
+                item
+                  .competitor_total_inc_vat
+              ),
+            previous:
+              item
+                .last_reviewed_total_inc_vat
+          },
+          {
+            label: "Forskjell nå",
+            value:
+              formatPriceCheckMoney(
+                item
+                  .price_difference_inc_vat
+              ),
+            difference: true
+          },
+          {
+            label:
+              "Sist vurdert",
+            value:
+              formatPriceFollowUpDate(
+                item
+                  .last_price_reviewed_at
+              )
+          }
+        ].forEach(function (entry) {
+          var box = el("div");
+
+          box.style.padding = "10px";
+          box.style.background =
+            "#f8fafc";
+          box.style.borderRadius =
+            "10px";
+
+          var label = el(
+            "div",
+            entry.label
+          );
+
+          label.style.fontSize =
+            "11px";
+          label.style.color =
+            "#64748b";
+
+          var value = el(
+            "div",
+            entry.value
+          );
+
+          value.style.fontWeight =
+            "800";
+          value.style.marginTop =
+            "3px";
+
+          if (
+            entry.difference &&
+            Number(
+              item
+                .price_difference_inc_vat ||
+                0
+            ) > 0
+          ) {
+            value.style.color =
+              "#b91c1c";
+          }
+
+          if (
+            entry.difference &&
+            Number(
+              item
+                .price_difference_inc_vat ||
+                0
+            ) < 0
+          ) {
+            value.style.color =
+              "#166534";
+          }
+
+          box.appendChild(label);
+          box.appendChild(value);
+
+          if (
+            entry.previous !==
+              undefined &&
+            entry.previous !== null &&
+            entry.previous !== ""
+          ) {
+            var previousText =
+              entry.previousShipping
+                ? "Sist: " +
+                  formatPriceCheckMoney(
+                    entry.previous
+                  )
+                : "Sist: " +
+                  formatPriceCheckMoney(
+                    entry.previous
+                  );
+
+            var previous = el(
+              "div",
+              previousText
+            );
+
+            previous.style.marginTop =
+              "4px";
+            previous.style.fontSize =
+              "11px";
+            previous.style.color =
+              "#64748b";
+
+            box.appendChild(previous);
+          }
+
+          priceGrid.appendChild(box);
+        });
+
+        card.appendChild(priceGrid);
+
+        var scheduleInfo = el(
+          "div",
+          "Neste planlagte sjekk: " +
+            formatPriceFollowUpDate(
+              item.next_follow_up_at
+            ) +
+            " · Sist kontrollert hos konkurrent: " +
+            formatPriceFollowUpDate(
+              item.checked_at
+            )
+        );
+
+        scheduleInfo.style.fontSize =
+          "12px";
+        scheduleInfo.style.color =
+          "#64748b";
+        scheduleInfo.style.marginBottom =
+          "12px";
+
+        card.appendChild(scheduleInfo);
+
+        var links = el("div");
+
+        links.style.display = "flex";
+        links.style.gap = "8px";
+        links.style.flexWrap = "wrap";
+        links.style.marginBottom =
+          "10px";
+
+        function addFollowUpLink(
+          href,
+          text
+        ) {
+          if (!href) {
+            return;
+          }
+
+          var link = el("a", text);
+
+          link.href = href;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.style.display =
+            "inline-flex";
+          link.style.padding =
+            "8px 11px";
+          link.style.border =
+            "1px solid #d1d5db";
+          link.style.borderRadius =
+            "9px";
+          link.style.color =
+            "#111827";
+          link.style.background =
+            "#ffffff";
+          link.style.fontWeight =
+            "700";
+          link.style.textDecoration =
+            "none";
+
+          links.appendChild(link);
+        }
+
+        addFollowUpLink(
+          item.golfkongen_product_url,
+          "Åpne GolfKongen-produkt"
+        );
+
+        addFollowUpLink(
+          item.competitor_product_url,
+          "Åpne konkurrentprodukt"
+        );
+
+        card.appendChild(links);
+
+        var actions = el("div");
+
+        actions.style.display = "flex";
+        actions.style.gap = "8px";
+        actions.style.flexWrap = "wrap";
+
+        actions.appendChild(
+          createPriceFollowUpAction(
+            item,
+            "Behold – 7 dager",
+            7,
+            "keep_price",
+            false
+          )
+        );
+
+        actions.appendChild(
+          createPriceFollowUpAction(
+            item,
+            "Behold – 14 dager",
+            14,
+            "keep_price",
+            true
+          )
+        );
+
+        actions.appendChild(
+          createPriceFollowUpAction(
+            item,
+            "Behold – 30 dager",
+            30,
+            "keep_price",
+            false
+          )
+        );
+
+        actions.appendChild(
+          createPriceFollowUpAction(
+            item,
+            "Jeg har endret pris – 14 dager",
+            14,
+            "price_changed",
+            false
+          )
+        );
+
+        card.appendChild(actions);
+        followUpList.appendChild(card);
+      });
+    }
+
+    [
+      followUpStatusFilter,
+      followUpCompetitorFilter,
+      followUpSort
+    ].forEach(function (input) {
+      input.addEventListener(
+        "change",
+        renderPriceFollowUps
+      );
+    });
+
+    followUpSearch.addEventListener(
+      "input",
+      renderPriceFollowUps
+    );
+
+    renderPriceFollowUps();
+
+    parent.appendChild(
+      followUpSection.wrap
+    );
+
     var suggestionSection =
       createCollapsibleSection(
         "📋 Lagrede prisforslag (" +
@@ -11059,6 +12175,16 @@ var competitorSection = createCollapsibleSection(
       .eq("is_active", true)
       .order("sort_order", {
         ascending: true
+      }),
+    sb
+      .from("internal_price_follow_up_view")
+      .select("*")
+      .order("follow_up_priority", {
+        ascending: true
+      })
+      .order("next_follow_up_at", {
+        ascending: true,
+        nullsFirst: false
       })
 
 
@@ -11141,6 +12267,14 @@ var competitorSection = createCollapsibleSection(
       return;
     }
 
+    if (results[15].error) {
+      renderError(
+        "Kunne ikke hente prisoppfølginger: " +
+          results[15].error.message
+      );
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -11156,7 +12290,8 @@ var competitorSection = createCollapsibleSection(
       priceComparisons: results[11].data || [],
       priceCompetitors: results[12].data || [],
       priceSuggestions: results[13].data || [],
-      priceReviewReasons: results[14].data || []
+      priceReviewReasons: results[14].data || [],
+      priceFollowUps: results[15].data || []
     });
   });
 } 
