@@ -9013,6 +9013,8 @@ function renderProductControlDashboard(parent, data) {
 
 var competitors = data.priceCompetitors || [];
 
+    var shippingRules = data.priceShippingRules || [];
+
     var priceSuggestions =
       data.priceSuggestions || [];
 
@@ -11458,44 +11460,83 @@ var competitors = data.priceCompetitors || [];
           prices.style.gap = "8px";
           prices.style.margin = "14px 0";
 
-          var difference =
+          var golfkongenPrice =
             suggestionNumberOrNull(
-              suggestion
-                .price_difference_inc_vat
+              suggestion.golfkongen_price_inc_vat
             );
+
+          var competitorProductPrice =
+            suggestionNumberOrNull(
+              suggestion.competitor_price_inc_vat
+            );
+
+          var shippingKnown =
+            suggestion.shipping_is_known === true;
+
+          var competitorTotalPrice =
+            shippingKnown
+              ? suggestionNumberOrNull(
+                  suggestion.competitor_total_inc_vat
+                )
+              : null;
+
+          var difference =
+            golfkongenPrice !== null &&
+            competitorProductPrice !== null
+              ? golfkongenPrice - competitorProductPrice
+              : null;
+
+          var totalDifference =
+            golfkongenPrice !== null &&
+            competitorTotalPrice !== null
+              ? golfkongenPrice - competitorTotalPrice
+              : null;
 
           [
             {
-              label: "GolfKongen",
-              value:
-                formatPriceCheckMoney(
-                  suggestion
-                    .golfkongen_price_inc_vat
-                )
+              label: "GolfKongen vare",
+              value: formatPriceCheckMoney(
+                suggestion.golfkongen_price_inc_vat
+              )
             },
             {
-              label: "Konkurrent",
-              value:
-                formatPriceCheckMoney(
-                  suggestion
-                    .competitor_total_inc_vat
-                )
+              label: "Konkurrent vare",
+              value: formatPriceCheckMoney(
+                suggestion.competitor_price_inc_vat
+              )
             },
             {
-              label: "Forskjell",
-              value:
-                formatPriceCheckMoney(
-                  suggestion
-                    .price_difference_inc_vat
-                ),
+              label: "Konkurrentfrakt",
+              value: priceFollowUpShippingText(
+                suggestion.competitor_shipping_inc_vat,
+                shippingKnown
+              )
+            },
+            {
+              label: "Konkurrent levert",
+              value: shippingKnown
+                ? formatPriceCheckMoney(
+                    suggestion.competitor_total_inc_vat
+                  )
+                : "Frakt ikke verifisert"
+            },
+            {
+              label: "Produktforskjell",
+              value: formatPriceCheckMoney(difference),
               difference: true
+            },
+            {
+              label: "Forskjell m/frakt",
+              value: shippingKnown
+                ? formatPriceCheckMoney(totalDifference)
+                : "Frakt ikke verifisert",
+              totalDifference: true
             },
             {
               label: "Treff",
               value:
                 String(
-                  suggestion
-                    .match_confidence || 0
+                  suggestion.match_confidence || 0
                 ) + "%"
             }
           ].forEach(function (item) {
@@ -11527,18 +11568,19 @@ var competitors = data.priceCompetitors || [];
             value.style.marginTop =
               "3px";
 
-            if (
-              item.difference &&
-              difference !== null
-            ) {
-              if (difference > 0) {
-                value.style.color =
-                  "#b91c1c";
-              } else if (
-                difference < 0
-              ) {
-                value.style.color =
-                  "#166534";
+            var comparisonDifference = null;
+
+            if (item.difference) {
+              comparisonDifference = difference;
+            } else if (item.totalDifference) {
+              comparisonDifference = totalDifference;
+            }
+
+            if (comparisonDifference !== null) {
+              if (comparisonDifference > 0) {
+                value.style.color = "#b91c1c";
+              } else if (comparisonDifference < 0) {
+                value.style.color = "#166534";
               }
             }
 
@@ -12054,6 +12096,388 @@ var competitorSection = createCollapsibleSection(
       });
     };
 
+
+    var shippingManager = el("div");
+    shippingManager.style.marginTop = "24px";
+    shippingManager.style.paddingTop = "20px";
+    shippingManager.style.borderTop = "1px solid #e5e7eb";
+
+    var shippingTitle = el("h3", "Fraktregler");
+    shippingTitle.style.margin = "0 0 6px 0";
+    shippingManager.appendChild(shippingTitle);
+
+    var shippingHelp = el(
+      "div",
+      "Produktprisen er hovedsammenligningen. Frakt vises separat og legges bare til når regelen er verifisert. Legg frakt inn én gang per konkurrent/frakttype – aldri per produkt."
+    );
+    shippingHelp.className = "sk-note";
+    shippingHelp.style.marginBottom = "14px";
+    shippingManager.appendChild(shippingHelp);
+
+    var shippingForm = el("div");
+    shippingForm.style.display = "grid";
+    shippingForm.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(210px, 1fr))";
+    shippingForm.style.gap = "12px";
+    shippingForm.style.padding = "14px";
+    shippingForm.style.border = "1px solid #e5e7eb";
+    shippingForm.style.borderRadius = "14px";
+    shippingForm.style.background = "#f8fafc";
+
+    var shippingCompetitorSelect = el("select");
+    competitors.forEach(function (competitor) {
+      addOption(
+        shippingCompetitorSelect,
+        competitor.id,
+        competitor.name || "Ukjent konkurrent"
+      );
+    });
+
+    var shippingRuleNameInput = el("input");
+    shippingRuleNameInput.type = "text";
+    shippingRuleNameInput.placeholder = "F.eks. Pakke i postkassen";
+
+    var shippingClassSelect = el("select");
+    addOption(shippingClassSelect, "disc", "Disc");
+    addOption(shippingClassSelect, "small", "Lite tilbehør");
+    addOption(shippingClassSelect, "bag", "Bag / sekk");
+    addOption(shippingClassSelect, "basket", "Kurv");
+    addOption(shippingClassSelect, "all", "Alle varer");
+
+    var shippingMethodInput = el("input");
+    shippingMethodInput.type = "text";
+    shippingMethodInput.placeholder = "F.eks. Posten – Pakke i postkassen";
+
+    var shippingFixedInput = el("input");
+    shippingFixedInput.type = "number";
+    shippingFixedInput.min = "0";
+    shippingFixedInput.step = "1";
+    shippingFixedInput.placeholder = "Tom = ukjent";
+
+    var shippingFreeFromInput = el("input");
+    shippingFreeFromInput.type = "number";
+    shippingFreeFromInput.min = "0";
+    shippingFreeFromInput.step = "1";
+    shippingFreeFromInput.placeholder = "Tom = ingen kjent grense";
+
+    var shippingSourceInput = el("input");
+    shippingSourceInput.type = "url";
+    shippingSourceInput.placeholder = "Lenke til fraktinfo";
+
+    var shippingNotesInput = el("input");
+    shippingNotesInput.type = "text";
+    shippingNotesInput.placeholder = "Valgfri kommentar";
+
+    addField(shippingForm, "Konkurrent", shippingCompetitorSelect);
+    addField(shippingForm, "Navn på regel", shippingRuleNameInput);
+    addField(shippingForm, "Fraktklasse", shippingClassSelect);
+    addField(shippingForm, "Fraktmetode", shippingMethodInput);
+    addField(shippingForm, "Fast frakt inkl. mva", shippingFixedInput);
+    addField(shippingForm, "Fri frakt fra", shippingFreeFromInput);
+    addField(shippingForm, "Kilde", shippingSourceInput);
+    addField(shippingForm, "Kommentar", shippingNotesInput);
+
+    function createShippingCheck(labelText, checked) {
+      var wrap = el("label");
+      wrap.style.display = "flex";
+      wrap.style.alignItems = "center";
+      wrap.style.gap = "8px";
+      wrap.style.padding = "8px 0";
+      wrap.style.fontWeight = "700";
+
+      var input = el("input");
+      input.type = "checkbox";
+      input.checked = checked;
+      input.style.width = "18px";
+      input.style.height = "18px";
+
+      wrap.appendChild(input);
+      wrap.appendChild(el("span", labelText));
+      shippingForm.appendChild(wrap);
+
+      return input;
+    }
+
+    var shippingAutoInput = createShippingCheck(
+      "Bruk automatisk i prissjekk",
+      true
+    );
+
+    var shippingVerifiedInput = createShippingCheck(
+      "Frakt er verifisert",
+      true
+    );
+
+    var shippingActiveInput = createShippingCheck(
+      "Aktiv regel",
+      true
+    );
+
+    shippingManager.appendChild(shippingForm);
+
+    var shippingActions = el("div");
+    shippingActions.style.display = "flex";
+    shippingActions.style.gap = "10px";
+    shippingActions.style.flexWrap = "wrap";
+    shippingActions.style.marginTop = "12px";
+
+    var saveShippingButton = createPrimaryButton("Legg til fraktregel");
+    var cancelShippingButton = createButton("Avbryt redigering");
+    cancelShippingButton.style.display = "none";
+
+    shippingActions.appendChild(saveShippingButton);
+    shippingActions.appendChild(cancelShippingButton);
+    shippingManager.appendChild(shippingActions);
+
+    var shippingRuleList = el("div");
+    shippingRuleList.style.marginTop = "18px";
+    shippingManager.appendChild(shippingRuleList);
+
+    var editingShippingRuleId = null;
+
+    function shippingNumberValue(input) {
+      var value = String(input.value || "").trim();
+      if (!value) return null;
+      var number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function resetShippingForm() {
+      editingShippingRuleId = null;
+      shippingRuleNameInput.value = "";
+      shippingClassSelect.value = "disc";
+      shippingMethodInput.value = "";
+      shippingFixedInput.value = "";
+      shippingFreeFromInput.value = "";
+      shippingSourceInput.value = "";
+      shippingNotesInput.value = "";
+      shippingAutoInput.checked = true;
+      shippingVerifiedInput.checked = true;
+      shippingActiveInput.checked = true;
+      saveShippingButton.textContent = "Legg til fraktregel";
+      cancelShippingButton.style.display = "none";
+    }
+
+    function editShippingRule(rule) {
+      editingShippingRuleId = rule.id;
+      shippingCompetitorSelect.value = rule.competitor_id || "";
+      shippingRuleNameInput.value = rule.rule_name || "";
+      shippingClassSelect.value = rule.shipping_class || "disc";
+      shippingMethodInput.value = rule.method_name || "";
+      shippingFixedInput.value =
+        rule.fixed_shipping_inc_vat === null ||
+        rule.fixed_shipping_inc_vat === undefined
+          ? ""
+          : String(rule.fixed_shipping_inc_vat);
+      shippingFreeFromInput.value =
+        rule.free_shipping_threshold_inc_vat === null ||
+        rule.free_shipping_threshold_inc_vat === undefined
+          ? ""
+          : String(rule.free_shipping_threshold_inc_vat);
+      shippingSourceInput.value = rule.source_url || "";
+      shippingNotesInput.value = rule.notes || "";
+      shippingAutoInput.checked = rule.is_auto_apply === true;
+      shippingVerifiedInput.checked = rule.is_verified === true;
+      shippingActiveInput.checked = rule.is_active !== false;
+      saveShippingButton.textContent = "Lagre fraktregel";
+      cancelShippingButton.style.display = "inline-block";
+      shippingForm.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }
+
+    function shippingCompetitorName(id) {
+      var found = competitors.find(function (competitor) {
+        return competitor.id === id;
+      });
+      return found ? found.name : "Ukjent konkurrent";
+    }
+
+    function renderShippingRuleList() {
+      clear(shippingRuleList);
+
+      var title = el(
+        "h4",
+        "Lagrede fraktregler (" + shippingRules.length + ")"
+      );
+      title.style.margin = "0 0 10px 0";
+      shippingRuleList.appendChild(title);
+
+      if (!shippingRules.length) {
+        shippingRuleList.appendChild(
+          el("p", "Ingen fraktregler er registrert.")
+        );
+        return;
+      }
+
+      var wrap = el("div");
+      wrap.style.overflowX = "auto";
+      wrap.style.border = "1px solid #e5e7eb";
+      wrap.style.borderRadius = "14px";
+
+      var table = el("table");
+      table.style.width = "100%";
+      table.style.borderCollapse = "collapse";
+      table.style.fontSize = "13px";
+
+      var thead = el("thead");
+      var headRow = el("tr");
+
+      [
+        "Butikk",
+        "Regel",
+        "Klasse",
+        "Fast frakt",
+        "Fri fra",
+        "Auto",
+        "Status",
+        "Handling"
+      ].forEach(function (label) {
+        var th = el("th", label);
+        th.style.textAlign = "left";
+        th.style.padding = "10px";
+        th.style.background = "#f8fafc";
+        th.style.borderBottom = "1px solid #e5e7eb";
+        th.style.whiteSpace = "nowrap";
+        headRow.appendChild(th);
+      });
+
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      var tbody = el("tbody");
+
+      shippingRules.forEach(function (rule) {
+        var tr = el("tr");
+
+        var values = [
+          shippingCompetitorName(rule.competitor_id),
+          rule.rule_name || "-",
+          rule.shipping_class || "-",
+          rule.fixed_shipping_inc_vat === null ||
+          rule.fixed_shipping_inc_vat === undefined
+            ? "Ukjent"
+            : formatPriceCheckMoney(rule.fixed_shipping_inc_vat),
+          rule.free_shipping_threshold_inc_vat === null ||
+          rule.free_shipping_threshold_inc_vat === undefined
+            ? "-"
+            : formatPriceCheckMoney(
+                rule.free_shipping_threshold_inc_vat
+              ),
+          rule.is_auto_apply ? "Ja" : "Nei",
+          rule.is_active
+            ? rule.is_verified
+              ? "Verifisert"
+              : "Ikke verifisert"
+            : "Deaktivert"
+        ];
+
+        values.forEach(function (textValue) {
+          var td = el("td", textValue);
+          td.style.padding = "10px";
+          td.style.borderBottom = "1px solid #f3f4f6";
+          td.style.whiteSpace = "nowrap";
+          tr.appendChild(td);
+        });
+
+        var actionTd = el("td");
+        actionTd.style.padding = "10px";
+        actionTd.style.borderBottom = "1px solid #f3f4f6";
+
+        var editButton = createButton("Rediger");
+        editButton.style.padding = "7px 10px";
+        editButton.onclick = function () {
+          editShippingRule(rule);
+        };
+
+        actionTd.appendChild(editButton);
+        tr.appendChild(actionTd);
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      shippingRuleList.appendChild(wrap);
+    }
+
+    cancelShippingButton.onclick = function () {
+      resetShippingForm();
+    };
+
+    saveShippingButton.onclick = function () {
+      var competitorId = shippingCompetitorSelect.value;
+      var ruleName = shippingRuleNameInput.value.trim();
+      var fixedShipping = shippingNumberValue(shippingFixedInput);
+      var freeFrom = shippingNumberValue(shippingFreeFromInput);
+
+      if (!competitorId) {
+        alert("Velg konkurrent.");
+        return;
+      }
+
+      if (!ruleName) {
+        alert("Skriv inn navn på fraktregelen.");
+        return;
+      }
+
+      if (
+        shippingVerifiedInput.checked === true &&
+        fixedShipping === null &&
+        freeFrom === null
+      ) {
+        alert(
+          "En verifisert regel må ha fast frakt og/eller fri-fraktgrense."
+        );
+        return;
+      }
+
+      saveShippingButton.disabled = true;
+      saveShippingButton.textContent = "Lagrer...";
+
+      sb.rpc("internal_save_price_shipping_rule", {
+        p_id: editingShippingRuleId,
+        p_competitor_id: competitorId,
+        p_rule_name: ruleName,
+        p_shipping_class: shippingClassSelect.value,
+        p_method_name: shippingMethodInput.value.trim() || null,
+        p_fixed_shipping_inc_vat: fixedShipping,
+        p_free_shipping_threshold_inc_vat: freeFrom,
+        p_is_auto_apply: shippingAutoInput.checked,
+        p_is_verified: shippingVerifiedInput.checked,
+        p_is_active: shippingActiveInput.checked,
+        p_source_url: shippingSourceInput.value.trim() || null,
+        p_notes: shippingNotesInput.value.trim() || null,
+        p_priority: 10
+      }).then(function (result) {
+        saveShippingButton.disabled = false;
+
+        if (result.error) {
+          saveShippingButton.textContent = editingShippingRuleId
+            ? "Lagre fraktregel"
+            : "Legg til fraktregel";
+          alert(
+            "Kunne ikke lagre fraktregel: " +
+              result.error.message
+          );
+          return;
+        }
+
+        localStorage.setItem(
+          "sk_internal_active_tab",
+          "priceCheck"
+        );
+
+        alert(
+          "Fraktregelen er lagret. Kjør prissjekken på nytt for at nye totalsummer skal bruke regelen."
+        );
+        window.location.reload();
+      });
+    };
+
+    renderShippingRuleList();
+    competitorSection.body.appendChild(shippingManager);
+
     renderCompetitorList();
     parent.appendChild(competitorSection.wrap);
 
@@ -12254,7 +12678,12 @@ var competitorSection = createCollapsibleSection(
       .order("next_follow_up_at", {
         ascending: true,
         nullsFirst: false
-      })
+      }),
+    sb
+      .from("internal_price_shipping_rules")
+      .select("*")
+      .order("priority", { ascending: true })
+      .order("rule_name", { ascending: true })
 
 
   ]).then(function (results) {
@@ -12344,6 +12773,14 @@ var competitorSection = createCollapsibleSection(
       return;
     }
 
+    if (results[16].error) {
+      renderError(
+        "Kunne ikke hente fraktregler: " +
+          results[16].error.message
+      );
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -12360,7 +12797,8 @@ var competitorSection = createCollapsibleSection(
       priceCompetitors: results[12].data || [],
       priceSuggestions: results[13].data || [],
       priceReviewReasons: results[14].data || [],
-      priceFollowUps: results[15].data || []
+      priceFollowUps: results[15].data || [],
+      priceShippingRules: results[16].data || []
     });
   });
 } 
