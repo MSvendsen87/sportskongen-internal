@@ -6865,7 +6865,7 @@ function renderProductControlDashboard(parent, data) {
 
     var note = el(
       "div",
-      "Prissjekken søker hos registrerte konkurrenter via DiscInStock og Krokhol. Treff lagres som forslag og må godkjennes manuelt før de påvirker prissammenligningen."
+      "Prissjekken søker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf. Tidligere avvisninger brukes til å filtrere kjente feiltreff, og sikre treff må fortsatt godkjennes manuelt."
     );
     note.className = "sk-note";
     note.style.marginBottom = "16px";
@@ -7186,30 +7186,51 @@ function renderProductControlDashboard(parent, data) {
       ownPrice.style.margin = "4px 0";
       summary.appendChild(ownPrice);
 
+      function sourceSummary(label, key, countKey) {
+        var status =
+          productResult.sourceStatus &&
+          productResult.sourceStatus[key];
+
+        if (!status || !status.ok) {
+          return label + ": feil";
+        }
+
+        return (
+          label +
+          ": " +
+          String(status[countKey] || 0)
+        );
+      }
+
       var sourceText = el(
         "p",
-        "Krokhol: " +
-          (
-            productResult.sourceStatus &&
-            productResult.sourceStatus.krokhol &&
-            productResult.sourceStatus.krokhol.ok
-              ? String(
-                  productResult.sourceStatus
-                    .krokhol.productsFound || 0
-                ) + " søkeresultater"
-              : "Feil"
-          ) +
-          " · DiscInStock: " +
-          (
-            productResult.sourceStatus &&
-            productResult.sourceStatus.discinstock &&
-            productResult.sourceStatus.discinstock.ok
-              ? String(
-                  productResult.sourceStatus
-                    .discinstock.cardsFound || 0
-                ) + " kort"
-              : "Feil"
+        [
+          sourceSummary(
+            "Krokhol",
+            "krokhol",
+            "productsFound"
+          ),
+          sourceSummary(
+            "DiscInStock",
+            "discinstock",
+            "cardsFound"
+          ),
+          sourceSummary(
+            "DGshop",
+            "dgshop",
+            "productsFound"
+          ),
+          sourceSummary(
+            "Frisbeebutikken",
+            "frisbeebutikken",
+            "productsFound"
+          ),
+          sourceSummary(
+            "WeAreDiscGolf",
+            "wearediscgolf",
+            "productsFound"
           )
+        ].join(" · ")
       );
 
       sourceText.style.margin = "4px 0";
@@ -7272,6 +7293,21 @@ function renderProductControlDashboard(parent, data) {
         details.style.marginBottom = "10px";
 
         card.appendChild(details);
+
+        if (
+          candidate.matchWarnings &&
+          candidate.matchWarnings.length
+        ) {
+          var warningText = el(
+            "div",
+            "Kontroll: " +
+              candidate.matchWarnings.join(" · ")
+          );
+          warningText.style.color = "#92400e";
+          warningText.style.fontSize = "12px";
+          warningText.style.marginBottom = "8px";
+          card.appendChild(warningText);
+        }
 
         if (candidate.quantity !== null &&
             candidate.quantity !== undefined) {
@@ -7397,7 +7433,7 @@ function renderProductControlDashboard(parent, data) {
                 p_competitor_price_inc_vat:
                   candidate.price,
                 p_competitor_shipping_inc_vat:
-                  0,
+                  null,
                 p_competitor_in_stock:
                   candidate.inStock,
                 p_match_confidence:
@@ -7416,7 +7452,12 @@ function renderProductControlDashboard(parent, data) {
                   worker_version:
                     result.version || null,
                   checked_at:
-                    result.generatedAt || null
+                    result.generatedAt || null,
+                  shipping_known: false,
+                  match_warnings:
+                    candidate.matchWarnings || [],
+                  learning_applied:
+                    candidate.learningApplied || []
                 }
               }
             )
@@ -7478,7 +7519,7 @@ function renderProductControlDashboard(parent, data) {
 
       workerStatus.style.display = "block";
       workerStatus.textContent =
-        "Søker hos Krokhol og DiscInStock...";
+        "Søker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf...";
 
       workerResult.style.display = "none";
       clear(workerResult);
@@ -7517,7 +7558,7 @@ function renderProductControlDashboard(parent, data) {
     var batchSection =
       createCollapsibleSection(
         "☑️ Sjekk valgte produkter",
-        "Velg opptil 20 produkter og kjør én samlet prissjekk.",
+        "Velg opptil 5 produkter og kjør én samlet prissjekk.",
         false
       );
 
@@ -7646,7 +7687,7 @@ function renderProductControlDashboard(parent, data) {
       selectedCount.textContent =
         String(count) + " valgt";
 
-      if (count > 20) {
+      if (count > 5) {
         selectedCount.style.background =
           "#fee2e2";
         selectedCount.style.color =
@@ -7698,7 +7739,7 @@ function renderProductControlDashboard(parent, data) {
 
       batchInfo.textContent =
         String(filteredProducts.length) +
-        " produkter vises. Maks 20 kan sjekkes per kjøring.";
+        " produkter vises. Maks 5 kan sjekkes per kjøring.";
 
       if (!filteredProducts.length) {
         batchProductList.appendChild(
@@ -7818,7 +7859,7 @@ function renderProductControlDashboard(parent, data) {
         var remaining =
           Math.max(
             0,
-            20 - currentIds.length
+            5 - currentIds.length
           );
 
         filteredProducts
@@ -7930,7 +7971,7 @@ function renderProductControlDashboard(parent, data) {
           p_competitor_price_inc_vat:
             candidate.price,
           p_competitor_shipping_inc_vat:
-            0,
+            null,
           p_competitor_in_stock:
             candidate.inStock,
           p_match_confidence:
@@ -7949,7 +7990,12 @@ function renderProductControlDashboard(parent, data) {
             worker_version:
               workerResult.version || null,
             checked_at:
-              workerResult.generatedAt || null
+              workerResult.generatedAt || null,
+            shipping_known: false,
+            match_warnings:
+              candidate.matchWarnings || [],
+            learning_applied:
+              candidate.learningApplied || []
           }
         }
       )
@@ -8141,6 +8187,21 @@ function renderProductControlDashboard(parent, data) {
                 candidateMeta
               );
 
+              if (
+                candidate.matchWarnings &&
+                candidate.matchWarnings.length
+              ) {
+                var warningText = el(
+                  "div",
+                  "Kontroll: " +
+                    candidate.matchWarnings.join(" · ")
+                );
+                warningText.style.color = "#92400e";
+                warningText.style.fontSize = "12px";
+                warningText.style.marginBottom = "8px";
+                candidateCard.appendChild(warningText);
+              }
+
               var actions = el("div");
 
               actions.style.display =
@@ -8230,9 +8291,9 @@ function renderProductControlDashboard(parent, data) {
           return;
         }
 
-        if (ids.length > 20) {
+        if (ids.length > 5) {
           alert(
-            "Maks 20 produkter kan sjekkes per kjøring."
+            "Maks 5 produkter kan sjekkes per kjøring."
           );
           return;
         }
@@ -8301,7 +8362,7 @@ function renderProductControlDashboard(parent, data) {
     var checkAllSection =
       createCollapsibleSection(
         "🚀 Kjør prissjekk på alle",
-        "Kontroller produkter i puljer på 20. Sikre treff lagres som forslag som må godkjennes manuelt.",
+        "Kontroller produkter i trygge puljer på 5. Sikre treff lagres som forslag som må godkjennes manuelt.",
         false
       );
 
@@ -8492,7 +8553,7 @@ function renderProductControlDashboard(parent, data) {
             candidate.price,
 
           p_competitor_shipping_inc_vat:
-            0,
+            null,
 
           p_competitor_in_stock:
             candidate.inStock,
@@ -8521,6 +8582,14 @@ function renderProductControlDashboard(parent, data) {
 
             checked_at:
               workerResult.generatedAt || null,
+
+            shipping_known: false,
+
+            match_warnings:
+              candidate.matchWarnings || [],
+
+            learning_applied:
+              candidate.learningApplied || [],
 
             automatic_batch:
               true
@@ -8781,12 +8850,12 @@ function renderProductControlDashboard(parent, data) {
         for (
           var index = 0;
           index < productsToCheck.length;
-          index += 20
+          index += 5
         ) {
           batches.push(
             productsToCheck.slice(
               index,
-              index + 20
+              index + 5
             )
           );
         }
