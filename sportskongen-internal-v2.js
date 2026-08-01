@@ -7294,6 +7294,12 @@ function renderProductControlDashboard(parent, data) {
 
         card.appendChild(details);
 
+        addPriceCandidateShippingBox(
+          card,
+          productResult,
+          candidate
+        );
+
         if (
           candidate.matchWarnings &&
           candidate.matchWarnings.length
@@ -7933,6 +7939,283 @@ function renderProductControlDashboard(parent, data) {
       });
     }
 
+    function resolvePriceCandidateShipping(
+      productResult,
+      candidate
+    ) {
+      var competitor =
+        findPriceCompetitor(candidate);
+
+      if (!competitor) {
+        return Promise.resolve({
+          known: false,
+          shipping: null,
+          total: null,
+          ruleName: null,
+          sourceUrl: null
+        });
+      }
+
+      var productCategory = "disc";
+
+      var ownProduct =
+        (data.products || []).find(
+          function (product) {
+            return (
+              String(product.id) ===
+              String(productResult.productId)
+            );
+          }
+        );
+
+      if (
+        ownProduct &&
+        ownProduct.category
+      ) {
+        productCategory =
+          String(ownProduct.category);
+      }
+
+      return sb.rpc(
+        "internal_resolve_price_shipping",
+        {
+          p_competitor_id:
+            competitor.id,
+          p_product_category:
+            productCategory,
+          p_order_value_inc_vat:
+            candidate.price
+        }
+      ).then(function (result) {
+        if (result.error) {
+          throw result.error;
+        }
+
+        var row =
+          result.data &&
+          result.data[0];
+
+        if (
+          !row ||
+          row.shipping_is_known !== true ||
+          row.shipping_inc_vat === null ||
+          row.shipping_inc_vat === undefined
+        ) {
+          return {
+            known: false,
+            shipping: null,
+            total: null,
+            ruleName:
+              row && row.shipping_rule_name
+                ? row.shipping_rule_name
+                : null,
+            sourceUrl:
+              row && row.shipping_source_url
+                ? row.shipping_source_url
+                : null
+          };
+        }
+
+        var shipping =
+          Number(row.shipping_inc_vat);
+
+        var price =
+          Number(candidate.price);
+
+        return {
+          known: true,
+          shipping: shipping,
+          total:
+            Number.isFinite(price)
+              ? price + shipping
+              : null,
+          ruleName:
+            row.shipping_rule_name || null,
+          sourceUrl:
+            row.shipping_source_url || null
+        };
+      });
+    }
+
+    function addPriceCandidateShippingBox(
+      parent,
+      productResult,
+      candidate
+    ) {
+      var box = el(
+        "div",
+        "Frakt: beregner..."
+      );
+
+      box.style.marginBottom = "10px";
+      box.style.padding = "9px 10px";
+      box.style.border =
+        "1px solid #d1fae5";
+      box.style.borderRadius = "9px";
+      box.style.background = "#ffffff";
+      box.style.fontSize = "13px";
+      box.style.lineHeight = "1.5";
+
+      parent.appendChild(box);
+
+      resolvePriceCandidateShipping(
+        productResult,
+        candidate
+      )
+        .then(function (shippingInfo) {
+          clear(box);
+
+          var competitorPrice =
+            Number(candidate.price);
+
+          var ownPrice =
+            Number(
+              productResult.golfkongenPrice
+            );
+
+          var productDifference =
+            Number.isFinite(ownPrice) &&
+            Number.isFinite(competitorPrice)
+              ? ownPrice - competitorPrice
+              : null;
+
+          var line1 = el(
+            "div",
+            "Produktpris: " +
+              formatPriceCheckMoney(
+                candidate.price
+              )
+          );
+
+          line1.style.fontWeight = "700";
+          box.appendChild(line1);
+
+          var line2 = el(
+            "div",
+            shippingInfo.known
+              ? (
+                  "Konkurrentfrakt: " +
+                  formatPriceCheckMoney(
+                    shippingInfo.shipping
+                  )
+                )
+              : "Konkurrentfrakt: Ikke verifisert"
+          );
+
+          box.appendChild(line2);
+
+          if (
+            shippingInfo.known &&
+            shippingInfo.total !== null
+          ) {
+            var line3 = el(
+              "div",
+              "Konkurrent levert: " +
+                formatPriceCheckMoney(
+                  shippingInfo.total
+                )
+            );
+
+            box.appendChild(line3);
+
+            if (
+              Number.isFinite(ownPrice)
+            ) {
+              var deliveredDifference =
+                ownPrice -
+                shippingInfo.total;
+
+              var comparisonText;
+
+              if (
+                Math.abs(deliveredDifference) <
+                0.005
+              ) {
+                comparisonText =
+                  "Med konkurrentfrakt: samme beløp";
+              } else if (
+                deliveredDifference < 0
+              ) {
+                comparisonText =
+                  "Med konkurrentfrakt: GolfKongen er " +
+                  formatPriceCheckMoney(
+                    Math.abs(
+                      deliveredDifference
+                    )
+                  ) +
+                  " lavere før eventuell GolfKongen-frakt";
+              } else {
+                comparisonText =
+                  "Med konkurrentfrakt: GolfKongen er " +
+                  formatPriceCheckMoney(
+                    deliveredDifference
+                  ) +
+                  " høyere før eventuell GolfKongen-frakt";
+              }
+
+              var line4 = el(
+                "div",
+                comparisonText
+              );
+
+              line4.style.fontWeight = "700";
+              box.appendChild(line4);
+            }
+          }
+
+          if (
+            productDifference !== null
+          ) {
+            var line5 = el(
+              "div",
+              Math.abs(productDifference) < 0.005
+                ? "Vare mot vare: samme pris"
+                : productDifference < 0
+                  ? (
+                      "Vare mot vare: GolfKongen er " +
+                      formatPriceCheckMoney(
+                        Math.abs(productDifference)
+                      ) +
+                      " billigere"
+                    )
+                  : (
+                      "Vare mot vare: GolfKongen er " +
+                      formatPriceCheckMoney(
+                        productDifference
+                      ) +
+                      " dyrere"
+                    )
+            );
+
+            line5.style.color = "#475569";
+            box.appendChild(line5);
+          }
+
+          if (shippingInfo.ruleName) {
+            var ruleLine = el(
+              "div",
+              "Fraktregel: " +
+                shippingInfo.ruleName
+            );
+
+            ruleLine.style.color = "#64748b";
+            ruleLine.style.fontSize = "12px";
+            box.appendChild(ruleLine);
+          }
+        })
+        .catch(function (error) {
+          box.textContent =
+            "Konkurrentfrakt: Kunne ikke beregnes (" +
+            (
+              error.message ||
+              String(error)
+            ) +
+            ")";
+
+          box.style.color = "#92400e";
+        });
+    }
+
     function saveBatchSuggestion(
       productResult,
       candidate,
@@ -8185,6 +8468,12 @@ function renderProductControlDashboard(parent, data) {
 
               candidateCard.appendChild(
                 candidateMeta
+              );
+
+              addPriceCandidateShippingBox(
+                candidateCard,
+                productResult,
+                candidate
               );
 
               if (
