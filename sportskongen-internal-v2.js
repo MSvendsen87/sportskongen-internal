@@ -7939,6 +7939,166 @@ function renderProductControlDashboard(parent, data) {
       });
     }
 
+    function getPriceCheckProductCategory(
+      productResult
+    ) {
+      var ownProduct =
+        (data.products || []).find(
+          function (product) {
+            return (
+              String(product.id) ===
+              String(productResult.productId)
+            );
+          }
+        );
+
+      return ownProduct &&
+        ownProduct.category
+          ? String(ownProduct.category)
+          : String(
+              productResult.category ||
+              "disc"
+            );
+    }
+
+    function resolveGolfKongenShipping(
+      productResult
+    ) {
+      var category =
+        getPriceCheckProductCategory(
+          productResult
+        );
+
+      var ownPrice =
+        Number(
+          productResult.golfkongenPrice
+        );
+
+      var normalizedCategory =
+        String(category || "")
+          .toLowerCase();
+
+      var className =
+        normalizedCategory === "kurv"
+          ? "basket"
+          : normalizedCategory === "tilbehor"
+            ? "small"
+            : normalizedCategory === "disc"
+              ? "disc"
+              : "all";
+
+      var applicable =
+        (ownShippingRules || [])
+          .filter(function (rule) {
+            return (
+              rule.is_active !== false &&
+              rule.is_verified === true &&
+              (
+                String(rule.shipping_class) ===
+                  className ||
+                String(rule.shipping_class) ===
+                  "all"
+              )
+            );
+          })
+          .sort(function (a, b) {
+            var aExact =
+              String(a.shipping_class) ===
+              className
+                ? 0
+                : 1;
+
+            var bExact =
+              String(b.shipping_class) ===
+              className
+                ? 0
+                : 1;
+
+            if (aExact !== bExact) {
+              return aExact - bExact;
+            }
+
+            return (
+              Number(a.priority || 100) -
+              Number(b.priority || 100)
+            );
+          });
+
+      if (
+        !applicable.length ||
+        !Number.isFinite(ownPrice)
+      ) {
+        return {
+          known: false,
+          shipping: null,
+          total: null,
+          ruleName: null,
+          methodName: null
+        };
+      }
+
+      var rule =
+        applicable[0];
+
+      var freeFrom =
+        rule.free_shipping_threshold_inc_vat ===
+          null ||
+        rule.free_shipping_threshold_inc_vat ===
+          undefined ||
+        rule.free_shipping_threshold_inc_vat ===
+          ""
+          ? null
+          : Number(
+              rule
+                .free_shipping_threshold_inc_vat
+            );
+
+      var fixed =
+        rule.fixed_shipping_inc_vat === null ||
+        rule.fixed_shipping_inc_vat === undefined ||
+        rule.fixed_shipping_inc_vat === ""
+          ? null
+          : Number(
+              rule.fixed_shipping_inc_vat
+            );
+
+      var shipping = null;
+
+      if (
+        Number.isFinite(freeFrom) &&
+        ownPrice >= freeFrom
+      ) {
+        shipping = 0;
+      } else if (
+        Number.isFinite(fixed)
+      ) {
+        shipping = fixed;
+      }
+
+      if (shipping === null) {
+        return {
+          known: false,
+          shipping: null,
+          total: null,
+          ruleName:
+            rule.rule_name || null,
+          methodName:
+            rule.method_name || null
+        };
+      }
+
+      return {
+        known: true,
+        shipping: shipping,
+        total:
+          ownPrice + shipping,
+        ruleName:
+          rule.rule_name || null,
+        methodName:
+          rule.method_name || null
+      };
+    }
+
     function resolvePriceCandidateShipping(
       productResult,
       candidate
@@ -7956,25 +8116,10 @@ function renderProductControlDashboard(parent, data) {
         });
       }
 
-      var productCategory = "disc";
-
-      var ownProduct =
-        (data.products || []).find(
-          function (product) {
-            return (
-              String(product.id) ===
-              String(productResult.productId)
-            );
-          }
+      var productCategory =
+        getPriceCheckProductCategory(
+          productResult
         );
-
-      if (
-        ownProduct &&
-        ownProduct.category
-      ) {
-        productCategory =
-          String(ownProduct.category);
-      }
 
       return sb.rpc(
         "internal_resolve_price_shipping",
@@ -8058,6 +8203,11 @@ function renderProductControlDashboard(parent, data) {
 
       parent.appendChild(box);
 
+      var ownShippingInfo =
+        resolveGolfKongenShipping(
+          productResult
+        );
+
       resolvePriceCandidateShipping(
         productResult,
         candidate
@@ -8079,140 +8229,253 @@ function renderProductControlDashboard(parent, data) {
               ? ownPrice - competitorPrice
               : null;
 
-          var line1 = el(
+          var ownPriceLine = el(
             "div",
-            "Produktpris: " +
+            "GolfKongen vare: " +
               formatPriceCheckMoney(
-                candidate.price
+                ownPrice
               )
           );
 
-          line1.style.fontWeight = "700";
-          box.appendChild(line1);
+          ownPriceLine.style.fontWeight =
+            "700";
 
-          var line2 = el(
-            "div",
-            shippingInfo.known
-              ? (
-                  "Konkurrentfrakt: " +
-                  formatPriceCheckMoney(
-                    shippingInfo.shipping
-                  )
-                )
-              : "Konkurrentfrakt: Ikke verifisert"
+          box.appendChild(
+            ownPriceLine
           );
 
-          box.appendChild(line2);
+          box.appendChild(
+            el(
+              "div",
+              ownShippingInfo.known
+                ? (
+                    "GolfKongen-frakt: " +
+                    formatPriceCheckMoney(
+                      ownShippingInfo.shipping
+                    ) +
+                    (
+                      ownShippingInfo.methodName
+                        ? (
+                            " (" +
+                            ownShippingInfo.methodName +
+                            ")"
+                          )
+                        : ""
+                    )
+                  )
+                : "GolfKongen-frakt: Ikke verifisert for denne varetypen"
+            )
+          );
+
+          if (
+            ownShippingInfo.known &&
+            ownShippingInfo.total !== null
+          ) {
+            box.appendChild(
+              el(
+                "div",
+                "GolfKongen levert: " +
+                  formatPriceCheckMoney(
+                    ownShippingInfo.total
+                  )
+              )
+            );
+          }
+
+          var divider =
+            el("div");
+
+          divider.style.height = "1px";
+          divider.style.background =
+            "#e5e7eb";
+          divider.style.margin =
+            "6px 0";
+
+          box.appendChild(divider);
+
+          var competitorPriceLine =
+            el(
+              "div",
+              "Konkurrent vare: " +
+                formatPriceCheckMoney(
+                  candidate.price
+                )
+            );
+
+          competitorPriceLine.style.fontWeight =
+            "700";
+
+          box.appendChild(
+            competitorPriceLine
+          );
+
+          box.appendChild(
+            el(
+              "div",
+              shippingInfo.known
+                ? (
+                    "Konkurrentfrakt: " +
+                    formatPriceCheckMoney(
+                      shippingInfo.shipping
+                    )
+                  )
+                : "Konkurrentfrakt: Ikke verifisert"
+            )
+          );
 
           if (
             shippingInfo.known &&
             shippingInfo.total !== null
           ) {
-            var line3 = el(
-              "div",
-              "Konkurrent levert: " +
-                formatPriceCheckMoney(
-                  shippingInfo.total
-                )
-            );
-
-            box.appendChild(line3);
-
-            if (
-              Number.isFinite(ownPrice)
-            ) {
-              var deliveredDifference =
-                ownPrice -
-                shippingInfo.total;
-
-              var comparisonText;
-
-              if (
-                Math.abs(deliveredDifference) <
-                0.005
-              ) {
-                comparisonText =
-                  "Med konkurrentfrakt: samme beløp";
-              } else if (
-                deliveredDifference < 0
-              ) {
-                comparisonText =
-                  "Med konkurrentfrakt: GolfKongen er " +
-                  formatPriceCheckMoney(
-                    Math.abs(
-                      deliveredDifference
-                    )
-                  ) +
-                  " lavere før eventuell GolfKongen-frakt";
-              } else {
-                comparisonText =
-                  "Med konkurrentfrakt: GolfKongen er " +
-                  formatPriceCheckMoney(
-                    deliveredDifference
-                  ) +
-                  " høyere før eventuell GolfKongen-frakt";
-              }
-
-              var line4 = el(
+            box.appendChild(
+              el(
                 "div",
-                comparisonText
-              );
-
-              line4.style.fontWeight = "700";
-              box.appendChild(line4);
-            }
+                "Konkurrent levert: " +
+                  formatPriceCheckMoney(
+                    shippingInfo.total
+                  )
+              )
+            );
           }
 
           if (
             productDifference !== null
           ) {
-            var line5 = el(
-              "div",
-              Math.abs(productDifference) < 0.005
-                ? "Vare mot vare: samme pris"
-                : productDifference < 0
+            var productLine =
+              el(
+                "div",
+                Math.abs(
+                  productDifference
+                ) < 0.005
+                  ? "Vare mot vare: samme pris"
+                  : productDifference < 0
+                    ? (
+                        "Vare mot vare: GolfKongen er " +
+                        formatPriceCheckMoney(
+                          Math.abs(
+                            productDifference
+                          )
+                        ) +
+                        " billigere"
+                      )
+                    : (
+                        "Vare mot vare: GolfKongen er " +
+                        formatPriceCheckMoney(
+                          productDifference
+                        ) +
+                        " dyrere"
+                      )
+              );
+
+            productLine.style.color =
+              "#475569";
+
+            box.appendChild(
+              productLine
+            );
+          }
+
+          if (
+            ownShippingInfo.known &&
+            ownShippingInfo.total !== null &&
+            shippingInfo.known &&
+            shippingInfo.total !== null
+          ) {
+            var deliveredDifference =
+              ownShippingInfo.total -
+              shippingInfo.total;
+
+            var deliveredText =
+              Math.abs(
+                deliveredDifference
+              ) < 0.005
+                ? "Levert mot levert: samme pris"
+                : deliveredDifference < 0
                   ? (
-                      "Vare mot vare: GolfKongen er " +
+                      "Levert mot levert: GolfKongen er " +
                       formatPriceCheckMoney(
-                        Math.abs(productDifference)
+                        Math.abs(
+                          deliveredDifference
+                        )
                       ) +
                       " billigere"
                     )
                   : (
-                      "Vare mot vare: GolfKongen er " +
+                      "Levert mot levert: GolfKongen er " +
                       formatPriceCheckMoney(
-                        productDifference
+                        deliveredDifference
                       ) +
                       " dyrere"
-                    )
-            );
+                    );
 
-            line5.style.color = "#475569";
-            box.appendChild(line5);
+            var deliveredLine =
+              el(
+                "div",
+                deliveredText
+              );
+
+            deliveredLine.style.fontWeight =
+              "700";
+
+            deliveredLine.style.marginTop =
+              "4px";
+
+            box.appendChild(
+              deliveredLine
+            );
           }
 
-          if (shippingInfo.ruleName) {
-            var ruleLine = el(
-              "div",
-              "Fraktregel: " +
-                shippingInfo.ruleName
-            );
+          if (
+            ownShippingInfo.ruleName
+          ) {
+            var ownRuleLine =
+              el(
+                "div",
+                "GolfKongen-regel: " +
+                  ownShippingInfo.ruleName
+              );
 
-            ruleLine.style.color = "#64748b";
-            ruleLine.style.fontSize = "12px";
-            box.appendChild(ruleLine);
+            ownRuleLine.style.color =
+              "#64748b";
+            ownRuleLine.style.fontSize =
+              "12px";
+
+            box.appendChild(
+              ownRuleLine
+            );
+          }
+
+          if (
+            shippingInfo.ruleName
+          ) {
+            var ruleLine =
+              el(
+                "div",
+                "Konkurrentregel: " +
+                  shippingInfo.ruleName
+              );
+
+            ruleLine.style.color =
+              "#64748b";
+            ruleLine.style.fontSize =
+              "12px";
+
+            box.appendChild(
+              ruleLine
+            );
           }
         })
         .catch(function (error) {
           box.textContent =
-            "Konkurrentfrakt: Kunne ikke beregnes (" +
+            "Frakt: Kunne ikke beregnes (" +
             (
               error.message ||
               String(error)
             ) +
             ")";
 
-          box.style.color = "#92400e";
+          box.style.color =
+            "#92400e";
         });
     }
 
@@ -8819,7 +9082,11 @@ function renderProductControlDashboard(parent, data) {
       if (!competitor) {
         return Promise.resolve({
           saved: false,
-          reason: "competitor_not_found"
+          reason: "competitor_not_found",
+          productId:
+            productResult.productId,
+          productName:
+            productResult.productName
         });
       }
 
@@ -8890,7 +9157,15 @@ function renderProductControlDashboard(parent, data) {
         }
 
         return {
-          saved: true
+          saved: true,
+          productId:
+            productResult.productId,
+          productName:
+            productResult.productName,
+          competitorName:
+            candidate.store ||
+            candidate.sourceLabel ||
+            null
         };
       });
     }
@@ -8920,7 +9195,11 @@ function renderProductControlDashboard(parent, data) {
                   Promise.resolve({
                     saved: false,
                     reason:
-                      "competitor_not_found"
+                      "competitor_not_found",
+                    productId:
+                      productResult.productId,
+                    productName:
+                      productResult.productName
                   })
                 );
 
@@ -8999,6 +9278,14 @@ function renderProductControlDashboard(parent, data) {
                   return {
                     saved: false,
                     reason: "save_error",
+                    productId:
+                      productResult.productId,
+                    productName:
+                      productResult.productName,
+                    competitorName:
+                      candidate.store ||
+                      candidate.sourceLabel ||
+                      null,
                     error:
                       error.message ||
                       String(error)
@@ -9012,13 +9299,49 @@ function renderProductControlDashboard(parent, data) {
       return Promise.all(tasks);
     }
 
+    var checkAllRetryFailedButton =
+      createButton(
+        "Kjør bare produkter som feilet"
+      );
+
+    checkAllRetryFailedButton.style.display =
+      "none";
+    checkAllRetryFailedButton.style.marginTop =
+      "8px";
+    checkAllRetryFailedButton.style.marginLeft =
+      "8px";
+
+    checkAllSection.body.appendChild(
+      checkAllRetryFailedButton
+    );
+
+    var checkAllFailureDetails =
+      el("div");
+
+    checkAllFailureDetails.className =
+      "sk-note";
+    checkAllFailureDetails.style.display =
+      "none";
+    checkAllFailureDetails.style.marginTop =
+      "10px";
+    checkAllFailureDetails.style.whiteSpace =
+      "pre-wrap";
+
+    checkAllSection.body.appendChild(
+      checkAllFailureDetails
+    );
+
+    var lastFailedPriceCheckIds = [];
+    var retryFailedRequested = false;
+
     function updateCheckAllProgress(
       total,
       checked,
       suggestions,
       saved,
       skipped,
-      errors,
+      workerErrors,
+      saveErrors,
       message
     ) {
       var percent =
@@ -9036,7 +9359,7 @@ function renderProductControlDashboard(parent, data) {
 
       checkAllProgress.textContent =
         message +
-        "\n\nProdukter kontrollert: " +
+        "\n\nProdukter behandlet: " +
         String(checked) +
         " av " +
         String(total) +
@@ -9046,9 +9369,100 @@ function renderProductControlDashboard(parent, data) {
         String(saved) +
         "\nHoppet over: " +
         String(skipped) +
-        "\nFeil: " +
-        String(errors);
+        "\nWorker-/produktfeil: " +
+        String(workerErrors) +
+        "\nLagringsfeil: " +
+        String(saveErrors) +
+        "\nFeil totalt: " +
+        String(
+          workerErrors +
+          saveErrors
+        );
     }
+
+    function renderCheckAllFailures(
+      failedMap
+    ) {
+      var rows =
+        Object.keys(
+          failedMap
+        ).map(function (key) {
+          return failedMap[key];
+        });
+
+      lastFailedPriceCheckIds =
+        rows.map(function (row) {
+          return String(row.id);
+        });
+
+      checkAllRetryFailedButton.style.display =
+        rows.length
+          ? "inline-block"
+          : "none";
+
+      if (!rows.length) {
+        checkAllFailureDetails.style.display =
+          "none";
+        checkAllFailureDetails.textContent =
+          "";
+        return;
+      }
+
+      checkAllFailureDetails.style.display =
+        "block";
+
+      var shown =
+        rows.slice(0, 40);
+
+      checkAllFailureDetails.textContent =
+        "Produkter som bør kjøres på nytt (" +
+        String(rows.length) +
+        "):\n" +
+        shown.map(function (row) {
+          return (
+            "• " +
+            (
+              row.name ||
+              ("Produkt " + row.id)
+            ) +
+            " – " +
+            row.type +
+            (
+              row.error
+                ? (
+                    ": " +
+                    row.error
+                  )
+                : ""
+            )
+          );
+        }).join("\n") +
+        (
+          rows.length > shown.length
+            ? (
+                "\n… og " +
+                String(
+                  rows.length -
+                  shown.length
+                ) +
+                " til."
+              )
+            : ""
+        );
+    }
+
+    checkAllRetryFailedButton.onclick =
+      function () {
+        if (
+          checkAllRunning ||
+          !lastFailedPriceCheckIds.length
+        ) {
+          return;
+        }
+
+        retryFailedRequested = true;
+        startCheckAllButton.click();
+      };
 
     stopCheckAllButton.onclick =
       function () {
@@ -9073,7 +9487,33 @@ function renderProductControlDashboard(parent, data) {
         var productsToCheck =
           relevantProducts.slice();
 
-        if (requestedLimit !== "all") {
+        if (
+          retryFailedRequested &&
+          lastFailedPriceCheckIds.length
+        ) {
+          var retrySet = {};
+
+          lastFailedPriceCheckIds.forEach(
+            function (id) {
+              retrySet[String(id)] = true;
+            }
+          );
+
+          productsToCheck =
+            productsToCheck.filter(
+              function (product) {
+                return (
+                  retrySet[
+                    String(product.id)
+                  ] === true
+                );
+              }
+            );
+
+          retryFailedRequested = false;
+        } else if (
+          requestedLimit !== "all"
+        ) {
           productsToCheck =
             productsToCheck.slice(
               0,
@@ -9088,11 +9528,14 @@ function renderProductControlDashboard(parent, data) {
           return;
         }
 
-        var confirmed = window.confirm(
-          "Starte prissjekk av " +
-          String(productsToCheck.length) +
-          " produkter?\n\nSikre treff lagres som forslag, men blir ikke godkjent automatisk."
-        );
+        var confirmed =
+          window.confirm(
+            "Starte prissjekk av " +
+            String(
+              productsToCheck.length
+            ) +
+            " produkter?\n\nSikre treff lagres som forslag, men blir ikke godkjent automatisk."
+          );
 
         if (!confirmed) {
           return;
@@ -9104,7 +9547,11 @@ function renderProductControlDashboard(parent, data) {
         startCheckAllButton.disabled =
           true;
 
-        checkAllLimit.disabled = true;
+        checkAllLimit.disabled =
+          true;
+
+        checkAllRetryFailedButton.disabled =
+          true;
 
         stopCheckAllButton.disabled =
           false;
@@ -9124,6 +9571,9 @@ function renderProductControlDashboard(parent, data) {
         checkAllBarInner.style.width =
           "0%";
 
+        checkAllFailureDetails.style.display =
+          "none";
+
         var total =
           productsToCheck.length;
 
@@ -9131,20 +9581,74 @@ function renderProductControlDashboard(parent, data) {
         var suggestions = 0;
         var saved = 0;
         var skipped = 0;
-        var errors = 0;
+        var workerErrors = 0;
+        var saveErrors = 0;
         var batchIndex = 0;
+
+        var failedMap = {};
+
+        function markFailed(
+          productId,
+          productName,
+          type,
+          error
+        ) {
+          var id =
+            String(
+              productId || ""
+            );
+
+          if (!id) {
+            return;
+          }
+
+          if (!failedMap[id]) {
+            failedMap[id] = {
+              id: id,
+              name:
+                productName ||
+                ("Produkt " + id),
+              type: type,
+              error: error || ""
+            };
+          } else {
+            failedMap[id].type =
+              failedMap[id].type +
+              " + " +
+              type;
+
+            if (error) {
+              failedMap[id].error =
+                (
+                  failedMap[id].error
+                    ? (
+                        failedMap[id].error +
+                        " | "
+                      )
+                    : ""
+                ) +
+                error;
+            }
+          }
+        }
 
         var batches = [];
 
+        /*
+         * To produkter per Worker-kall.
+         * Med fem kilder + WeAre detaljsidekontroll gir dette
+         * god margin mot Cloudflare subrequest-grenser.
+         */
         for (
           var index = 0;
-          index < productsToCheck.length;
-          index += 5
+          index <
+            productsToCheck.length;
+          index += 2
         ) {
           batches.push(
             productsToCheck.slice(
               index,
-              index + 5
+              index + 2
             )
           );
         }
@@ -9152,7 +9656,8 @@ function renderProductControlDashboard(parent, data) {
         function runNextBatch() {
           if (
             checkAllStopRequested ||
-            batchIndex >= batches.length
+            batchIndex >=
+              batches.length
           ) {
             return Promise.resolve();
           }
@@ -9168,11 +9673,14 @@ function renderProductControlDashboard(parent, data) {
             suggestions,
             saved,
             skipped,
-            errors,
+            workerErrors,
+            saveErrors,
             "Kjører pulje " +
               String(batchIndex) +
               " av " +
-              String(batches.length) +
+              String(
+                batches.length
+              ) +
               "..."
           );
 
@@ -9180,54 +9688,154 @@ function renderProductControlDashboard(parent, data) {
             mode: "selected",
 
             product_ids:
-              batch.map(function (product) {
-                return product.id;
-              })
+              batch.map(
+                function (product) {
+                  return product.id;
+                }
+              )
           })
-            .then(function (workerResult) {
-              checked +=
-                Number(
-                  workerResult.checkedProducts ||
-                  0
-                );
+            .then(
+              function (workerResult) {
+                var productResults =
+                  workerResult.productResults ||
+                  [];
 
-              suggestions +=
-                Number(
-                  workerResult.totalSuggestions ||
-                  0
-                );
+                var resultIds = {};
 
-              return saveWorkerBatchSuggestions(
-                workerResult
-              ).then(function (saveResults) {
-                saveResults.forEach(
-                  function (saveResult) {
-                    if (saveResult.saved) {
-                      saved += 1;
-                    } else if (
-                      saveResult.reason ===
-                      "competitor_not_found"
+                productResults.forEach(
+                  function (
+                    productResult
+                  ) {
+                    var id =
+                      String(
+                        productResult.productId ||
+                        ""
+                      );
+
+                    if (id) {
+                      resultIds[id] = true;
+                    }
+
+                    if (
+                      productResult.error
                     ) {
-                      skipped += 1;
-                    } else {
-                      errors += 1;
+                      workerErrors += 1;
+
+                      markFailed(
+                        productResult.productId,
+                        productResult.productName,
+                        "Worker",
+                        productResult.error
+                      );
                     }
                   }
                 );
 
-                if (
+                /*
+                 * Dersom Worker stoppet tidlig/rate-limit eller av annen
+                 * grunn ikke returnerte et produkt i puljen, skal produktet
+                 * stå i retry-listen i stedet for å forsvinne stille.
+                 */
+                batch.forEach(
+                  function (product) {
+                    if (
+                      !resultIds[
+                        String(product.id)
+                      ]
+                    ) {
+                      workerErrors += 1;
+
+                      markFailed(
+                        product.id,
+                        product.name,
+                        "Ikke behandlet",
+                        "Worker returnerte ikke produktet i denne puljen."
+                      );
+                    }
+                  }
+                );
+
+                checked += batch.length;
+
+                suggestions +=
+                  Number(
+                    workerResult.totalSuggestions ||
+                    0
+                  );
+
+                return saveWorkerBatchSuggestions(
                   workerResult
-                    .stoppedBecauseRateLimited
-                ) {
-                  checkAllStopRequested =
-                    true;
-                }
-              });
-            })
-            .catch(function () {
-              errors += batch.length;
-              checked += batch.length;
-            })
+                ).then(
+                  function (saveResults) {
+                    saveResults.forEach(
+                      function (
+                        saveResult
+                      ) {
+                        if (
+                          saveResult.saved
+                        ) {
+                          saved += 1;
+                        } else if (
+                          saveResult.reason ===
+                            "competitor_not_found"
+                        ) {
+                          skipped += 1;
+                        } else {
+                          saveErrors += 1;
+
+                          markFailed(
+                            saveResult.productId,
+                            saveResult.productName,
+                            "Lagring" +
+                              (
+                                saveResult.competitorName
+                                  ? (
+                                      " (" +
+                                      saveResult.competitorName +
+                                      ")"
+                                    )
+                                  : ""
+                              ),
+                            saveResult.error ||
+                              "Ukjent lagringsfeil"
+                          );
+                        }
+                      }
+                    );
+
+                    if (
+                      workerResult
+                        .stoppedBecauseRateLimited
+                    ) {
+                      checkAllStopRequested =
+                        true;
+                    }
+                  }
+                );
+              }
+            )
+            .catch(
+              function (error) {
+                checked += batch.length;
+
+                batch.forEach(
+                  function (product) {
+                    workerErrors += 1;
+
+                    markFailed(
+                      product.id,
+                      product.name,
+                      "Puljefeil",
+                      error &&
+                      (
+                        error.message ||
+                        String(error)
+                      )
+                    );
+                  }
+                );
+              }
+            )
             .then(function () {
               updateCheckAllProgress(
                 total,
@@ -9235,24 +9843,30 @@ function renderProductControlDashboard(parent, data) {
                 suggestions,
                 saved,
                 skipped,
-                errors,
+                workerErrors,
+                saveErrors,
                 checkAllStopRequested
                   ? "Stopper etter fullført pulje..."
-                  : "Pulje " +
-                    String(batchIndex) +
-                    " er ferdig."
+                  : (
+                      "Pulje " +
+                      String(batchIndex) +
+                      " er ferdig."
+                    )
               );
 
               if (
                 checkAllStopRequested ||
-                batchIndex >= batches.length
+                batchIndex >=
+                  batches.length
               ) {
                 return;
               }
 
               return waitPriceCheck(
-                1500
-              ).then(runNextBatch);
+                1700
+              ).then(
+                runNextBatch
+              );
             });
         }
 
@@ -9260,7 +9874,8 @@ function renderProductControlDashboard(parent, data) {
           .then(function () {
             var completed =
               !checkAllStopRequested &&
-              batchIndex >= batches.length;
+              batchIndex >=
+                batches.length;
 
             updateCheckAllProgress(
               total,
@@ -9268,10 +9883,15 @@ function renderProductControlDashboard(parent, data) {
               suggestions,
               saved,
               skipped,
-              errors,
+              workerErrors,
+              saveErrors,
               completed
                 ? "Prissjekken er ferdig."
                 : "Prissjekken ble stoppet."
+            );
+
+            renderCheckAllFailures(
+              failedMap
             );
 
             checkAllRefreshButton.style.display =
@@ -9286,6 +9906,9 @@ function renderProductControlDashboard(parent, data) {
               false;
 
             checkAllLimit.disabled =
+              false;
+
+            checkAllRetryFailedButton.disabled =
               false;
 
             stopCheckAllButton.disabled =
@@ -9303,6 +9926,9 @@ function renderProductControlDashboard(parent, data) {
 var competitors = data.priceCompetitors || [];
 
     var shippingRules = data.priceShippingRules || [];
+
+    var ownShippingRules =
+      data.priceOwnShippingRules || [];
 
     var priceSuggestions =
       data.priceSuggestions || [];
@@ -12972,6 +13598,12 @@ var competitorSection = createCollapsibleSection(
       .from("internal_price_shipping_rules")
       .select("*")
       .order("priority", { ascending: true })
+      .order("rule_name", { ascending: true }),
+
+    sb
+      .from("internal_price_own_shipping_rules")
+      .select("*")
+      .order("priority", { ascending: true })
       .order("rule_name", { ascending: true })
 
 
@@ -13070,6 +13702,14 @@ var competitorSection = createCollapsibleSection(
       return;
     }
 
+    if (results[17].error) {
+      renderError(
+        "Kunne ikke hente GolfKongen-frakt: " +
+          results[17].error.message
+      );
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -13087,7 +13727,8 @@ var competitorSection = createCollapsibleSection(
       priceSuggestions: results[13].data || [],
       priceReviewReasons: results[14].data || [],
       priceFollowUps: results[15].data || [],
-      priceShippingRules: results[16].data || []
+      priceShippingRules: results[16].data || [],
+      priceOwnShippingRules: results[17].data || []
     });
   });
 } 
