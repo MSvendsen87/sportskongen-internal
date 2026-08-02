@@ -7104,7 +7104,50 @@ function renderProductControlDashboard(parent, data) {
         });
     }
 
-    function callPriceCheckWorker(payload) {
+    function isRetryablePriceCheckError(
+      error
+    ) {
+      var message =
+        String(
+          error &&
+          (
+            error.message ||
+            error
+          ) ||
+          ""
+        ).toLowerCase();
+
+      return (
+        message.indexOf(
+          "failed to fetch"
+        ) !== -1 ||
+        message.indexOf(
+          "networkerror"
+        ) !== -1 ||
+        message.indexOf(
+          "load failed"
+        ) !== -1 ||
+        message.indexOf(
+          "http 429"
+        ) !== -1 ||
+        message.indexOf(
+          "http 500"
+        ) !== -1 ||
+        message.indexOf(
+          "http 502"
+        ) !== -1 ||
+        message.indexOf(
+          "http 503"
+        ) !== -1 ||
+        message.indexOf(
+          "http 504"
+        ) !== -1
+      );
+    }
+
+    function callPriceCheckWorkerOnce(
+      payload
+    ) {
       return getPriceCheckToken()
         .then(function (token) {
           return fetch(
@@ -7117,25 +7160,103 @@ function renderProductControlDashboard(parent, data) {
                 "Content-Type":
                   "application/json"
               },
-              body: JSON.stringify(payload)
+              body:
+                JSON.stringify(
+                  payload
+                )
             }
           );
         })
         .then(function (response) {
           return response
-            .json()
-            .then(function (responseData) {
+            .text()
+            .then(function (responseText) {
+              var responseData = null;
+
+              try {
+                responseData =
+                  responseText
+                    ? JSON.parse(
+                        responseText
+                      )
+                    : {};
+              } catch (_) {
+                var invalidError =
+                  new Error(
+                    "Prissjekken ga ugyldig svar (HTTP " +
+                    String(
+                      response.status
+                    ) +
+                    ")."
+                  );
+
+                invalidError.retryable =
+                  response.status >= 500;
+
+                throw invalidError;
+              }
+
               if (!response.ok) {
-                throw new Error(
-                  responseData.error ||
-                  "Prissjekken svarte HTTP " +
-                    response.status
-                );
+                var httpError =
+                  new Error(
+                    responseData.error ||
+                    "Prissjekken svarte HTTP " +
+                      response.status
+                  );
+
+                httpError.retryable =
+                  response.status === 429 ||
+                  response.status >= 500;
+
+                throw httpError;
               }
 
               return responseData;
             });
         });
+    }
+
+    function callPriceCheckWorker(
+      payload,
+      attempt
+    ) {
+      var currentAttempt =
+        Number(attempt || 1);
+
+      return callPriceCheckWorkerOnce(
+        payload
+      ).catch(function (error) {
+        var retryable =
+          error &&
+          error.retryable === true
+            ? true
+            : isRetryablePriceCheckError(
+                error
+              );
+
+        if (
+          retryable &&
+          currentAttempt < 4
+        ) {
+          var delay =
+            currentAttempt === 1
+              ? 3500
+              : currentAttempt === 2
+                ? 7000
+                : 14000;
+
+          return waitPriceCheck(
+            delay
+          ).then(function () {
+            return callPriceCheckWorker(
+              payload,
+              currentAttempt + 1
+            );
+          });
+        }
+
+        throw error;
+      });
     }
 
     function renderPriceCheckWorkerResult(result) {
@@ -9334,6 +9455,45 @@ function renderProductControlDashboard(parent, data) {
     var lastFailedPriceCheckIds = [];
     var retryFailedRequested = false;
 
+    try {
+      var storedFailedIds =
+        JSON.parse(
+          localStorage.getItem(
+            "gk_pricecheck_failed_ids_v1"
+          ) ||
+          "[]"
+        );
+
+      if (
+        Array.isArray(
+          storedFailedIds
+        )
+      ) {
+        lastFailedPriceCheckIds =
+          storedFailedIds.map(
+            function (id) {
+              return String(id);
+            }
+          );
+      }
+    } catch (_) {
+      lastFailedPriceCheckIds = [];
+    }
+
+    if (
+      lastFailedPriceCheckIds.length
+    ) {
+      checkAllRetryFailedButton.style.display =
+        "inline-block";
+
+      checkAllRetryFailedButton.textContent =
+        "Kjør lagrede feilprodukter (" +
+        String(
+          lastFailedPriceCheckIds.length
+        ) +
+        ")";
+    }
+
     function updateCheckAllProgress(
       total,
       checked,
@@ -9395,12 +9555,31 @@ function renderProductControlDashboard(parent, data) {
           return String(row.id);
         });
 
+      try {
+        localStorage.setItem(
+          "gk_pricecheck_failed_ids_v1",
+          JSON.stringify(
+            lastFailedPriceCheckIds
+          )
+        );
+      } catch (_) {
+        // Lokal lagring er bare en ekstra sikkerhet.
+      }
+
       checkAllRetryFailedButton.style.display =
         rows.length
           ? "inline-block"
           : "none";
 
       if (!rows.length) {
+        try {
+          localStorage.removeItem(
+            "gk_pricecheck_failed_ids_v1"
+          );
+        } catch (_) {
+          // Ingen handling nødvendig.
+        }
+
         checkAllFailureDetails.style.display =
           "none";
         checkAllFailureDetails.textContent =
@@ -9635,20 +9814,20 @@ function renderProductControlDashboard(parent, data) {
         var batches = [];
 
         /*
-         * To produkter per Worker-kall.
-         * Med fem kilder + WeAre detaljsidekontroll gir dette
-         * god margin mot Cloudflare subrequest-grenser.
+         * Ett produkt per Worker-kall.
+         * Dette isolerer feil til ett produkt, gir bedre margin
+         * mot Cloudflare-grenser og gjør automatisk retry tryggere.
          */
         for (
           var index = 0;
           index <
             productsToCheck.length;
-          index += 2
+          index += 1
         ) {
           batches.push(
             productsToCheck.slice(
               index,
-              index + 2
+              index + 1
             )
           );
         }
@@ -9863,7 +10042,7 @@ function renderProductControlDashboard(parent, data) {
               }
 
               return waitPriceCheck(
-                1700
+                2500
               ).then(
                 runNextBatch
               );
