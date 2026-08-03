@@ -7259,6 +7259,378 @@ function renderProductControlDashboard(parent, data) {
       });
     }
 
+    var PRICE_CHECK_SOURCE_FALLBACKS = [
+      {
+        key: "discinstock",
+        label: "DiscInStock"
+      },
+      {
+        key: "krokhol",
+        label: "Krokhol"
+      },
+      {
+        key: "dgshop",
+        label: "DGshop"
+      },
+      {
+        key: "frisbeebutikken",
+        label: "Frisbeebutikken"
+      },
+      {
+        key: "wearediscgolf",
+        label: "WeAreDiscGolf"
+      }
+    ];
+
+    function clonePriceCheckPayload(
+      payload
+    ) {
+      return JSON.parse(
+        JSON.stringify(
+          payload || {}
+        )
+      );
+    }
+
+    function callPriceCheckSourceFallback(
+      payload,
+      sourceDefinition,
+      attempt
+    ) {
+      var currentAttempt =
+        Number(attempt || 1);
+
+      var sourcePayload =
+        clonePriceCheckPayload(
+          payload
+        );
+
+      sourcePayload.sources = [
+        sourceDefinition.key
+      ];
+
+      return callPriceCheckWorkerOnce(
+        sourcePayload
+      ).catch(function (error) {
+        var retryable =
+          error &&
+          error.retryable === true
+            ? true
+            : isRetryablePriceCheckError(
+                error
+              );
+
+        if (
+          retryable &&
+          currentAttempt < 2
+        ) {
+          return waitPriceCheck(
+            3000
+          ).then(function () {
+            return callPriceCheckSourceFallback(
+              payload,
+              sourceDefinition,
+              currentAttempt + 1
+            );
+          });
+        }
+
+        throw error;
+      });
+    }
+
+    function mergePriceCheckSourceResults(
+      payload,
+      sourceRuns,
+      originalError
+    ) {
+      var mergedProductResult = null;
+      var mergedCandidates = [];
+      var mergedSourceStatus = {};
+      var mergedSuggestions = [];
+      var sourceFailures = [];
+      var generatedAt = null;
+      var version = null;
+      var rateLimited = false;
+      var successfulSources = 0;
+
+      sourceRuns.forEach(
+        function (sourceRun) {
+          if (!sourceRun.ok) {
+            sourceFailures.push({
+              key:
+                sourceRun.source.key,
+              label:
+                sourceRun.source.label,
+              error:
+                sourceRun.error
+            });
+
+            mergedSourceStatus[
+              sourceRun.source.key
+            ] = {
+              ok: false,
+              error:
+                sourceRun.error
+            };
+
+            return;
+          }
+
+          successfulSources += 1;
+
+          var result =
+            sourceRun.result || {};
+
+          version =
+            version ||
+            result.version ||
+            null;
+
+          generatedAt =
+            result.generatedAt ||
+            generatedAt;
+
+          if (
+            result.stoppedBecauseRateLimited
+          ) {
+            rateLimited = true;
+          }
+
+          var productResult =
+            result.productResults &&
+            result.productResults[0];
+
+          if (productResult) {
+            if (!mergedProductResult) {
+              mergedProductResult =
+                {
+                  productId:
+                    productResult.productId,
+                  productName:
+                    productResult.productName,
+                  productBrand:
+                    productResult.productBrand,
+                  golfkongenPrice:
+                    productResult.golfkongenPrice,
+                  stockQuantity:
+                    productResult.stockQuantity,
+                  candidates: [],
+                  sourceStatus: {}
+                };
+            }
+
+            (
+              productResult.candidates ||
+              []
+            ).forEach(
+              function (candidate) {
+                mergedCandidates.push(
+                  candidate
+                );
+              }
+            );
+
+            Object.keys(
+              productResult.sourceStatus ||
+              {}
+            ).forEach(
+              function (sourceKey) {
+                mergedSourceStatus[
+                  sourceKey
+                ] =
+                  productResult
+                    .sourceStatus[
+                      sourceKey
+                    ];
+              }
+            );
+          }
+
+          (
+            result.suggestions ||
+            []
+          ).forEach(
+            function (suggestion) {
+              mergedSuggestions.push(
+                suggestion
+              );
+            }
+          );
+        }
+      );
+
+      if (!mergedProductResult) {
+        var noResultError =
+          new Error(
+            "Alle priskilder feilet også i kildevis fallback."
+          );
+
+        noResultError.sourceFailures =
+          sourceFailures;
+
+        throw noResultError;
+      }
+
+      mergedProductResult.candidates =
+        mergedCandidates;
+
+      mergedProductResult.sourceStatus =
+        mergedSourceStatus;
+
+      mergedProductResult.fallbackUsed =
+        true;
+
+      mergedProductResult.fallbackSourceFailures =
+        sourceFailures;
+
+      /*
+       * Produktet er delvis kontrollert dersom minst én kilde
+       * fortsatt ikke lot seg kjøre. Forslag fra kildene som
+       * fungerte beholdes og kan lagres, men produktet blir
+       * stående i retry-listen til alle kilder er kontrollert.
+       */
+      if (sourceFailures.length) {
+        mergedProductResult.error =
+          "Kildevis fallback: " +
+          sourceFailures.map(
+            function (failure) {
+              return (
+                failure.label +
+                ": " +
+                failure.error
+              );
+            }
+          ).join(" | ");
+      }
+
+      return {
+        ok: true,
+        version:
+          version || "fallback",
+        mode:
+          payload.mode || "selected",
+        requestedProducts: 1,
+        checkedProducts: 1,
+        totalSuggestions:
+          mergedCandidates.length,
+        stoppedBecauseRateLimited:
+          rateLimited,
+        fallbackUsed: true,
+        fallbackOriginalError:
+          originalError &&
+          (
+            originalError.message ||
+            String(originalError)
+          ),
+        fallbackSuccessfulSources:
+          successfulSources,
+        fallbackSourceFailures:
+          sourceFailures,
+        productResults: [
+          mergedProductResult
+        ],
+        suggestions:
+          mergedSuggestions,
+        generatedAt:
+          generatedAt ||
+          new Date().toISOString()
+      };
+    }
+
+    function callPriceCheckWorkerResilient(
+      payload
+    ) {
+      return callPriceCheckWorker(
+        payload
+      ).catch(function (originalError) {
+        /*
+         * Bare fall tilbake kilde-for-kilde når vi sjekker ett
+         * produkt. Fullkjøringen sender nå alltid ett produkt
+         * per kall.
+         */
+        var productCount =
+          Array.isArray(
+            payload.product_ids
+          )
+            ? payload.product_ids.length
+            : (
+                payload.product_id
+                  ? 1
+                  : 0
+              );
+
+        if (productCount !== 1) {
+          throw originalError;
+        }
+
+        var sourceRuns = [];
+        var chain =
+          Promise.resolve();
+
+        PRICE_CHECK_SOURCE_FALLBACKS
+          .forEach(
+            function (
+              sourceDefinition
+            ) {
+              chain =
+                chain.then(
+                  function () {
+                    return callPriceCheckSourceFallback(
+                      payload,
+                      sourceDefinition,
+                      1
+                    )
+                      .then(
+                        function (result) {
+                          sourceRuns.push({
+                            ok: true,
+                            source:
+                              sourceDefinition,
+                            result:
+                              result
+                          });
+                        }
+                      )
+                      .catch(
+                        function (error) {
+                          sourceRuns.push({
+                            ok: false,
+                            source:
+                              sourceDefinition,
+                            error:
+                              error &&
+                              (
+                                error.message ||
+                                String(error)
+                              )
+                          });
+                        }
+                      )
+                      .then(
+                        function () {
+                          return waitPriceCheck(
+                            900
+                          );
+                        }
+                      );
+                  }
+                );
+            }
+          );
+
+        return chain.then(
+          function () {
+            return mergePriceCheckSourceResults(
+              payload,
+              sourceRuns,
+              originalError
+            );
+          }
+        );
+      });
+    }
+
     function renderPriceCheckWorkerResult(result) {
       clear(workerResult);
       workerResult.style.display = "block";
@@ -7651,7 +8023,7 @@ function renderProductControlDashboard(parent, data) {
       workerResult.style.display = "none";
       clear(workerResult);
 
-      callPriceCheckWorker({
+      callPriceCheckWorkerResilient({
         mode: "single",
         product_id: productId
       })
@@ -8987,7 +9359,7 @@ function renderProductControlDashboard(parent, data) {
           "none";
         clear(batchResults);
 
-        callPriceCheckWorker({
+        callPriceCheckWorkerResilient({
           mode: "selected",
           product_ids: ids
         })
@@ -9863,7 +10235,7 @@ function renderProductControlDashboard(parent, data) {
               "..."
           );
 
-          return callPriceCheckWorker({
+          return callPriceCheckWorkerResilient({
             mode: "selected",
 
             product_ids:
