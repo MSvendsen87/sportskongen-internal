@@ -867,6 +867,21 @@
       "#sk-internal-root .sk-recommendation-down{color:#b91c1c;font-weight:900;}" +
       "#sk-internal-root .sk-recommendation-up{color:#166534;font-weight:900;}" +
       "#sk-internal-root .sk-recommendation-stay{color:#475569;font-weight:900;}" +
+      "#sk-internal-root .sk-price-history-chart{width:100%;min-height:300px;border:1px solid #e5e7eb;border-radius:11px;background:#fff;padding:8px;overflow:hidden;}" +
+      "#sk-internal-root .sk-price-history-chart svg{display:block;width:100%;height:auto;min-height:260px;}" +
+      "#sk-internal-root .sk-price-history-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:#475569;}" +
+      "#sk-internal-root .sk-price-history-legend span{display:inline-flex;align-items:center;gap:5px;}" +
+      "#sk-internal-root .sk-price-history-dot{display:inline-block;width:9px;height:9px;border-radius:50%;}" +
+      "#sk-internal-root .sk-price-editor{display:grid;gap:10px;margin-top:10px;}" +
+      "#sk-internal-root .sk-price-editor-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end;}" +
+      "#sk-internal-root .sk-price-editor-toolbar input,#sk-internal-root .sk-price-editor-toolbar select{padding:8px 9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;}" +
+      "#sk-internal-root .sk-price-variant-list{display:grid;gap:7px;}" +
+      "#sk-internal-root .sk-price-variant-row{display:grid;grid-template-columns:32px minmax(180px,1fr) 105px 120px;gap:8px;align-items:center;padding:8px 9px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;}" +
+      "#sk-internal-root .sk-price-variant-row input[type='number']{width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:8px;}" +
+      "#sk-internal-root .sk-price-preview{padding:10px 11px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;font-size:12px;line-height:1.55;}" +
+      "#sk-internal-root .sk-strategy-dashboard-status{font-weight:900;white-space:nowrap;}" +
+      "#sk-internal-root .sk-strategy-ok{color:#166534;}" +
+      "#sk-internal-root .sk-strategy-needs{color:#b91c1c;}" +
       "#sk-internal-root .sk-analysis-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:6px;border-radius:12px;background:#eef2f7;border:1px solid #dbe3ec;}" +
       "#sk-internal-root .sk-analysis-tab{appearance:none;padding:8px 10px!important;border:1px solid transparent!important;border-radius:9px!important;background:transparent!important;color:#475569!important;font-size:12px!important;font-weight:800!important;}" +
       "#sk-internal-root .sk-analysis-tab.sk-active{background:#111827!important;color:#fff!important;}" +
@@ -920,6 +935,8 @@
       "  #sk-internal-root .sk-market-summary{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-strategy-choice{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-rank-row{grid-template-columns:26px minmax(120px,1fr) 80px;}" +
+      "  #sk-internal-root .sk-price-variant-row{grid-template-columns:28px minmax(120px,1fr) 90px;}" +
+      "  #sk-internal-root .sk-price-variant-row .sk-price-variant-current{display:none;}" +
       "  #sk-internal-root .sk-market-rank-shipping{display:none;}" +
       "  #sk-internal-root .sk-content{padding:10px;}" +
       "  #sk-internal-root .sk-userbar{padding:9px 12px;}" +
@@ -8617,6 +8634,970 @@ function renderProductControlDashboard(parent, data) {
         : null;
     }
 
+    function priceProductById(
+      productId
+    ) {
+      return (
+        (data.products || [])
+          .find(
+            function (product) {
+              return (
+                String(
+                  product.id
+                ) ===
+                String(
+                  productId
+                )
+              );
+            }
+          ) ||
+        null
+      );
+    }
+
+    function strategyLabel(
+      strategy
+    ) {
+      if (
+        strategy === "cheapest"
+      ) {
+        return "Billigst";
+      }
+
+      if (
+        strategy ===
+          "most_expensive"
+      ) {
+        return "Dyrest";
+      }
+
+      if (
+        strategy === "middle"
+      ) {
+        return "Midten";
+      }
+
+      return "Ikke valgt";
+    }
+
+    function strategyIsOnTarget(
+      analysis,
+      strategy
+    ) {
+      if (
+        !analysis ||
+        analysis.min === null ||
+        analysis.ownPrice === null ||
+        !strategy
+      ) {
+        return false;
+      }
+
+      if (
+        strategy === "cheapest"
+      ) {
+        return (
+          analysis.ownPrice <=
+          analysis.min
+        );
+      }
+
+      if (
+        strategy ===
+          "most_expensive"
+      ) {
+        return (
+          analysis.ownPrice >=
+          analysis.max
+        );
+      }
+
+      return (
+        analysis.ownPrice ===
+        analysis.median
+      );
+    }
+
+    function callQuickbutikAdminWorker(
+      endpoint,
+      options
+    ) {
+      return getPriceCheckToken()
+        .then(
+          function (token) {
+            var fetchOptions =
+              Object.assign(
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization:
+                      "Bearer " +
+                      token
+                  }
+                },
+                options || {}
+              );
+
+            fetchOptions.headers =
+              Object.assign(
+                {},
+                fetchOptions.headers ||
+                  {},
+                {
+                  Authorization:
+                    "Bearer " +
+                    token
+                }
+              );
+
+            return fetch(
+              "https://sportskongen-quickbutik-sync.post-cd6.workers.dev" +
+                endpoint,
+              fetchOptions
+            );
+          }
+        )
+        .then(
+          function (response) {
+            return response
+              .text()
+              .then(
+                function (text) {
+                  var payload = {};
+
+                  try {
+                    payload =
+                      text
+                        ? JSON.parse(
+                            text
+                          )
+                        : {};
+                  } catch (_) {
+                    payload = {
+                      error:
+                        text ||
+                        "Ugyldig svar"
+                    };
+                  }
+
+                  if (
+                    !response.ok ||
+                    payload.ok === false
+                  ) {
+                    throw new Error(
+                      skReadableError(
+                        payload.error ||
+                        payload
+                          .quickbutik_response ||
+                        payload
+                      )
+                    );
+                  }
+
+                  return payload;
+                }
+              );
+          }
+        );
+    }
+
+    function loadProductPriceEditorData(
+      productId
+    ) {
+      return callQuickbutikAdminWorker(
+        "/product-price-editor-data" +
+          "?product_id=" +
+          encodeURIComponent(
+            productId
+          )
+      );
+    }
+
+    function previewProductPriceChange(
+      payload
+    ) {
+      return callQuickbutikAdminWorker(
+        "/preview-product-price-change",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body:
+            JSON.stringify(
+              payload
+            )
+        }
+      );
+    }
+
+    function applyProductPriceChange(
+      payload
+    ) {
+      var applyPayload =
+        Object.assign(
+          {},
+          payload,
+          {
+            confirm_text:
+              "OPPDATER PRIS"
+          }
+        );
+
+      return callQuickbutikAdminWorker(
+        "/apply-product-price-change",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body:
+            JSON.stringify(
+              applyPayload
+            )
+        }
+      );
+    }
+
+    function loadProductPriceHistory(
+      productId,
+      days
+    ) {
+      var query =
+        sb
+          .from(
+            "internal_price_history_view"
+          )
+          .select("*")
+          .eq(
+            "product_id",
+            productId
+          )
+          .order(
+            "checked_at",
+            {
+              ascending: true
+            }
+          );
+
+      var dayCount =
+        Number(days || 0);
+
+      if (
+        Number.isFinite(dayCount) &&
+        dayCount > 0
+      ) {
+        var fromDate =
+          new Date(
+            Date.now() -
+            dayCount *
+              24 *
+              60 *
+              60 *
+              1000
+          );
+
+        query =
+          query.gte(
+            "checked_at",
+            fromDate
+              .toISOString()
+          );
+      }
+
+      return query
+        .limit(3000)
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            return (
+              result.data || []
+            );
+          }
+        );
+    }
+
+    function renderPriceHistoryChart(
+      host,
+      historyRows
+    ) {
+      clear(host);
+
+      var rows =
+        (historyRows || [])
+          .filter(
+            function (item) {
+              return (
+                numberOrNullLocal(
+                  item.price_inc_vat
+                ) !== null &&
+                item.checked_at
+              );
+            }
+          );
+
+      if (!rows.length) {
+        var empty = el(
+          "div",
+          "Ingen prishistorikk i valgt periode."
+        );
+
+        empty.className =
+          "sk-note";
+
+        host.appendChild(empty);
+        return;
+      }
+
+      var bySeries = {};
+
+      rows.forEach(
+        function (item) {
+          var key =
+            String(
+              item.series_key ||
+              item.series_label ||
+              "ukjent"
+            );
+
+          if (!bySeries[key]) {
+            bySeries[key] = {
+              key: key,
+              label:
+                item.series_label ||
+                key,
+              sourceType:
+                item.source_type ||
+                "competitor",
+              points: []
+            };
+          }
+
+          bySeries[key]
+            .points.push({
+              time:
+                new Date(
+                  item.checked_at
+                ).getTime(),
+              price:
+                Number(
+                  item.price_inc_vat
+                )
+            });
+        }
+      );
+
+      var series =
+        Object.keys(bySeries)
+          .map(
+            function (key) {
+              var entry =
+                bySeries[key];
+
+              entry.points.sort(
+                function (a, b) {
+                  return (
+                    a.time -
+                    b.time
+                  );
+                }
+              );
+
+              return entry;
+            }
+          )
+          .sort(
+            function (a, b) {
+              if (
+                a.sourceType ===
+                  "own" &&
+                b.sourceType !==
+                  "own"
+              ) {
+                return -1;
+              }
+
+              if (
+                b.sourceType ===
+                  "own" &&
+                a.sourceType !==
+                  "own"
+              ) {
+                return 1;
+              }
+
+              return a.label
+                .localeCompare(
+                  b.label,
+                  "nb-NO"
+                );
+            }
+          );
+
+      var allPoints = [];
+
+      series.forEach(
+        function (entry) {
+          entry.points.forEach(
+            function (point) {
+              allPoints.push(
+                point
+              );
+            }
+          );
+        }
+      );
+
+      var minTime =
+        Math.min.apply(
+          Math,
+          allPoints.map(
+            function (point) {
+              return point.time;
+            }
+          )
+        );
+
+      var maxTime =
+        Math.max.apply(
+          Math,
+          allPoints.map(
+            function (point) {
+              return point.time;
+            }
+          )
+        );
+
+      if (
+        minTime === maxTime
+      ) {
+        minTime -=
+          12 *
+          60 *
+          60 *
+          1000;
+        maxTime +=
+          12 *
+          60 *
+          60 *
+          1000;
+      }
+
+      var prices =
+        allPoints.map(
+          function (point) {
+            return point.price;
+          }
+        );
+
+      var minPrice =
+        Math.min.apply(
+          Math,
+          prices
+        );
+
+      var maxPrice =
+        Math.max.apply(
+          Math,
+          prices
+        );
+
+      if (
+        minPrice === maxPrice
+      ) {
+        minPrice =
+          Math.max(
+            0,
+            minPrice - 10
+          );
+
+        maxPrice += 10;
+      } else {
+        var padding =
+          Math.max(
+            5,
+            (
+              maxPrice -
+              minPrice
+            ) *
+              0.08
+          );
+
+        minPrice =
+          Math.max(
+            0,
+            minPrice -
+              padding
+          );
+
+        maxPrice +=
+          padding;
+      }
+
+      var width = 800;
+      var height = 300;
+      var left = 62;
+      var right = 18;
+      var top = 18;
+      var bottom = 42;
+      var plotWidth =
+        width -
+        left -
+        right;
+      var plotHeight =
+        height -
+        top -
+        bottom;
+
+      function xFor(time) {
+        return (
+          left +
+          (
+            (
+              time -
+              minTime
+            ) /
+            (
+              maxTime -
+              minTime
+            )
+          ) *
+            plotWidth
+        );
+      }
+
+      function yFor(price) {
+        return (
+          top +
+          (
+            1 -
+            (
+              price -
+              minPrice
+            ) /
+            (
+              maxPrice -
+              minPrice
+            )
+          ) *
+            plotHeight
+        );
+      }
+
+      var ns =
+        "http://www.w3.org/2000/svg";
+
+      var svg =
+        document.createElementNS(
+          ns,
+          "svg"
+        );
+
+      svg.setAttribute(
+        "viewBox",
+        "0 0 " +
+          width +
+          " " +
+          height
+      );
+
+      svg.setAttribute(
+        "role",
+        "img"
+      );
+
+      svg.setAttribute(
+        "aria-label",
+        "Prishistorikk"
+      );
+
+      var colors = [
+        "#111827",
+        "#2563eb",
+        "#dc2626",
+        "#16a34a",
+        "#9333ea",
+        "#ea580c",
+        "#0891b2",
+        "#be123c"
+      ];
+
+      for (
+        var gridIndex = 0;
+        gridIndex <= 4;
+        gridIndex += 1
+      ) {
+        var ratio =
+          gridIndex / 4;
+
+        var y =
+          top +
+          ratio *
+            plotHeight;
+
+        var line =
+          document.createElementNS(
+            ns,
+            "line"
+          );
+
+        line.setAttribute(
+          "x1",
+          String(left)
+        );
+        line.setAttribute(
+          "x2",
+          String(
+            left +
+            plotWidth
+          )
+        );
+        line.setAttribute(
+          "y1",
+          String(y)
+        );
+        line.setAttribute(
+          "y2",
+          String(y)
+        );
+        line.setAttribute(
+          "stroke",
+          "#e5e7eb"
+        );
+        line.setAttribute(
+          "stroke-width",
+          "1"
+        );
+
+        svg.appendChild(line);
+
+        var priceLabel =
+          document.createElementNS(
+            ns,
+            "text"
+          );
+
+        priceLabel.setAttribute(
+          "x",
+          String(
+            left - 8
+          )
+        );
+        priceLabel.setAttribute(
+          "y",
+          String(
+            y + 4
+          )
+        );
+        priceLabel.setAttribute(
+          "text-anchor",
+          "end"
+        );
+        priceLabel.setAttribute(
+          "font-size",
+          "10"
+        );
+        priceLabel.setAttribute(
+          "fill",
+          "#64748b"
+        );
+
+        priceLabel.textContent =
+          Math.round(
+            maxPrice -
+            ratio *
+              (
+                maxPrice -
+                minPrice
+              )
+          ) +
+          " kr";
+
+        svg.appendChild(
+          priceLabel
+        );
+      }
+
+      [
+        [minTime, left, "start"],
+        [
+          (
+            minTime +
+            maxTime
+          ) / 2,
+          left +
+            plotWidth / 2,
+          "middle"
+        ],
+        [
+          maxTime,
+          left +
+            plotWidth,
+          "end"
+        ]
+      ].forEach(
+        function (item) {
+          var dateLabel =
+            document.createElementNS(
+              ns,
+              "text"
+            );
+
+          dateLabel.setAttribute(
+            "x",
+            String(item[1])
+          );
+          dateLabel.setAttribute(
+            "y",
+            String(
+              height - 12
+            )
+          );
+          dateLabel.setAttribute(
+            "text-anchor",
+            item[2]
+          );
+          dateLabel.setAttribute(
+            "font-size",
+            "10"
+          );
+          dateLabel.setAttribute(
+            "fill",
+            "#64748b"
+          );
+
+          dateLabel.textContent =
+            new Date(
+              item[0]
+            ).toLocaleDateString(
+              "nb-NO",
+              {
+                day: "2-digit",
+                month:
+                  "2-digit",
+                year:
+                  "2-digit"
+              }
+            );
+
+          svg.appendChild(
+            dateLabel
+          );
+        }
+      );
+
+      series.forEach(
+        function (
+          entry,
+          index
+        ) {
+          var color =
+            entry.sourceType ===
+              "own"
+              ? colors[0]
+              : colors[
+                  (
+                    index %
+                    (
+                      colors.length -
+                      1
+                    )
+                  ) +
+                  1
+                ];
+
+          var path =
+            document.createElementNS(
+              ns,
+              "path"
+            );
+
+          var d =
+            entry.points
+              .map(
+                function (
+                  point,
+                  pointIndex
+                ) {
+                  return (
+                    (
+                      pointIndex ===
+                        0
+                        ? "M"
+                        : "L"
+                    ) +
+                    xFor(
+                      point.time
+                    ).toFixed(
+                      2
+                    ) +
+                    " " +
+                    yFor(
+                      point.price
+                    ).toFixed(
+                      2
+                    )
+                  );
+                }
+              )
+              .join(" ");
+
+          path.setAttribute(
+            "d",
+            d
+          );
+          path.setAttribute(
+            "fill",
+            "none"
+          );
+          path.setAttribute(
+            "stroke",
+            color
+          );
+          path.setAttribute(
+            "stroke-width",
+            entry.sourceType ===
+              "own"
+              ? "3"
+              : "2"
+          );
+          path.setAttribute(
+            "stroke-linejoin",
+            "round"
+          );
+          path.setAttribute(
+            "stroke-linecap",
+            "round"
+          );
+
+          svg.appendChild(path);
+
+          entry.points.forEach(
+            function (point) {
+              var circle =
+                document.createElementNS(
+                  ns,
+                  "circle"
+                );
+
+              circle.setAttribute(
+                "cx",
+                String(
+                  xFor(
+                    point.time
+                  )
+                )
+              );
+              circle.setAttribute(
+                "cy",
+                String(
+                  yFor(
+                    point.price
+                  )
+                )
+              );
+              circle.setAttribute(
+                "r",
+                entry.sourceType ===
+                  "own"
+                  ? "3"
+                  : "2.5"
+              );
+              circle.setAttribute(
+                "fill",
+                color
+              );
+
+              var title =
+                document.createElementNS(
+                  ns,
+                  "title"
+                );
+
+              title.textContent =
+                entry.label +
+                " · " +
+                formatPriceCheckMoney(
+                  point.price
+                ) +
+                " · " +
+                new Date(
+                  point.time
+                ).toLocaleString(
+                  "nb-NO"
+                );
+
+              circle.appendChild(
+                title
+              );
+
+              svg.appendChild(
+                circle
+              );
+            }
+          );
+
+          entry._color =
+            color;
+        }
+      );
+
+      var chartWrap =
+        el("div");
+
+      chartWrap.className =
+        "sk-price-history-chart";
+
+      chartWrap.appendChild(
+        svg
+      );
+
+      var legend =
+        el("div");
+
+      legend.className =
+        "sk-price-history-legend";
+
+      series.forEach(
+        function (entry) {
+          var item =
+            el("span");
+
+          var dot =
+            el("i");
+
+          dot.className =
+            "sk-price-history-dot";
+          dot.style.background =
+            entry._color;
+
+          item.appendChild(dot);
+          item.appendChild(
+            document.createTextNode(
+              entry.label
+            )
+          );
+
+          legend.appendChild(
+            item
+          );
+        }
+      );
+
+      chartWrap.appendChild(
+        legend
+      );
+
+      host.appendChild(
+        chartWrap
+      );
+    }
+
     function confirmedMatchesForProduct(
       productId
     ) {
@@ -9388,6 +10369,11 @@ function renderProductControlDashboard(parent, data) {
 
     [
       ["overview", "Oversikt", null],
+      [
+        "strategy",
+        "Prisstrategi",
+        priceProductStrategies.length
+      ],
       ["run", "Kjør kontroll", null],
       ["suggestions", "Forslag", probableCount],
       ["confirmed", "Godkjente", confirmedCount],
@@ -9493,6 +10479,9 @@ function renderProductControlDashboard(parent, data) {
 
     var overviewPane =
       pricePanes.overview;
+
+    var strategyPane =
+      pricePanes.strategy;
 
     var runPane =
       pricePanes.run;
@@ -17813,6 +18802,505 @@ var competitorSection = createCollapsibleSection(
       }
     );
 
+    createPageHeader(
+      strategyPane,
+      "Prisstrategi-dashboard",
+      "Se om produktene faktisk ligger der du har valgt: billigst, i midten eller dyrest. Strategien styrer ikke priser automatisk.",
+      String(
+        priceProductStrategies.length
+      ) +
+        " produkter med valgt strategi"
+    );
+
+    var strategyRows =
+      overviewRows
+        .map(
+          function (row) {
+            var strategy =
+              currentStrategyForProduct(
+                row.product_id
+              );
+
+            var analysis =
+              row._market;
+
+            var advice =
+              strategy
+                ? strategyAdvice(
+                    analysis,
+                    strategy
+                  )
+                : null;
+
+            return {
+              row: row,
+              strategy:
+                strategy,
+              analysis:
+                analysis,
+              advice:
+                advice,
+              onTarget:
+                strategy
+                  ? strategyIsOnTarget(
+                      analysis,
+                      strategy
+                    )
+                  : false
+            };
+          }
+        );
+
+    var selectedStrategyRows =
+      strategyRows.filter(
+        function (item) {
+          return !!item.strategy;
+        }
+      );
+
+    var strategyOnTarget =
+      selectedStrategyRows.filter(
+        function (item) {
+          return (
+            item.onTarget ===
+            true
+          );
+        }
+      ).length;
+
+    var strategyNeedsChange =
+      selectedStrategyRows.filter(
+        function (item) {
+          return (
+            item.onTarget ===
+              false &&
+            item.advice &&
+            item.advice.target !==
+              null
+          );
+        }
+      ).length;
+
+    var strategyNoData =
+      selectedStrategyRows.filter(
+        function (item) {
+          return (
+            !item.advice ||
+            item.advice.target ===
+              null
+          );
+        }
+      ).length;
+
+    addProStatGrid(
+      strategyPane,
+      [
+        {
+          label:
+            "Billigst-strategi",
+          value:
+            String(
+              selectedStrategyRows
+                .filter(
+                  function (
+                    item
+                  ) {
+                    return (
+                      item.strategy ===
+                      "cheapest"
+                    );
+                  }
+                ).length
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Midten-strategi",
+          value:
+            String(
+              selectedStrategyRows
+                .filter(
+                  function (
+                    item
+                  ) {
+                    return (
+                      item.strategy ===
+                      "middle"
+                    );
+                  }
+                ).length
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Dyrest-strategi",
+          value:
+            String(
+              selectedStrategyRows
+                .filter(
+                  function (
+                    item
+                  ) {
+                    return (
+                      item.strategy ===
+                      "most_expensive"
+                    );
+                  }
+                ).length
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Ligger på ønsket mål",
+          value:
+            String(
+              strategyOnTarget
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Bør justeres",
+          value:
+            String(
+              strategyNeedsChange
+            ),
+          tone:
+            strategyNeedsChange
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "For lite prisdata",
+          value:
+            String(
+              strategyNoData
+            ),
+          tone:
+            strategyNoData
+              ? "warning"
+              : "ok"
+        }
+      ]
+    );
+
+    var strategyToolbar =
+      el("div");
+
+    strategyToolbar.className =
+      "sk-analysis-toolbar";
+
+    var strategyFilter =
+      el("select");
+
+    [
+      ["all", "Alle valgte strategier"],
+      [
+        "needs",
+        "Kun de som bør justeres"
+      ],
+      [
+        "ok",
+        "Kun de som ligger på mål"
+      ],
+      [
+        "cheapest",
+        "Mål: billigst"
+      ],
+      ["middle", "Mål: midten"],
+      [
+        "most_expensive",
+        "Mål: dyrest"
+      ]
+    ].forEach(
+      function (item) {
+        addOption(
+          strategyFilter,
+          item[0],
+          item[1]
+        );
+      }
+    );
+
+    strategyToolbar.appendChild(
+      strategyFilter
+    );
+
+    strategyPane.appendChild(
+      strategyToolbar
+    );
+
+    var strategyTableHost =
+      el("div");
+
+    strategyPane.appendChild(
+      strategyTableHost
+    );
+
+    function renderStrategyDashboardRows() {
+      clear(
+        strategyTableHost
+      );
+
+      var visible =
+        selectedStrategyRows
+          .filter(
+            function (item) {
+              if (
+                strategyFilter.value ===
+                  "needs"
+              ) {
+                return (
+                  item.onTarget ===
+                    false
+                );
+              }
+
+              if (
+                strategyFilter.value ===
+                  "ok"
+              ) {
+                return (
+                  item.onTarget ===
+                  true
+                );
+              }
+
+              if (
+                [
+                  "cheapest",
+                  "middle",
+                  "most_expensive"
+                ].indexOf(
+                  strategyFilter.value
+                ) >= 0
+              ) {
+                return (
+                  item.strategy ===
+                  strategyFilter.value
+                );
+              }
+
+              return true;
+            }
+          )
+          .sort(
+            function (a, b) {
+              if (
+                a.onTarget !==
+                b.onTarget
+              ) {
+                return a.onTarget
+                  ? 1
+                  : -1;
+              }
+
+              var aDelta =
+                a.advice &&
+                a.advice.delta !==
+                  null
+                  ? Math.abs(
+                      Number(
+                        a.advice
+                          .delta
+                      )
+                    )
+                  : -1;
+
+              var bDelta =
+                b.advice &&
+                b.advice.delta !==
+                  null
+                  ? Math.abs(
+                      Number(
+                        b.advice
+                          .delta
+                      )
+                    )
+                  : -1;
+
+              return (
+                bDelta -
+                aDelta
+              );
+            }
+          );
+
+      skCreateAnalysisTable(
+        strategyTableHost,
+        [
+          {
+            label: "Produkt",
+            value:
+              function (item) {
+                return (
+                  item.row.name ||
+                  "-"
+                );
+              }
+          },
+          {
+            label: "Mål",
+            value:
+              function (item) {
+                return strategyLabel(
+                  item.strategy
+                );
+              }
+          },
+          {
+            label: "GK nå",
+            value:
+              function (item) {
+                return (
+                  item.analysis
+                    ? item
+                        .analysis
+                        .ownPrice
+                    : null
+                );
+              },
+            format: "money",
+            align: "right"
+          },
+          {
+            label: "Målpris",
+            value:
+              function (item) {
+                return (
+                  item.advice
+                    ? item.advice
+                        .target
+                    : null
+                );
+              },
+            format: "money",
+            align: "right"
+          },
+          {
+            label:
+              "Markedsposisjon",
+            value:
+              function (item) {
+                return (
+                  item.analysis &&
+                  item.analysis
+                    .positionText
+                    ? item
+                        .analysis
+                        .positionText
+                    : "For lite data"
+                );
+              }
+          },
+          {
+            label: "Status",
+            render:
+              function (
+                td,
+                item
+              ) {
+                td.className =
+                  "sk-strategy-dashboard-status " +
+                  (
+                    item.onTarget
+                      ? "sk-strategy-ok"
+                      : "sk-strategy-needs"
+                  );
+
+                td.textContent =
+                  item.onTarget
+                    ? "På mål"
+                    : (
+                        item.advice &&
+                        item.advice
+                          .target !==
+                          null
+                          ? (
+                              Number(
+                                item
+                                  .advice
+                                  .delta
+                              ) > 0
+                                ? (
+                                    "Opp " +
+                                    formatPriceCheckMoney(
+                                      Math.abs(
+                                        item
+                                          .advice
+                                          .delta
+                                      )
+                                    )
+                                  )
+                                : (
+                                    Number(
+                                      item
+                                        .advice
+                                        .delta
+                                    ) <
+                                    0
+                                      ? (
+                                          "Ned " +
+                                          formatPriceCheckMoney(
+                                            Math.abs(
+                                              item
+                                                .advice
+                                                .delta
+                                            )
+                                          )
+                                        )
+                                      : "Treffer mål"
+                                  )
+                            )
+                          : "For lite data"
+                      );
+              }
+          },
+          {
+            label: "",
+            render:
+              function (
+                td,
+                item
+              ) {
+                var button =
+                  createButton(
+                    "Vis produkt"
+                  );
+
+                button.onclick =
+                  function () {
+                    activatePriceSubtab(
+                      "overview"
+                    );
+
+                    overviewSearch.value =
+                      item.row.name ||
+                      "";
+
+                    renderCompactPriceOverview();
+                  };
+
+                td.appendChild(
+                  button
+                );
+              }
+          }
+        ],
+        visible,
+        "Ingen produkter i valgt strategifilter."
+      );
+    }
+
+    strategyFilter.onchange =
+      renderStrategyDashboardRows;
+
+    renderStrategyDashboardRows();
+
     var adviceDown =
       overviewRows.filter(
         function (row) {
@@ -19022,6 +20510,1085 @@ var competitorSection = createCollapsibleSection(
 
           detailInner.appendChild(
             strategyBox
+          );
+
+          var historyBox =
+            el("div");
+
+          historyBox.className =
+            "sk-price-detail-box";
+          historyBox.style.gridColumn =
+            "1 / -1";
+
+          historyBox.appendChild(
+            el(
+              "strong",
+              "Prishistorikk"
+            )
+          );
+
+          historyBox.appendChild(
+            el(
+              "div",
+              "Grafen viser varepris for GolfKongen og de konkurrentkoblingene som er godkjent nå. Frakt er ikke med."
+            )
+          );
+
+          var historyControls =
+            el("div");
+
+          historyControls.className =
+            "sk-price-editor-toolbar";
+          historyControls.style.marginTop =
+            "9px";
+
+          var historyPeriod =
+            el("select");
+
+          [
+            ["90", "90 dager"],
+            ["180", "180 dager"],
+            ["365", "365 dager"],
+            ["0", "All historikk"]
+          ].forEach(
+            function (item) {
+              addOption(
+                historyPeriod,
+                item[0],
+                item[1]
+              );
+            }
+          );
+
+          historyPeriod.value =
+            "365";
+
+          var loadHistoryButton =
+            createButton(
+              "Vis graf"
+            );
+
+          historyControls.appendChild(
+            historyPeriod
+          );
+          historyControls.appendChild(
+            loadHistoryButton
+          );
+
+          var historyHost =
+            el("div");
+
+          historyHost.style.marginTop =
+            "10px";
+
+          historyBox.appendChild(
+            historyControls
+          );
+          historyBox.appendChild(
+            historyHost
+          );
+
+          function loadHistory() {
+            loadHistoryButton.disabled =
+              true;
+
+            loadHistoryButton.textContent =
+              "Laster…";
+
+            clear(historyHost);
+
+            var loading =
+              el(
+                "div",
+                "Henter prishistorikk…"
+              );
+
+            loading.className =
+              "sk-note";
+
+            historyHost.appendChild(
+              loading
+            );
+
+            loadProductPriceHistory(
+              row.product_id,
+              historyPeriod.value
+            )
+              .then(
+                function (
+                  historyRows
+                ) {
+                  loadHistoryButton.disabled =
+                    false;
+
+                  loadHistoryButton.textContent =
+                    "Oppdater graf";
+
+                  renderPriceHistoryChart(
+                    historyHost,
+                    historyRows
+                  );
+                }
+              )
+              .catch(
+                function (error) {
+                  loadHistoryButton.disabled =
+                    false;
+
+                  loadHistoryButton.textContent =
+                    "Prøv igjen";
+
+                  clear(
+                    historyHost
+                  );
+
+                  var errorNote =
+                    el(
+                      "div",
+                      "Kunne ikke hente historikk: " +
+                        skReadableError(
+                          error
+                        )
+                    );
+
+                  errorNote.className =
+                    "sk-note";
+
+                  historyHost.appendChild(
+                    errorNote
+                  );
+                }
+              );
+          }
+
+          loadHistoryButton.onclick =
+            loadHistory;
+
+          historyPeriod.onchange =
+            function () {
+              if (
+                historyHost
+                  .childNodes
+                  .length
+              ) {
+                loadHistory();
+              }
+            };
+
+          detailInner.appendChild(
+            historyBox
+          );
+
+          var priceEditBox =
+            el("div");
+
+          priceEditBox.className =
+            "sk-price-detail-box";
+          priceEditBox.style.gridColumn =
+            "1 / -1";
+
+          priceEditBox.appendChild(
+            el(
+              "strong",
+              "Endre pris i Quickbutik"
+            )
+          );
+
+          var priceEditIntro =
+            el(
+              "div",
+              "Prisendringen skjer først etter kontroll og bekreftelse. Har produktet aktive varianter, beregnes hovedprisen automatisk som laveste positive aktive variantpris."
+            );
+
+          priceEditBox.appendChild(
+            priceEditIntro
+          );
+
+          var openPriceEditor =
+            createPrimaryButton(
+              "Åpne prisendring"
+            );
+
+          openPriceEditor.style.marginTop =
+            "9px";
+
+          priceEditBox.appendChild(
+            openPriceEditor
+          );
+
+          var priceEditorHost =
+            el("div");
+
+          priceEditorHost.style.display =
+            "none";
+
+          priceEditBox.appendChild(
+            priceEditorHost
+          );
+
+          var priceEditorLoaded =
+            false;
+
+          function recommendedTargetForEditor() {
+            if (
+              selectedStrategy
+            ) {
+              var chosenAdvice =
+                strategyAdvice(
+                  analysis,
+                  selectedStrategy
+                );
+
+              if (
+                chosenAdvice &&
+                chosenAdvice.target !==
+                  null
+              ) {
+                return Number(
+                  chosenAdvice.target
+                );
+              }
+            }
+
+            if (
+              analysis &&
+              analysis
+                .recommendation &&
+              analysis
+                .recommendation
+                .target !==
+                null
+            ) {
+              return Number(
+                analysis
+                  .recommendation
+                  .target
+              );
+            }
+
+            return Number(
+              row
+                .golfkongen_price_inc_vat ||
+              0
+            );
+          }
+
+          function renderPriceEditor(
+            editorData
+          ) {
+            clear(
+              priceEditorHost
+            );
+
+            var product =
+              editorData.product ||
+              {};
+
+            var activeVariants =
+              editorData
+                .active_variants ||
+              [];
+
+            var recommended =
+              recommendedTargetForEditor();
+
+            var toolbar =
+              el("div");
+
+            toolbar.className =
+              "sk-price-editor-toolbar";
+
+            var targetWrap =
+              el("label");
+
+            targetWrap.style.display =
+              "grid";
+            targetWrap.style.gap =
+              "4px";
+
+            targetWrap.appendChild(
+              el(
+                "span",
+                selectedStrategy
+                  ? (
+                      "Målpris fra strategi (" +
+                      strategyLabel(
+                        selectedStrategy
+                      ) +
+                      ")"
+                    )
+                  : "Generell anbefalt målpris"
+              )
+            );
+
+            var targetInput =
+              el("input");
+
+            targetInput.type =
+              "number";
+            targetInput.min =
+              "1";
+            targetInput.step =
+              "1";
+            targetInput.value =
+              String(
+                Math.round(
+                  recommended ||
+                  product
+                    .current_main_price ||
+                  0
+                )
+              );
+
+            targetWrap.appendChild(
+              targetInput
+            );
+
+            toolbar.appendChild(
+              targetWrap
+            );
+
+            priceEditorHost.appendChild(
+              toolbar
+            );
+
+            var previewBox =
+              el("div");
+
+            previewBox.className =
+              "sk-price-preview";
+
+            priceEditorHost.appendChild(
+              previewBox
+            );
+
+            var variantList =
+              el("div");
+
+            variantList.className =
+              "sk-price-variant-list";
+
+            var variantControls =
+              [];
+
+            if (
+              activeVariants.length
+            ) {
+              var variantInfo =
+                el(
+                  "div",
+                  String(
+                    activeVariants.length
+                  ) +
+                    " aktive varianter. " +
+                    String(
+                      editorData
+                        .hidden_variant_count ||
+                      0
+                    ) +
+                    " skjulte/deaktiverte varianter ignoreres."
+                );
+
+              variantInfo.className =
+                "sk-note";
+
+              priceEditorHost.appendChild(
+                variantInfo
+              );
+
+              var setAllButton =
+                createButton(
+                  "Bruk målpris på alle aktive"
+                );
+
+              setAllButton.style.margin =
+                "8px 0";
+
+              priceEditorHost.appendChild(
+                setAllButton
+              );
+
+              activeVariants.forEach(
+                function (
+                  variant
+                ) {
+                  var variantRow =
+                    el("div");
+
+                  variantRow.className =
+                    "sk-price-variant-row";
+
+                  var checkbox =
+                    el("input");
+
+                  checkbox.type =
+                    "checkbox";
+
+                  var nameCell =
+                    el("div");
+
+                  nameCell.appendChild(
+                    el(
+                      "strong",
+                      variant.name ||
+                      (
+                        "Variant " +
+                        variant
+                          .quickbutik_variant_id
+                      )
+                    )
+                  );
+
+                  if (variant.sku) {
+                    var sku =
+                      el(
+                        "div",
+                        variant.sku
+                      );
+
+                    sku.style.fontSize =
+                      "10px";
+                    sku.style.color =
+                      "#64748b";
+
+                    nameCell.appendChild(
+                      sku
+                    );
+                  }
+
+                  var currentCell =
+                    el(
+                      "div",
+                      "Nå " +
+                        formatPriceCheckMoney(
+                          variant.price
+                        )
+                    );
+
+                  currentCell.className =
+                    "sk-price-variant-current";
+
+                  var priceInput =
+                    el("input");
+
+                  priceInput.type =
+                    "number";
+                  priceInput.min =
+                    "1";
+                  priceInput.step =
+                    "1";
+                  priceInput.value =
+                    String(
+                      variant.price ||
+                      ""
+                    );
+
+                  function enableVariant() {
+                    checkbox.checked =
+                      true;
+                    updatePricePreview();
+                  }
+
+                  priceInput.oninput =
+                    enableVariant;
+
+                  checkbox.onchange =
+                    updatePricePreview;
+
+                  variantRow.appendChild(
+                    checkbox
+                  );
+                  variantRow.appendChild(
+                    nameCell
+                  );
+                  variantRow.appendChild(
+                    currentCell
+                  );
+                  variantRow.appendChild(
+                    priceInput
+                  );
+
+                  variantList.appendChild(
+                    variantRow
+                  );
+
+                  variantControls.push({
+                    variant:
+                      variant,
+                    checkbox:
+                      checkbox,
+                    input:
+                      priceInput
+                  });
+                }
+              );
+
+              setAllButton.onclick =
+                function () {
+                  var target =
+                    Number(
+                      targetInput.value
+                    );
+
+                  if (
+                    !Number.isFinite(
+                      target
+                    ) ||
+                    target <= 0
+                  ) {
+                    alert(
+                      "Skriv inn en gyldig målpris først."
+                    );
+                    return;
+                  }
+
+                  variantControls.forEach(
+                    function (
+                      control
+                    ) {
+                      control
+                        .checkbox
+                        .checked =
+                        true;
+
+                      control
+                        .input
+                        .value =
+                        String(
+                          target
+                        );
+                    }
+                  );
+
+                  updatePricePreview();
+                };
+
+              priceEditorHost.appendChild(
+                variantList
+              );
+            }
+
+            var mainInput = null;
+
+            if (
+              !activeVariants.length
+            ) {
+              var mainWrap =
+                el("label");
+
+              mainWrap.style.display =
+                "grid";
+              mainWrap.style.gap =
+                "4px";
+              mainWrap.style.maxWidth =
+                "220px";
+              mainWrap.style.marginTop =
+                "8px";
+
+              mainWrap.appendChild(
+                el(
+                  "span",
+                  "Ny hovedpris"
+                )
+              );
+
+              mainInput =
+                el("input");
+
+              mainInput.type =
+                "number";
+              mainInput.min =
+                "1";
+              mainInput.step =
+                "1";
+              mainInput.value =
+                String(
+                  Math.round(
+                    recommended ||
+                    product
+                      .current_main_price ||
+                    0
+                  )
+                );
+
+              mainInput.oninput =
+                updatePricePreview;
+
+              mainWrap.appendChild(
+                mainInput
+              );
+
+              priceEditorHost.appendChild(
+                mainWrap
+              );
+            }
+
+            var applyButton =
+              createPrimaryButton(
+                "Kontroller og oppdater pris"
+              );
+
+            applyButton.style.marginTop =
+              "10px";
+
+            priceEditorHost.appendChild(
+              applyButton
+            );
+
+            function buildPricePayload() {
+              var payload = {
+                product_id:
+                  row.product_id,
+                variant_updates:
+                  []
+              };
+
+              if (
+                activeVariants.length
+              ) {
+                variantControls.forEach(
+                  function (
+                    control
+                  ) {
+                    if (
+                      !control
+                        .checkbox
+                        .checked
+                    ) {
+                      return;
+                    }
+
+                    payload
+                      .variant_updates
+                      .push({
+                        quickbutik_variant_id:
+                          control
+                            .variant
+                            .quickbutik_variant_id,
+                        price:
+                          Number(
+                            control
+                              .input
+                              .value
+                          )
+                      });
+                  }
+                );
+              } else {
+                payload.main_price =
+                  Number(
+                    mainInput.value
+                  );
+              }
+
+              return payload;
+            }
+
+            function calculateLocalMainPreview() {
+              if (
+                !activeVariants.length
+              ) {
+                return Number(
+                  mainInput &&
+                  mainInput.value
+                );
+              }
+
+              var prices =
+                activeVariants
+                  .map(
+                    function (
+                      variant
+                    ) {
+                      var control =
+                        variantControls.find(
+                          function (
+                            candidate
+                          ) {
+                            return (
+                              String(
+                                candidate
+                                  .variant
+                                  .quickbutik_variant_id
+                              ) ===
+                              String(
+                                variant
+                                  .quickbutik_variant_id
+                              )
+                            );
+                          }
+                        );
+
+                      if (
+                        control &&
+                        control
+                          .checkbox
+                          .checked
+                      ) {
+                        return Number(
+                          control
+                            .input
+                            .value
+                        );
+                      }
+
+                      return Number(
+                        variant.price
+                      );
+                    }
+                  )
+                  .filter(
+                    function (
+                      price
+                    ) {
+                      return (
+                        Number.isFinite(
+                          price
+                        ) &&
+                        price > 0
+                      );
+                    }
+                  );
+
+              return prices.length
+                ? Math.min.apply(
+                    Math,
+                    prices
+                  )
+                : null;
+            }
+
+            function updatePricePreview() {
+              var proposedMain =
+                calculateLocalMainPreview();
+
+              var selectedCount =
+                activeVariants.length
+                  ? variantControls
+                      .filter(
+                        function (
+                          control
+                        ) {
+                          return (
+                            control
+                              .checkbox
+                              .checked
+                          );
+                        }
+                      ).length
+                  : 0;
+
+              var text =
+                "Hovedpris nå: " +
+                formatPriceCheckMoney(
+                  product
+                    .current_main_price
+                ) +
+                ". ";
+
+              if (
+                activeVariants.length
+              ) {
+                text +=
+                  "Valgt " +
+                  String(
+                    selectedCount
+                  ) +
+                  " av " +
+                  String(
+                    activeVariants.length
+                  ) +
+                  " aktive varianter. ";
+
+                text +=
+                  "Ny hovedpris blir automatisk " +
+                  formatPriceCheckMoney(
+                    proposedMain
+                  ) +
+                  " fordi hovedpris = laveste positive aktive variantpris.";
+              } else {
+                text +=
+                  "Ny hovedpris: " +
+                  formatPriceCheckMoney(
+                    proposedMain
+                  ) +
+                  ".";
+              }
+
+              previewBox.textContent =
+                text;
+            }
+
+            targetInput.onchange =
+              function () {
+                if (
+                  !activeVariants.length &&
+                  mainInput
+                ) {
+                  mainInput.value =
+                    targetInput.value;
+                }
+
+                updatePricePreview();
+              };
+
+            applyButton.onclick =
+              function () {
+                var payload =
+                  buildPricePayload();
+
+                if (
+                  activeVariants.length &&
+                  !payload
+                    .variant_updates
+                    .length
+                ) {
+                  alert(
+                    "Velg minst én aktiv variant som skal endres."
+                  );
+                  return;
+                }
+
+                applyButton.disabled =
+                  true;
+
+                applyButton.textContent =
+                  "Kontrollerer…";
+
+                previewProductPriceChange(
+                  payload
+                )
+                  .then(
+                    function (
+                      preview
+                    ) {
+                      var changes =
+                        preview.changes ||
+                        {};
+
+                      var lines = [
+                        product.name ||
+                          row.name ||
+                          "Produkt",
+                        "",
+                        "Hovedpris: " +
+                          formatPriceCheckMoney(
+                            changes
+                              .old_main_price
+                          ) +
+                          " → " +
+                          formatPriceCheckMoney(
+                            changes
+                              .new_main_price
+                          )
+                      ];
+
+                      (
+                        changes
+                          .variant_updates ||
+                        []
+                      ).forEach(
+                        function (
+                          change
+                        ) {
+                          lines.push(
+                            (
+                              change.name ||
+                              (
+                                "Variant " +
+                                change
+                                  .quickbutik_variant_id
+                              )
+                            ) +
+                              ": " +
+                              formatPriceCheckMoney(
+                                change
+                                  .old_price
+                              ) +
+                              " → " +
+                              formatPriceCheckMoney(
+                                change
+                                  .new_price
+                              )
+                          );
+                        }
+                      );
+
+                      lines.push(
+                        "",
+                        "Oppdatere dette i Quickbutik?"
+                      );
+
+                      if (
+                        !window.confirm(
+                          lines.join(
+                            "\n"
+                          )
+                        )
+                      ) {
+                        throw {
+                          cancelled:
+                            true
+                        };
+                      }
+
+                      applyButton.textContent =
+                        "Oppdaterer Quickbutik…";
+
+                      return applyProductPriceChange(
+                        payload
+                      );
+                    }
+                  )
+                  .then(
+                    function (
+                      result
+                    ) {
+                      if (!result) {
+                        return;
+                      }
+
+                      applyButton.textContent =
+                        "Pris oppdatert";
+
+                      localStorage.setItem(
+                        "sk_internal_active_tab",
+                        "priceCheck"
+                      );
+
+                      localStorage.setItem(
+                        "sk_pricecheck_subtab_v1",
+                        "overview"
+                      );
+
+                      alert(
+                        result.message ||
+                        "Pris oppdatert."
+                      );
+
+                      window.location.reload();
+                    }
+                  )
+                  .catch(
+                    function (
+                      error
+                    ) {
+                      applyButton.disabled =
+                        false;
+
+                      applyButton.textContent =
+                        "Kontroller og oppdater pris";
+
+                      if (
+                        error &&
+                        error.cancelled
+                      ) {
+                        return;
+                      }
+
+                      alert(
+                        "Kunne ikke oppdatere pris: " +
+                          skReadableError(
+                            error
+                          )
+                      );
+                    }
+                  );
+              };
+
+            updatePricePreview();
+          }
+
+          openPriceEditor.onclick =
+            function () {
+              var isOpen =
+                priceEditorHost
+                  .style
+                  .display !==
+                "none";
+
+              if (isOpen) {
+                priceEditorHost.style.display =
+                  "none";
+
+                openPriceEditor.textContent =
+                  "Åpne prisendring";
+                return;
+              }
+
+              priceEditorHost.style.display =
+                "block";
+
+              openPriceEditor.textContent =
+                "Skjul prisendring";
+
+              if (
+                priceEditorLoaded
+              ) {
+                return;
+              }
+
+              clear(
+                priceEditorHost
+              );
+
+              var loading =
+                el(
+                  "div",
+                  "Henter hovedpris og varianter direkte fra Quickbutik…"
+                );
+
+              loading.className =
+                "sk-note";
+
+              priceEditorHost.appendChild(
+                loading
+              );
+
+              loadProductPriceEditorData(
+                row.product_id
+              )
+                .then(
+                  function (
+                    editorData
+                  ) {
+                    priceEditorLoaded =
+                      true;
+
+                    renderPriceEditor(
+                      editorData
+                    );
+                  }
+                )
+                .catch(
+                  function (
+                    error
+                  ) {
+                    clear(
+                      priceEditorHost
+                    );
+
+                    var errorNote =
+                      el(
+                        "div",
+                        "Kunne ikke åpne prisendring: " +
+                          skReadableError(
+                            error
+                          )
+                      );
+
+                    errorNote.className =
+                      "sk-note";
+
+                    priceEditorHost.appendChild(
+                      errorNote
+                    );
+                  }
+                );
+            };
+
+          detailInner.appendChild(
+            priceEditBox
           );
 
           var matchesBox = el("div");
