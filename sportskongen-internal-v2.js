@@ -889,6 +889,11 @@
       "#sk-internal-root .sk-market-analysis-sub{font-size:11px;color:#64748b;line-height:1.5;}" +
       "#sk-internal-root .sk-market-rank-badge{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:10px;font-weight:900;}" +
       "#sk-internal-root .sk-recent-price-update{padding:10px 12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;color:#166534;font-size:12px;font-weight:800;margin-bottom:10px;}" +
+      "#sk-internal-root .sk-market-profile-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;}" +
+      "#sk-internal-root .sk-market-profile-badge{display:inline-flex;padding:3px 6px;border-radius:999px;background:#f1f5f9;color:#334155;font-size:10px;font-weight:800;}" +
+      "#sk-internal-root .sk-market-used-badge{background:#fff7ed;color:#9a3412;}" +
+      "#sk-internal-root .sk-market-newonly-badge{background:#f0fdf4;color:#166534;}" +
+      "#sk-internal-root .sk-market-data-badge{background:#eff6ff;color:#1d4ed8;}" +
       "#sk-internal-root .sk-analysis-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:6px;border-radius:12px;background:#eef2f7;border:1px solid #dbe3ec;}" +
       "#sk-internal-root .sk-analysis-tab{appearance:none;padding:8px 10px!important;border:1px solid transparent!important;border-radius:9px!important;background:transparent!important;color:#475569!important;font-size:12px!important;font-weight:800!important;}" +
       "#sk-internal-root .sk-analysis-tab.sk-active{background:#111827!important;color:#fff!important;}" +
@@ -18094,7 +18099,7 @@ var competitorSection = createCollapsibleSection(
 
     var competitorIntro = el(
       "div",
-      "Konkurrentbutikker administreres her. Du bestemmer selv hvilke butikker som skal brukes."
+      "Konkurrentbutikker administreres her. Brukte varer er som standard ikke med i markedsanalyse. En butikk kan fortsatt sammenlignes på nye varer selv om den også har et bruktmarked."
     );
     competitorIntro.className = "sk-note";
     competitorIntro.style.marginBottom = "14px";
@@ -18147,6 +18152,159 @@ var competitorSection = createCollapsibleSection(
     activeWrap.appendChild(el("span", "Aktiv konkurrent"));
     competitorForm.appendChild(activeWrap);
 
+    var marketSegmentInput =
+      el("select");
+
+    [
+      [
+        "direct_specialist",
+        "Direkte spesialist"
+      ],
+      [
+        "small_specialist",
+        "Mindre spesialist"
+      ],
+      [
+        "chain",
+        "Sportskjede"
+      ],
+      [
+        "reference",
+        "Referanse"
+      ]
+    ].forEach(
+      function (item) {
+        addOption(
+          marketSegmentInput,
+          item[0],
+          item[1]
+        );
+      }
+    );
+
+    addField(
+      competitorForm,
+      "Type konkurrent",
+      marketSegmentInput
+    );
+
+    var usedLevelInput =
+      el("select");
+
+    [
+      ["none", "Selger ikke brukt"],
+      ["small", "Noe brukt"],
+      [
+        "significant",
+        "Mye brukt"
+      ],
+      [
+        "unknown",
+        "Uavklart"
+      ]
+    ].forEach(
+      function (item) {
+        addOption(
+          usedLevelInput,
+          item[0],
+          item[1]
+        );
+      }
+    );
+
+    addField(
+      competitorForm,
+      "Bruktmarked",
+      usedLevelInput
+    );
+
+    var marketEnabledWrap =
+      el("label");
+
+    marketEnabledWrap.style.display =
+      "flex";
+    marketEnabledWrap.style.alignItems =
+      "center";
+    marketEnabledWrap.style.gap =
+      "9px";
+    marketEnabledWrap.style.padding =
+      "10px 0";
+    marketEnabledWrap.style.fontWeight =
+      "700";
+
+    var marketEnabledInput =
+      el("input");
+
+    marketEnabledInput.type =
+      "checkbox";
+    marketEnabledInput.checked =
+      true;
+
+    marketEnabledWrap.appendChild(
+      marketEnabledInput
+    );
+
+    marketEnabledWrap.appendChild(
+      el(
+        "span",
+        "Med i markedsanalyse"
+      )
+    );
+
+    competitorForm.appendChild(
+      marketEnabledWrap
+    );
+
+    var includeUsedWrap =
+      el("label");
+
+    includeUsedWrap.style.display =
+      "flex";
+    includeUsedWrap.style.alignItems =
+      "center";
+    includeUsedWrap.style.gap =
+      "9px";
+    includeUsedWrap.style.padding =
+      "10px 0";
+    includeUsedWrap.style.fontWeight =
+      "700";
+
+    var includeUsedInput =
+      el("input");
+
+    includeUsedInput.type =
+      "checkbox";
+    includeUsedInput.checked =
+      false;
+
+    includeUsedWrap.appendChild(
+      includeUsedInput
+    );
+
+    includeUsedWrap.appendChild(
+      el(
+        "span",
+        "Tillat brukte varer i markedsanalyse"
+      )
+    );
+
+    competitorForm.appendChild(
+      includeUsedWrap
+    );
+
+    var marketNotesInput =
+      el("textarea");
+
+    marketNotesInput.rows = 3;
+    marketNotesInput.placeholder =
+      "Valgfri intern merknad om butikken, bruktmarked, datakvalitet osv.";
+
+    addField(
+      competitorForm,
+      "Markedsnotat",
+      marketNotesInput
+    );
+
     competitorSection.body.appendChild(competitorForm);
 
     var competitorActions = el("div");
@@ -18179,6 +18337,16 @@ var competitorSection = createCollapsibleSection(
       competitorNameInput.value = "";
       competitorUrlInput.value = "";
       competitorActiveInput.checked = true;
+      marketSegmentInput.value =
+        "direct_specialist";
+      usedLevelInput.value =
+        "none";
+      marketEnabledInput.checked =
+        true;
+      includeUsedInput.checked =
+        false;
+      marketNotesInput.value =
+        "";
       saveCompetitorButton.textContent = "Legg til konkurrent";
       cancelCompetitorButton.style.display = "none";
     }
@@ -18189,6 +18357,32 @@ var competitorSection = createCollapsibleSection(
       competitorUrlInput.value = competitor.base_url || "";
       competitorActiveInput.checked =
         competitor.is_active !== false;
+
+      marketSegmentInput.value =
+        competitor.market_segment ||
+        "direct_specialist";
+
+      usedLevelInput.value =
+        competitor.used_catalog_level ||
+        (
+          competitor.sells_used
+            ? "unknown"
+            : "none"
+        );
+
+      marketEnabledInput.checked =
+        competitor
+          .market_analysis_enabled !==
+        false;
+
+      includeUsedInput.checked =
+        competitor
+          .include_used_in_analysis ===
+        true;
+
+      marketNotesInput.value =
+        competitor.market_notes ||
+        "";
 
       saveCompetitorButton.textContent =
         "Lagre endringer";
@@ -18240,6 +18434,9 @@ var competitorSection = createCollapsibleSection(
       [
         "Butikk",
         "Nettadresse",
+        "Type",
+        "Brukt",
+        "Analyse",
         "Status",
         "Handling"
       ].forEach(function (label) {
@@ -18279,6 +18476,58 @@ var competitorSection = createCollapsibleSection(
         } else {
           urlTd.textContent = "-";
         }
+
+        var typeTd =
+          el(
+            "td",
+            skMarketSegmentLabel(
+              competitor.market_segment
+            )
+          );
+
+        var usedTd =
+          el(
+            "td",
+            competitor.sells_used ===
+              true
+              ? skUsedCatalogLabel(
+                  competitor
+                    .used_catalog_level
+                )
+              : "Kun nytt / ukjent"
+          );
+
+        var analysisTd = el("td");
+
+        var analysisBadge =
+          el(
+            "span",
+            competitor
+              .market_analysis_enabled !==
+              false
+              ? (
+                  competitor
+                    .include_used_in_analysis ===
+                    true
+                    ? "Med · brukt tillatt"
+                    : "Med · kun nytt"
+                )
+              : "Ikke med"
+          );
+
+        analysisBadge.className =
+          "sk-market-profile-badge " +
+          (
+            competitor
+              .include_used_in_analysis ===
+              true
+              ? "sk-market-used-badge"
+              : "sk-market-newonly-badge"
+          );
+
+        analysisTd.appendChild(
+          analysisBadge
+        );
 
         var statusTd = el("td");
         var statusBadge = el(
@@ -18321,6 +18570,9 @@ var competitorSection = createCollapsibleSection(
         [
           nameTd,
           urlTd,
+          typeTd,
+          usedTd,
+          analysisTd,
           statusTd,
           actionTd
         ].forEach(function (td) {
@@ -18331,6 +18583,9 @@ var competitorSection = createCollapsibleSection(
 
         tr.appendChild(nameTd);
         tr.appendChild(urlTd);
+        tr.appendChild(typeTd);
+        tr.appendChild(usedTd);
+        tr.appendChild(analysisTd);
         tr.appendChild(statusTd);
         tr.appendChild(actionTd);
         tbody.appendChild(tr);
@@ -18373,9 +18628,10 @@ var competitorSection = createCollapsibleSection(
         p_base_url: baseUrl || null,
         p_is_active: competitorActiveInput.checked
       }).then(function (result) {
-        saveCompetitorButton.disabled = false;
-
         if (result.error) {
+          saveCompetitorButton.disabled =
+            false;
+
           saveCompetitorButton.textContent =
             editingCompetitorId
               ? "Lagre endringer"
@@ -18386,6 +18642,86 @@ var competitorSection = createCollapsibleSection(
               result.error.message
           );
           return;
+        }
+
+        var savedCompetitorId =
+          editingCompetitorId;
+
+        if (
+          !savedCompetitorId &&
+          Array.isArray(result.data) &&
+          result.data.length
+        ) {
+          savedCompetitorId =
+            result.data[0]
+              .competitor_id;
+        }
+
+        if (
+          !savedCompetitorId &&
+          result.data &&
+          result.data
+            .competitor_id
+        ) {
+          savedCompetitorId =
+            result.data
+              .competitor_id;
+        }
+
+        if (!savedCompetitorId) {
+          throw new Error(
+            "Konkurrenten ble lagret, men markedsprofilen mangler konkurrent-ID."
+          );
+        }
+
+        return sb.rpc(
+          "internal_update_price_competitor_market_profile",
+          {
+            p_id:
+              savedCompetitorId,
+
+            p_market_segment:
+              marketSegmentInput.value,
+
+            p_market_analysis_enabled:
+              marketEnabledInput.checked,
+
+            p_sells_used:
+              usedLevelInput.value !==
+              "none",
+
+            p_used_catalog_level:
+              usedLevelInput.value,
+
+            p_include_used_in_analysis:
+              includeUsedInput.checked,
+
+            p_physical_store:
+              null,
+
+            p_company_name:
+              null,
+
+            p_org_number:
+              null,
+
+            p_market_notes:
+              marketNotesInput.value
+                .trim() ||
+              null
+          }
+        );
+      }).then(function (
+        profileResult
+      ) {
+        saveCompetitorButton.disabled =
+          false;
+
+        if (
+          profileResult &&
+          profileResult.error
+        ) {
+          throw profileResult.error;
         }
 
         localStorage.setItem(
@@ -18400,6 +18736,22 @@ var competitorSection = createCollapsibleSection(
         );
 
         window.location.reload();
+      }).catch(function (error) {
+        saveCompetitorButton.disabled =
+          false;
+
+        saveCompetitorButton.textContent =
+          editingCompetitorId
+            ? "Lagre endringer"
+            : "Legg til konkurrent";
+
+        alert(
+          "Kunne ikke lagre markedsprofil: " +
+            (
+              error.message ||
+              String(error)
+            )
+        );
       });
     };
 
@@ -24395,6 +24747,44 @@ function renderAuditLog(
 }
 
 
+function skMarketSegmentLabel(value) {
+  if (value === "direct_specialist") {
+    return "Direkte spesialist";
+  }
+
+  if (value === "small_specialist") {
+    return "Mindre spesialist";
+  }
+
+  if (value === "chain") {
+    return "Sportskjede";
+  }
+
+  if (value === "reference") {
+    return "Referanse";
+  }
+
+  return "Direkte spesialist";
+}
+
+
+function skUsedCatalogLabel(value) {
+  if (value === "significant") {
+    return "Mye brukt";
+  }
+
+  if (value === "small") {
+    return "Noe brukt";
+  }
+
+  if (value === "none") {
+    return "Ikke brukt";
+  }
+
+  return "Uavklart";
+}
+
+
 function renderMarketAnalysis(
   parent,
   data
@@ -24405,6 +24795,30 @@ function renderMarketAnalysis(
   var inventory =
     data.inventoryAnalytics || [];
 
+  var marketCompetitors =
+    (data.priceCompetitors || [])
+      .filter(
+        function (competitor) {
+          return (
+            competitor.is_active !==
+              false &&
+            competitor
+              .market_analysis_enabled !==
+              false
+          );
+        }
+      );
+
+  var marketCompetitorIds = {};
+
+  marketCompetitors.forEach(
+    function (competitor) {
+      marketCompetitorIds[
+        String(competitor.id)
+      ] = true;
+    }
+  );
+
   var confirmed =
     suggestions.filter(
       function (item) {
@@ -24412,6 +24826,14 @@ function renderMarketAnalysis(
           item.is_active !== false &&
           item.match_status ===
             "confirmed" &&
+          (
+            !item.competitor_id ||
+            marketCompetitorIds[
+              String(
+                item.competitor_id
+              )
+            ] === true
+          ) &&
           Number.isFinite(
             Number(
               item
@@ -24442,7 +24864,185 @@ function renderMarketAnalysis(
     parent,
     "Markedsanalyse",
     "Prisnivå, markedsposisjon og målbare indikatorer mot konkurrentene. Størrelse skilles tydelig fra prisrangering, slik at produkt-overlapp ikke fremstilles som omsetning eller markedsandel.",
-    "Marked v1"
+    "Marked v2"
+  );
+
+  var marketInfo =
+    el(
+      "div",
+      "Standard er nye varer. Brukte discer skal ikke blandes med ordinære nypriser. WeAreDiscGolf og HyzerShop er markert som butikker med bruktmarked, men brukt er slått av i analysen som standard."
+    );
+
+  marketInfo.className =
+    "sk-note";
+  marketInfo.style.marginBottom =
+    "12px";
+
+  parent.appendChild(
+    marketInfo
+  );
+
+  var profileTableRows =
+    marketCompetitors
+      .slice()
+      .sort(
+        function (a, b) {
+          return String(
+            a.name || ""
+          ).localeCompare(
+            String(
+              b.name || ""
+            ),
+            "nb-NO"
+          );
+        }
+      );
+
+  addDashboardSectionTitle(
+    parent,
+    "Konkurrentgrunnlag"
+  );
+
+  skCreateAnalysisTable(
+    parent,
+    [
+      {
+        label: "Butikk",
+        render:
+          function (td, competitor) {
+            td.appendChild(
+              el(
+                "strong",
+                competitor.name ||
+                "-"
+              )
+            );
+
+            var badges =
+              el("div");
+
+            badges.className =
+              "sk-market-profile-badges";
+
+            var segment =
+              el(
+                "span",
+                skMarketSegmentLabel(
+                  competitor
+                    .market_segment
+                )
+              );
+
+            segment.className =
+              "sk-market-profile-badge";
+
+            badges.appendChild(
+              segment
+            );
+
+            if (
+              competitor.sells_used ===
+              true
+            ) {
+              var used =
+                el(
+                  "span",
+                  skUsedCatalogLabel(
+                    competitor
+                      .used_catalog_level
+                  )
+                );
+
+              used.className =
+                "sk-market-profile-badge sk-market-used-badge";
+
+              badges.appendChild(
+                used
+              );
+            }
+
+            var newOnly =
+              el(
+                "span",
+                competitor
+                  .include_used_in_analysis ===
+                  true
+                  ? "Brukt kan inngå"
+                  : "Kun nytt i analyse"
+              );
+
+            newOnly.className =
+              "sk-market-profile-badge " +
+              (
+                competitor
+                  .include_used_in_analysis ===
+                  true
+                  ? "sk-market-used-badge"
+                  : "sk-market-newonly-badge"
+              );
+
+            badges.appendChild(
+              newOnly
+            );
+
+            td.appendChild(
+              badges
+            );
+          }
+      },
+      {
+        label: "Pristreff",
+        value:
+          function (competitor) {
+            return confirmed.filter(
+              function (item) {
+                return (
+                  String(
+                    item.competitor_id
+                  ) ===
+                  String(
+                    competitor.id
+                  )
+                );
+              }
+            ).length;
+          },
+        align: "right"
+      },
+      {
+        label: "Datastatus",
+        value:
+          function (competitor) {
+            if (
+              competitor
+                .is_search_enabled ===
+                true
+            ) {
+              return "Prisintegrasjon aktiv";
+            }
+
+            if (
+              competitor
+                .integration_status ===
+                "direct"
+            ) {
+              return "Direkte integrasjon";
+            }
+
+            if (
+              competitor
+                .integration_status ===
+                "planned"
+            ) {
+              return "Planlagt";
+            }
+
+            return "Manuell / ikke koblet";
+          }
+      }
+    ],
+    profileTableRows,
+    "Ingen konkurrenter er aktivert for markedsanalyse."
   );
 
   function median(values) {
