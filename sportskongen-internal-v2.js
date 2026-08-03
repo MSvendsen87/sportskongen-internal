@@ -6851,7 +6851,7 @@ function renderProductControlDashboard(parent, data) {
         tone: "ok"
       },
       {
-        label: "Mangler prissjekk",
+        label: "Mangler godkjent pristreff",
         value: String(missing),
         tone: missing ? "warning" : "ok"
       },
@@ -11614,12 +11614,125 @@ var competitors = data.priceCompetitors || [];
 
     var suggestionSection =
       createCollapsibleSection(
-        "📋 Lagrede prisforslag (" +
-          String(priceSuggestions.length) +
-          ")",
-        "Filtrer, sorter og kontroller forslag før de påvirker prissammenligningen.",
+        "📋 Prisforslag og koblinger",
+        "Prioriter produkter som mangler godkjent konkurrenttreff. Høy confidence betyr ikke automatisk at treffet er riktig.",
         true
       );
+
+    var suggestionStats = el("div");
+    suggestionStats.style.marginBottom = "12px";
+    suggestionSection.body.appendChild(
+      suggestionStats
+    );
+
+    function suggestionHasConfirmedMatch(
+      productId
+    ) {
+      return priceSuggestions.some(
+        function (item) {
+          return (
+            String(item.product_id) ===
+              String(productId) &&
+            item.is_active !== false &&
+            item.match_status ===
+              "confirmed"
+          );
+        }
+      );
+    }
+
+    function renderSuggestionStats() {
+      clear(suggestionStats);
+
+      var activeSuggestions =
+        priceSuggestions.filter(
+          function (item) {
+            return item.is_active !== false;
+          }
+        );
+
+      var waiting =
+        activeSuggestions.filter(
+          function (item) {
+            return item.match_status ===
+              "probable";
+          }
+        );
+
+      var confirmed =
+        activeSuggestions.filter(
+          function (item) {
+            return item.match_status ===
+              "confirmed";
+          }
+        );
+
+      var rejected =
+        activeSuggestions.filter(
+          function (item) {
+            return item.match_status ===
+              "rejected";
+          }
+        );
+
+      var firstMatchProductIds = {};
+
+      waiting.forEach(
+        function (item) {
+          if (
+            !suggestionHasConfirmedMatch(
+              item.product_id
+            )
+          ) {
+            firstMatchProductIds[
+              String(item.product_id)
+            ] = true;
+          }
+        }
+      );
+
+      addProStatGrid(
+        suggestionStats,
+        [
+          {
+            label:
+              "Venter på vurdering",
+            value:
+              String(waiting.length),
+            tone:
+              waiting.length
+                ? "warning"
+                : "ok"
+          },
+          {
+            label:
+              "Kan gi første pristreff",
+            value:
+              String(
+                Object.keys(
+                  firstMatchProductIds
+                ).length
+              ),
+            tone: "warning"
+          },
+          {
+            label: "Godkjent",
+            value:
+              String(confirmed.length),
+            tone: "ok"
+          },
+          {
+            label: "Avvist",
+            value:
+              String(rejected.length),
+            tone:
+              rejected.length
+                ? "danger"
+                : "ok"
+          }
+        ]
+      );
+    }
 
     var suggestionFilterGrid = el("div");
 
@@ -11711,6 +11824,37 @@ var competitors = data.priceCompetitors || [];
       suggestionStatusFilter
     );
 
+    var suggestionPriorityFilter =
+      el("select");
+
+    [
+      {
+        value: "first-match",
+        label:
+          "Kun produkter uten godkjent treff"
+      },
+      {
+        value: "all",
+        label: "Alle produkter"
+      },
+      {
+        value: "already-confirmed",
+        label:
+          "Har allerede godkjent treff"
+      }
+    ].forEach(function (item) {
+      addOption(
+        suggestionPriorityFilter,
+        item.value,
+        item.label
+      );
+    });
+
+    addSuggestionFilter(
+      "Prioritet",
+      suggestionPriorityFilter
+    );
+
     var suggestionConfidenceFilter =
       el("select");
 
@@ -11724,8 +11868,12 @@ var competitors = data.priceCompetitors || [];
         label: "100 %"
       },
       {
-        value: "90-99",
-        label: "90–99 %"
+        value: "95-99",
+        label: "95–99 %"
+      },
+      {
+        value: "90-94",
+        label: "90–94 %"
       },
       {
         value: "80-89",
@@ -11902,6 +12050,9 @@ var competitors = data.priceCompetitors || [];
       );
     });
 
+    suggestionSort.value =
+      "confidence-desc";
+
     addSuggestionFilter(
       "Sortering",
       suggestionSort
@@ -12001,10 +12152,17 @@ var competitors = data.priceCompetitors || [];
         return confidence === 100;
       }
 
-      if (selected === "90-99") {
+      if (selected === "95-99") {
+        return (
+          confidence >= 95 &&
+          confidence < 100
+        );
+      }
+
+      if (selected === "90-94") {
         return (
           confidence >= 90 &&
-          confidence < 100
+          confidence < 95
         );
       }
 
@@ -12180,8 +12338,8 @@ var competitors = data.priceCompetitors || [];
             "competitor-price-asc"
           ) {
             return compareSuggestionNumbers(
-              a.competitor_total_inc_vat,
-              b.competitor_total_inc_vat,
+              a.competitor_price_inc_vat,
+              b.competitor_price_inc_vat,
               false
             );
           }
@@ -12657,6 +12815,9 @@ var competitors = data.priceCompetitors || [];
       var selectedCompetitor =
         suggestionCompetitorFilter.value;
 
+      var selectedPriority =
+        suggestionPriorityFilter.value;
+
       var selectedReason =
         suggestionReasonFilter.value;
 
@@ -12684,6 +12845,37 @@ var competitors = data.priceCompetitors || [];
                 selectedCompetitor
             ) {
               return false;
+            }
+
+            /*
+             * Prioriteringsfilteret brukes bare når vi
+             * vurderer probable-forslag.
+             */
+            if (
+              suggestion.match_status ===
+                "probable" &&
+              selectedPriority !== "all"
+            ) {
+              var hasConfirmed =
+                suggestionHasConfirmedMatch(
+                  suggestion.product_id
+                );
+
+              if (
+                selectedPriority ===
+                  "first-match" &&
+                hasConfirmed
+              ) {
+                return false;
+              }
+
+              if (
+                selectedPriority ===
+                  "already-confirmed" &&
+                !hasConfirmed
+              ) {
+                return false;
+              }
             }
 
             if (
@@ -12742,16 +12934,30 @@ var competitors = data.priceCompetitors || [];
         visibleSuggestions
       );
 
+      renderSuggestionStats();
+
+      var distinctVisibleProducts = {};
+
+      visibleSuggestions.forEach(
+        function (item) {
+          distinctVisibleProducts[
+            String(item.product_id)
+          ] = true;
+        }
+      );
+
       suggestionResultCount.textContent =
         "Viser " +
         String(
           visibleSuggestions.length
         ) +
-        " av " +
+        " koblinger for " +
         String(
-          priceSuggestions.length
+          Object.keys(
+            distinctVisibleProducts
+          ).length
         ) +
-        " forslag.";
+        " produkter.";
 
       if (!visibleSuggestions.length) {
         var empty = el(
@@ -12869,6 +13075,42 @@ var competitors = data.priceCompetitors || [];
 
           if (
             suggestion.match_status ===
+              "probable" &&
+            !suggestionHasConfirmedMatch(
+              suggestion.product_id
+            )
+          ) {
+            var firstMatchBadge = el(
+              "div",
+              "⭐ Kan bli første godkjente pristreff"
+            );
+
+            firstMatchBadge.style.display =
+              "inline-block";
+            firstMatchBadge.style.marginTop =
+              "10px";
+            firstMatchBadge.style.marginLeft =
+              "8px";
+            firstMatchBadge.style.padding =
+              "5px 9px";
+            firstMatchBadge.style.borderRadius =
+              "999px";
+            firstMatchBadge.style.background =
+              "#dbeafe";
+            firstMatchBadge.style.color =
+              "#1d4ed8";
+            firstMatchBadge.style.fontSize =
+              "12px";
+            firstMatchBadge.style.fontWeight =
+              "800";
+
+            card.appendChild(
+              firstMatchBadge
+            );
+          }
+
+          if (
+            suggestion.match_status ===
               "rejected" &&
             suggestion
               .review_reason_label
@@ -12945,6 +13187,24 @@ var competitors = data.priceCompetitors || [];
               suggestion.competitor_price_inc_vat
             );
 
+          var ownShippingInfo =
+            resolveGolfKongenShipping({
+              productId:
+                suggestion.product_id,
+              golfkongenPrice:
+                suggestion.golfkongen_price_inc_vat
+            });
+
+          var ownShippingKnown =
+            ownShippingInfo.known === true;
+
+          var golfkongenTotalPrice =
+            ownShippingKnown
+              ? suggestionNumberOrNull(
+                  ownShippingInfo.total
+                )
+              : null;
+
           var shippingKnown =
             suggestion.shipping_is_known === true;
 
@@ -12962,9 +13222,9 @@ var competitors = data.priceCompetitors || [];
               : null;
 
           var totalDifference =
-            golfkongenPrice !== null &&
+            golfkongenTotalPrice !== null &&
             competitorTotalPrice !== null
-              ? golfkongenPrice - competitorTotalPrice
+              ? golfkongenTotalPrice - competitorTotalPrice
               : null;
 
           [
@@ -12975,13 +13235,29 @@ var competitors = data.priceCompetitors || [];
               )
             },
             {
+              label: "GolfKongen frakt",
+              value: ownShippingKnown
+                ? formatPriceCheckMoney(
+                    ownShippingInfo.shipping
+                  )
+                : "Frakt ikke verifisert"
+            },
+            {
+              label: "GolfKongen levert",
+              value: ownShippingKnown
+                ? formatPriceCheckMoney(
+                    ownShippingInfo.total
+                  )
+                : "Frakt ikke verifisert"
+            },
+            {
               label: "Konkurrent vare",
               value: formatPriceCheckMoney(
                 suggestion.competitor_price_inc_vat
               )
             },
             {
-              label: "Konkurrentfrakt",
+              label: "Konkurrent frakt",
               value: priceFollowUpShippingText(
                 suggestion.competitor_shipping_inc_vat,
                 shippingKnown
@@ -12996,15 +13272,19 @@ var competitors = data.priceCompetitors || [];
                 : "Frakt ikke verifisert"
             },
             {
-              label: "Produktforskjell",
+              label: "Vareforskjell",
               value: formatPriceCheckMoney(difference),
               difference: true
             },
             {
-              label: "Forskjell m/frakt",
-              value: shippingKnown
-                ? formatPriceCheckMoney(totalDifference)
-                : "Frakt ikke verifisert",
+              label: "Levertforskjell",
+              value:
+                ownShippingKnown &&
+                shippingKnown
+                  ? formatPriceCheckMoney(
+                      totalDifference
+                    )
+                  : "Frakt ikke verifisert",
               totalDifference: true
             },
             {
@@ -13231,6 +13511,7 @@ var competitors = data.priceCompetitors || [];
 
     [
       suggestionStatusFilter,
+      suggestionPriorityFilter,
       suggestionConfidenceFilter,
       suggestionCompetitorFilter,
       suggestionPriceFilter,
@@ -13242,6 +13523,19 @@ var competitors = data.priceCompetitors || [];
         renderPriceSuggestions
       );
     });
+
+    suggestionStatusFilter.addEventListener(
+      "change",
+      function () {
+        if (
+          suggestionStatusFilter.value !==
+            "probable"
+        ) {
+          suggestionPriorityFilter.value =
+            "all";
+        }
+      }
+    );
 
     suggestionSearch.addEventListener(
       "input",
