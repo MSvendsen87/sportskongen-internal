@@ -882,6 +882,13 @@
       "#sk-internal-root .sk-strategy-dashboard-status{font-weight:900;white-space:nowrap;}" +
       "#sk-internal-root .sk-strategy-ok{color:#166534;}" +
       "#sk-internal-root .sk-strategy-needs{color:#b91c1c;}" +
+      "#sk-internal-root .sk-market-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0;}" +
+      "#sk-internal-root .sk-market-analysis-card{padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}" +
+      "#sk-internal-root .sk-market-analysis-card h3{margin:0 0 7px;font-size:14px;}" +
+      "#sk-internal-root .sk-market-analysis-big{font-size:25px;font-weight:900;color:#111827;margin:3px 0;}" +
+      "#sk-internal-root .sk-market-analysis-sub{font-size:11px;color:#64748b;line-height:1.5;}" +
+      "#sk-internal-root .sk-market-rank-badge{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:10px;font-weight:900;}" +
+      "#sk-internal-root .sk-recent-price-update{padding:10px 12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;color:#166534;font-size:12px;font-weight:800;margin-bottom:10px;}" +
       "#sk-internal-root .sk-analysis-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:6px;border-radius:12px;background:#eef2f7;border:1px solid #dbe3ec;}" +
       "#sk-internal-root .sk-analysis-tab{appearance:none;padding:8px 10px!important;border:1px solid transparent!important;border-radius:9px!important;background:transparent!important;color:#475569!important;font-size:12px!important;font-weight:800!important;}" +
       "#sk-internal-root .sk-analysis-tab.sk-active{background:#111827!important;color:#fff!important;}" +
@@ -937,6 +944,7 @@
       "  #sk-internal-root .sk-market-rank-row{grid-template-columns:26px minmax(120px,1fr) 80px;}" +
       "  #sk-internal-root .sk-price-variant-row{grid-template-columns:28px minmax(120px,1fr) 90px;}" +
       "  #sk-internal-root .sk-price-variant-row .sk-price-variant-current{display:none;}" +
+      "  #sk-internal-root .sk-market-analysis-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-rank-shipping{display:none;}" +
       "  #sk-internal-root .sk-content{padding:10px;}" +
       "  #sk-internal-root .sk-userbar{padding:9px 12px;}" +
@@ -17645,6 +17653,42 @@ var competitors = priceCompetitors;
 
           if (
             suggestion.match_status ===
+              "confirmed"
+          ) {
+            var detailsButton =
+              createButton(
+                "Vis detaljer / graf"
+              );
+
+            detailsButton.onclick =
+              function () {
+                localStorage.setItem(
+                  "sk_pricecheck_open_product_v1",
+                  String(
+                    suggestion.product_id
+                  )
+                );
+
+                activatePriceSubtab(
+                  "overview"
+                );
+
+                overviewSearch.value =
+                  suggestion
+                    .golfkongen_product_name ||
+                  suggestion.product_name ||
+                  "";
+
+                renderCompactPriceOverview();
+              };
+
+            actions.appendChild(
+              detailsButton
+            );
+          }
+
+          if (
+            suggestion.match_status ===
             "probable"
           ) {
             var approve =
@@ -19999,6 +20043,55 @@ var competitorSection = createCollapsibleSection(
           detailInner.className =
             "sk-price-detail-inner";
 
+          var recentUpdateRaw =
+            localStorage.getItem(
+              "sk_price_recent_update_v1"
+            );
+
+          if (recentUpdateRaw) {
+            try {
+              var recentUpdate =
+                JSON.parse(
+                  recentUpdateRaw
+                );
+
+              if (
+                String(
+                  recentUpdate.product_id
+                ) ===
+                  String(
+                    row.product_id
+                  ) &&
+                Date.now() -
+                  Number(
+                    recentUpdate.at ||
+                    0
+                  ) <
+                  10 * 60 * 1000
+              ) {
+                var recentNote =
+                  el(
+                    "div",
+                    "Pris oppdatert via admin nylig. Ny hovedpris i intern prisoversikt: " +
+                      formatPriceCheckMoney(
+                        row
+                          .golfkongen_price_inc_vat
+                      ) +
+                      "."
+                  );
+
+                recentNote.className =
+                  "sk-recent-price-update";
+                recentNote.style.gridColumn =
+                  "1 / -1";
+
+                detailInner.appendChild(
+                  recentNote
+                );
+              }
+            } catch (_) {}
+          }
+
           function detailBox(
             title,
             price,
@@ -21461,6 +21554,23 @@ var competitorSection = createCollapsibleSection(
                         "overview"
                       );
 
+                      localStorage.setItem(
+                        "sk_pricecheck_open_product_v1",
+                        String(
+                          row.product_id
+                        )
+                      );
+
+                      localStorage.setItem(
+                        "sk_price_recent_update_v1",
+                        JSON.stringify({
+                          product_id:
+                            row.product_id,
+                          at:
+                            Date.now()
+                        })
+                      );
+
                       alert(
                         result.message ||
                         "Pris oppdatert."
@@ -21741,7 +21851,46 @@ var competitorSection = createCollapsibleSection(
                 open
                   ? "Vis"
                   : "Skjul";
+
+              if (!open) {
+                loadHistory();
+              }
             };
+
+          var pendingOpenProduct =
+            localStorage.getItem(
+              "sk_pricecheck_open_product_v1"
+            );
+
+          if (
+            pendingOpenProduct &&
+            String(
+              pendingOpenProduct
+            ) ===
+              String(
+                row.product_id
+              )
+          ) {
+            detailRow.style.display =
+              "table-row";
+            detailButton.textContent =
+              "Skjul";
+
+            localStorage.removeItem(
+              "sk_pricecheck_open_product_v1"
+            );
+
+            setTimeout(
+              function () {
+                loadHistory();
+                tr.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start"
+                });
+              },
+              60
+            );
+          }
         }
       );
 
@@ -24246,6 +24395,971 @@ function renderAuditLog(
 }
 
 
+function renderMarketAnalysis(
+  parent,
+  data
+) {
+  var suggestions =
+    data.priceSuggestions || [];
+
+  var inventory =
+    data.inventoryAnalytics || [];
+
+  var confirmed =
+    suggestions.filter(
+      function (item) {
+        return (
+          item.is_active !== false &&
+          item.match_status ===
+            "confirmed" &&
+          Number.isFinite(
+            Number(
+              item
+                .golfkongen_price_inc_vat
+            )
+          ) &&
+          Number(
+            item
+              .golfkongen_price_inc_vat
+          ) > 0 &&
+          Number.isFinite(
+            Number(
+              item
+                .competitor_price_inc_vat
+            )
+          ) &&
+          Number(
+            item
+              .competitor_price_inc_vat
+          ) > 0 &&
+          item.competitor_in_stock !==
+            false
+        );
+      }
+    );
+
+  createPageHeader(
+    parent,
+    "Markedsanalyse",
+    "Prisnivå, markedsposisjon og målbare indikatorer mot konkurrentene. Størrelse skilles tydelig fra prisrangering, slik at produkt-overlapp ikke fremstilles som omsetning eller markedsandel.",
+    "Marked v1"
+  );
+
+  function median(values) {
+    var sorted = values
+      .filter(
+        function (value) {
+          return Number.isFinite(
+            Number(value)
+          );
+        }
+      )
+      .map(Number)
+      .sort(
+        function (a, b) {
+          return a - b;
+        }
+      );
+
+    if (!sorted.length) {
+      return null;
+    }
+
+    var middle =
+      Math.floor(
+        sorted.length / 2
+      );
+
+    if (
+      sorted.length % 2
+    ) {
+      return sorted[middle];
+    }
+
+    return (
+      sorted[middle - 1] +
+      sorted[middle]
+    ) / 2;
+  }
+
+  function formatPercent(value) {
+    var number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return "-";
+    }
+
+    return number.toLocaleString(
+      "nb-NO",
+      {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      }
+    ) + "%";
+  }
+
+  var byProduct = {};
+
+  confirmed.forEach(
+    function (item) {
+      var productKey =
+        String(item.product_id);
+
+      if (!byProduct[productKey]) {
+        byProduct[productKey] = {
+          productId:
+            item.product_id,
+          name:
+            item.golfkongen_product_name ||
+            item.product_name ||
+            "Produkt",
+          ownPrice:
+            Number(
+              item
+                .golfkongen_price_inc_vat
+            ),
+          competitors: {}
+        };
+      }
+
+      var competitorKey =
+        String(
+          item.competitor_id ||
+          item.competitor_name ||
+          "ukjent"
+        );
+
+      var existing =
+        byProduct[productKey]
+          .competitors[
+            competitorKey
+          ];
+
+      var price =
+        Number(
+          item
+            .competitor_price_inc_vat
+        );
+
+      if (
+        !existing ||
+        price < existing.price
+      ) {
+        byProduct[productKey]
+          .competitors[
+            competitorKey
+          ] = {
+            key:
+              competitorKey,
+            name:
+              item.competitor_name ||
+              "Konkurrent",
+            price:
+              price,
+            checkedAt:
+              item.checked_at ||
+              null
+          };
+      }
+    }
+  );
+
+  var productAnalysis =
+    Object.keys(byProduct)
+      .map(
+        function (key) {
+          var product =
+            byProduct[key];
+
+          var competitors =
+            Object.keys(
+              product.competitors
+            ).map(
+              function (compKey) {
+                return product
+                  .competitors[
+                    compKey
+                  ];
+              }
+            );
+
+          var prices =
+            competitors.map(
+              function (competitor) {
+                return competitor.price;
+              }
+            );
+
+          var marketMedian =
+            median(prices);
+
+          var cheaper =
+            prices.filter(
+              function (price) {
+                return (
+                  price <
+                  product.ownPrice
+                );
+              }
+            ).length;
+
+          var totalStores =
+            competitors.length + 1;
+
+          return {
+            productId:
+              product.productId,
+            name:
+              product.name,
+            ownPrice:
+              product.ownPrice,
+            competitors:
+              competitors,
+            competitorCount:
+              competitors.length,
+            median:
+              marketMedian,
+            priceIndex:
+              marketMedian &&
+              marketMedian > 0
+                ? (
+                    product.ownPrice /
+                    marketMedian
+                  ) * 100
+                : null,
+            rank:
+              cheaper + 1,
+            totalStores:
+              totalStores,
+            cheaperThanMarket:
+              marketMedian !== null &&
+              product.ownPrice <
+                marketMedian,
+            sameAsMarket:
+              marketMedian !== null &&
+              product.ownPrice ===
+                marketMedian,
+            pricierThanMarket:
+              marketMedian !== null &&
+              product.ownPrice >
+                marketMedian,
+            cheapestObserved:
+              cheaper === 0
+          };
+        }
+      );
+
+  var indexedProducts =
+    productAnalysis.filter(
+      function (item) {
+        return (
+          item.priceIndex !== null
+        );
+      }
+    );
+
+  var generalPriceIndex =
+    median(
+      indexedProducts.map(
+        function (item) {
+          return item.priceIndex;
+        }
+      )
+    );
+
+  var cheaperCount =
+    indexedProducts.filter(
+      function (item) {
+        return item.cheaperThanMarket;
+      }
+    ).length;
+
+  var sameCount =
+    indexedProducts.filter(
+      function (item) {
+        return item.sameAsMarket;
+      }
+    ).length;
+
+  var pricierCount =
+    indexedProducts.filter(
+      function (item) {
+        return item.pricierThanMarket;
+      }
+    ).length;
+
+  var cheapestObservedCount =
+    indexedProducts.filter(
+      function (item) {
+        return item.cheapestObserved;
+      }
+    ).length;
+
+  var averageRank =
+    indexedProducts.length
+      ? indexedProducts.reduce(
+          function (sum, item) {
+            return sum + item.rank;
+          },
+          0
+        ) /
+        indexedProducts.length
+      : null;
+
+  var averageStoreCount =
+    indexedProducts.length
+      ? indexedProducts.reduce(
+          function (sum, item) {
+            return (
+              sum +
+              item.totalStores
+            );
+          },
+          0
+        ) /
+        indexedProducts.length
+      : null;
+
+  var indexLabel =
+    generalPriceIndex === null
+      ? "For lite data"
+      : (
+          generalPriceIndex < 99.5
+            ? (
+                formatPercent(
+                  100 -
+                  generalPriceIndex
+                ) +
+                " billigere enn markedsmidten"
+              )
+            : (
+                generalPriceIndex > 100.5
+                  ? (
+                      formatPercent(
+                        generalPriceIndex -
+                        100
+                      ) +
+                      " dyrere enn markedsmidten"
+                    )
+                  : "Omtrent lik markedsmidten"
+              )
+        );
+
+  addProStatGrid(
+    parent,
+    [
+      {
+        label:
+          "Prisindeks · marked = 100",
+        value:
+          generalPriceIndex === null
+            ? "-"
+            : generalPriceIndex
+                .toLocaleString(
+                  "nb-NO",
+                  {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1
+                  }
+                ),
+        tone:
+          generalPriceIndex !== null &&
+          generalPriceIndex > 102
+            ? "warning"
+            : "ok"
+      },
+      {
+        label:
+          "Produkter med markedsdata",
+        value:
+          String(
+            indexedProducts.length
+          ),
+        tone: "ok"
+      },
+      {
+        label:
+          "Billigst / delt billigst",
+        value:
+          String(
+            cheapestObservedCount
+          ),
+        tone: "ok"
+      },
+      {
+        label:
+          "Gj.snitt prisplassering",
+        value:
+          averageRank === null
+            ? "-"
+            : (
+                averageRank.toLocaleString(
+                  "nb-NO",
+                  {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1
+                  }
+                ) +
+                " av " +
+                averageStoreCount.toLocaleString(
+                  "nb-NO",
+                  {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1
+                  }
+                )
+              ),
+        tone: "ok"
+      }
+    ]
+  );
+
+  var priceSummary = el("div");
+  priceSummary.className =
+    "sk-market-analysis-grid";
+
+  var indexCard = el("div");
+  indexCard.className =
+    "sk-market-analysis-card";
+  indexCard.appendChild(
+    el("h3", "Generelt prisnivå")
+  );
+
+  var indexBig = el(
+    "div",
+    indexLabel
+  );
+  indexBig.className =
+    "sk-market-analysis-big";
+  indexCard.appendChild(
+    indexBig
+  );
+
+  var indexSub = el(
+    "div",
+    "Prisindeksen beregnes produkt for produkt mot medianen av de godkjente konkurrentprisene. 100 betyr samme pris som markedsmidten."
+  );
+  indexSub.className =
+    "sk-market-analysis-sub";
+  indexCard.appendChild(
+    indexSub
+  );
+
+  var splitCard = el("div");
+  splitCard.className =
+    "sk-market-analysis-card";
+  splitCard.appendChild(
+    el("h3", "Hvor ligger vi?")
+  );
+
+  var splitBig = el(
+    "div",
+    String(cheaperCount) +
+      " billigere · " +
+      String(sameCount) +
+      " likt · " +
+      String(pricierCount) +
+      " dyrere"
+  );
+  splitBig.className =
+    "sk-market-analysis-big";
+  splitCard.appendChild(
+    splitBig
+  );
+
+  var splitSub = el(
+    "div",
+    "Sammenligningen bruker markedsmedianen per produkt, ikke bare den aller billigste konkurrenten."
+  );
+  splitSub.className =
+    "sk-market-analysis-sub";
+  splitCard.appendChild(
+    splitSub
+  );
+
+  priceSummary.appendChild(
+    indexCard
+  );
+  priceSummary.appendChild(
+    splitCard
+  );
+  parent.appendChild(
+    priceSummary
+  );
+
+  var competitorByName = {};
+
+  confirmed.forEach(
+    function (item) {
+      var competitorName =
+        item.competitor_name ||
+        "Konkurrent";
+
+      var productKey =
+        String(item.product_id);
+
+      if (!competitorByName[
+        competitorName
+      ]) {
+        competitorByName[
+          competitorName
+        ] = {
+          name:
+            competitorName,
+          products: {},
+          latest:
+            null
+        };
+      }
+
+      var competitor =
+        competitorByName[
+          competitorName
+        ];
+
+      var price =
+        Number(
+          item
+            .competitor_price_inc_vat
+        );
+
+      var own =
+        Number(
+          item
+            .golfkongen_price_inc_vat
+        );
+
+      var existing =
+        competitor.products[
+          productKey
+        ];
+
+      if (
+        !existing ||
+        price < existing.price
+      ) {
+        competitor.products[
+          productKey
+        ] = {
+          own:
+            own,
+          price:
+            price
+        };
+      }
+
+      if (item.checked_at) {
+        var checked =
+          new Date(
+            item.checked_at
+          ).getTime();
+
+        if (
+          !competitor.latest ||
+          checked >
+            competitor.latest
+        ) {
+          competitor.latest =
+            checked;
+        }
+      }
+    }
+  );
+
+  var competitorRows =
+    Object.keys(
+      competitorByName
+    ).map(
+      function (name) {
+        var competitor =
+          competitorByName[name];
+
+        var pairs =
+          Object.keys(
+            competitor.products
+          ).map(
+            function (key) {
+              return competitor
+                .products[key];
+            }
+          );
+
+        var cheaperForUs = 0;
+        var sameForUs = 0;
+        var pricierForUs = 0;
+        var indices = [];
+
+        pairs.forEach(
+          function (pair) {
+            if (
+              pair.own <
+              pair.price
+            ) {
+              cheaperForUs += 1;
+            } else if (
+              pair.own ===
+              pair.price
+            ) {
+              sameForUs += 1;
+            } else {
+              pricierForUs += 1;
+            }
+
+            if (pair.own > 0) {
+              indices.push(
+                (
+                  pair.price /
+                  pair.own
+                ) * 100
+              );
+            }
+          }
+        );
+
+        return {
+          name:
+            competitor.name,
+          overlap:
+            pairs.length,
+          gkCheaper:
+            cheaperForUs,
+          same:
+            sameForUs,
+          gkPricier:
+            pricierForUs,
+          competitorIndex:
+            median(indices),
+          latest:
+            competitor.latest
+        };
+      }
+    ).sort(
+      function (a, b) {
+        if (
+          a.competitorIndex !==
+          b.competitorIndex
+        ) {
+          return (
+            Number(
+              a.competitorIndex ||
+              999
+            ) -
+            Number(
+              b.competitorIndex ||
+              999
+            )
+          );
+        }
+
+        return b.overlap -
+          a.overlap;
+      }
+    );
+
+  addDashboardSectionTitle(
+    parent,
+    "Pris mot hver konkurrent"
+  );
+
+  skCreateAnalysisTable(
+    parent,
+    [
+      {
+        label: "Prisrang",
+        value:
+          function (row) {
+            return (
+              String(
+                competitorRows.indexOf(
+                  row
+                ) + 1
+              ) +
+              "."
+            );
+          }
+      },
+      {
+        label: "Konkurrent",
+        key: "name"
+      },
+      {
+        label:
+          "Godkjent overlapp",
+        key: "overlap",
+        align: "right"
+      },
+      {
+        label:
+          "Prisindeks mot GK",
+        value:
+          function (row) {
+            return row.competitorIndex ===
+              null
+              ? "-"
+              : row.competitorIndex
+                  .toLocaleString(
+                    "nb-NO",
+                    {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1
+                    }
+                  );
+          },
+        align: "right"
+      },
+      {
+        label: "GK billigere",
+        key: "gkCheaper",
+        align: "right"
+      },
+      {
+        label: "Lik pris",
+        key: "same",
+        align: "right"
+      },
+      {
+        label: "GK dyrere",
+        key: "gkPricier",
+        align: "right"
+      },
+      {
+        label: "Sist kontrollert",
+        value:
+          function (row) {
+            return row.latest
+              ? new Date(
+                  row.latest
+                ).toLocaleString(
+                  "nb-NO"
+                )
+              : "-";
+          }
+      }
+    ],
+    competitorRows,
+    "Ingen konkurrentdata."
+  );
+
+  var physicalProducts =
+    inventory.length;
+
+  var stockUnits =
+    inventory.reduce(
+      function (sum, row) {
+        return (
+          sum +
+          Number(
+            row.stock_quantity ||
+            0
+          )
+        );
+      },
+      0
+    );
+
+  var stockRetailExVat =
+    inventory.reduce(
+      function (sum, row) {
+        return (
+          sum +
+          Number(
+            row
+              .stock_retail_value_ex_vat ||
+            0
+          )
+        );
+      },
+      0
+    );
+
+  var units365 =
+    inventory.reduce(
+      function (sum, row) {
+        return (
+          sum +
+          Number(
+            row.units_sold_365d ||
+            0
+          )
+        );
+      },
+      0
+    );
+
+  var revenue365 =
+    inventory.reduce(
+      function (sum, row) {
+        return (
+          sum +
+          Number(
+            row.revenue_365d ||
+            0
+          )
+        );
+      },
+      0
+    );
+
+  addDashboardSectionTitle(
+    parent,
+    "Størrelse og markedsindikatorer"
+  );
+
+  var sizeGrid = el("div");
+  sizeGrid.className =
+    "sk-market-analysis-grid";
+
+  [
+    [
+      "Fysiske produkter i vårt analysegrunnlag",
+      String(physicalProducts),
+      "Booking, gavekort og tjenester er holdt utenfor."
+    ],
+    [
+      "Enheter på lager",
+      Math.round(stockUnits)
+        .toLocaleString(
+          "nb-NO"
+        ),
+      "Faktisk fysisk lager i analysegrunnlaget."
+    ],
+    [
+      "Utsalgsverdi lager eks. MVA",
+      skFormatMoney(
+        stockRetailExVat
+      ),
+      "Dagens lager vurdert til dagens utsalgspriser eks. MVA."
+    ],
+    [
+      "Solgte enheter · 365 dager",
+      Math.round(units365)
+        .toLocaleString(
+          "nb-NO"
+        ),
+      "Fra synket Quickbutik-salg."
+    ],
+    [
+      "Omsetning i produktgrunnlaget · 365 dager",
+      skFormatMoney(
+        revenue365
+      ),
+      "Brutto vareomsetning fra synkede ordrelinjer."
+    ],
+    [
+      "Godkjente konkurrentkoblinger",
+      String(
+        confirmed.length
+      ),
+      String(
+        indexedProducts.length
+      ) +
+        " av våre produkter har brukbar markedsprisdata."
+    ]
+  ].forEach(
+    function (item) {
+      var card = el("div");
+      card.className =
+        "sk-market-analysis-card";
+      card.appendChild(
+        el("h3", item[0])
+      );
+
+      var big = el(
+        "div",
+        item[1]
+      );
+      big.className =
+        "sk-market-analysis-big";
+      card.appendChild(big);
+
+      var sub = el(
+        "div",
+        item[2]
+      );
+      sub.className =
+        "sk-market-analysis-sub";
+      card.appendChild(sub);
+
+      sizeGrid.appendChild(card);
+    }
+  );
+
+  parent.appendChild(sizeGrid);
+
+  var sizeNote = el(
+    "div",
+    "Viktig om størrelsesrangering: dagens konkurrentdata viser pris og hvor mange av våre produkter vi har funnet et godkjent treff på hos hver butikk. Det forteller noe om sortiment-overlapp, men ikke konkurrentens totale omsetning, totale lager eller markedsandel. Derfor kaller vi ikke dette en størrelsesrangering ennå. Neste steg kan være å samle offentlige indikatorer som totalt nettbutikk-sortiment, merke-bredde, Google-anmeldelser, organisk søkesynlighet og sosiale følgere i samme side."
+  );
+  sizeNote.className =
+    "sk-note";
+  sizeNote.style.marginTop =
+    "12px";
+  parent.appendChild(sizeNote);
+
+  addDashboardSectionTitle(
+    parent,
+    "Sortiment-overlapp · foreløpig indikator"
+  );
+
+  var overlapRows =
+    competitorRows
+      .slice()
+      .sort(
+        function (a, b) {
+          return b.overlap -
+            a.overlap;
+        }
+      );
+
+  skCreateAnalysisTable(
+    parent,
+    [
+      {
+        label: "Overlapp-rang",
+        value:
+          function (row) {
+            return (
+              String(
+                overlapRows.indexOf(
+                  row
+                ) + 1
+              ) +
+              "."
+            );
+          }
+      },
+      {
+        label: "Konkurrent",
+        key: "name"
+      },
+      {
+        label:
+          "Produkter vi matcher",
+        key: "overlap",
+        align: "right"
+      },
+      {
+        label:
+          "Andel av våre prisprodukter",
+        value:
+          function (row) {
+            return indexedProducts.length
+              ? formatPercent(
+                  row.overlap /
+                  indexedProducts.length *
+                  100
+                )
+              : "-";
+          },
+        align: "right"
+      }
+    ],
+    overlapRows,
+    "Ingen overlappdata."
+  );
+}
+
+
 function renderPortal(sb, user, data) {
     var app = renderShell(
       "Sportskongen Admin",
@@ -24366,6 +25480,20 @@ function renderPortal(sb, user, data) {
           "Bestselgere og dårligst selgende produkter.",
         render: function (parent) {
           renderSalesAnalytics(
+            parent,
+            data
+          );
+        }
+      },
+
+      marketAnalysis: {
+        label: "Markedsanalyse",
+        icon: "🧭",
+        group: "Salg og pris",
+        description:
+          "Prisnivå, konkurrentposisjon og markedsindikatorer.",
+        render: function (parent) {
+          renderMarketAnalysis(
             parent,
             data
           );
