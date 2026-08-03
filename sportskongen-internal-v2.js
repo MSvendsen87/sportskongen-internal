@@ -59,30 +59,232 @@
 
 
   var skAdminV4ResizeBound = false;
+  var skAdminV4LayoutObserver = null;
+  var skAdminV4FitTimer = null;
+
+  function setImportantStyle(
+    node,
+    property,
+    value
+  ) {
+    if (!node || !node.style) {
+      return;
+    }
+
+    node.style.setProperty(
+      property,
+      value,
+      "important"
+    );
+  }
+
+  function findCommonAncestor(a, b) {
+    if (!a || !b) {
+      return null;
+    }
+
+    var current = a;
+
+    while (
+      current &&
+      current !== document.body
+    ) {
+      if (current.contains(b)) {
+        return current;
+      }
+
+      current =
+        current.parentElement;
+    }
+
+    return document.body;
+  }
+
+  function prepareAdminHostLayout(
+    hiddenSidebar
+  ) {
+    if (!root) return;
+
+    /*
+     * Quickbutik-temaet legger innholdet i en smal
+     * kolonne og kan klippe negative marginer.
+     * På admin-siden gjør vi kun våre egne forfedre
+     * bredere og lar resten av nettbutikken være urørt.
+     */
+    var common = hiddenSidebar
+      ? findCommonAncestor(
+          hiddenSidebar,
+          root
+        )
+      : null;
+
+    if (
+      common &&
+      common !== document.body
+    ) {
+      setImportantStyle(
+        common,
+        "grid-template-columns",
+        "minmax(0,1fr)"
+      );
+
+      setImportantStyle(
+        common,
+        "overflow",
+        "visible"
+      );
+    }
+
+    var node =
+      root.parentElement;
+
+    while (
+      node &&
+      node !== document.body &&
+      node !== document.documentElement
+    ) {
+      setImportantStyle(
+        node,
+        "max-width",
+        "none"
+      );
+
+      setImportantStyle(
+        node,
+        "overflow",
+        "visible"
+      );
+
+      var rect =
+        node.getBoundingClientRect();
+
+      /*
+       * Bootstrap-/temakolonner langs stien til admin
+       * skal ikke beholde gammel 8/9/10-kolonnebredde.
+       */
+      if (
+        rect.width <
+          window.innerWidth - 40
+      ) {
+        setImportantStyle(
+          node,
+          "width",
+          "100%"
+        );
+
+        setImportantStyle(
+          node,
+          "flex",
+          "1 1 100%"
+        );
+
+        setImportantStyle(
+          node,
+          "flex-basis",
+          "100%"
+        );
+      }
+
+      node =
+        node.parentElement;
+    }
+  }
 
   function fitAdminRootToViewport() {
     if (!root) return;
 
-    var left = root.getBoundingClientRect().left;
-    var targetLeft = 12;
-    var shift = Math.max(0, left - targetLeft);
+    prepareAdminHostLayout(
+      window.skAdminHiddenStoreSidebar ||
+      null
+    );
 
-    root.style.width =
-      "calc(100vw - 24px)";
-    root.style.maxWidth = "none";
-    root.style.marginLeft =
-      "-" + String(shift) + "px";
-    root.style.marginRight = "0";
-    root.style.position = "relative";
-    root.style.zIndex = "10";
+    /*
+     * Bruk relative left i stedet for negativ margin.
+     * Det er langt mer stabilt inni Quickbutik sine
+     * grid/flex-containere.
+     */
+    setImportantStyle(
+      root,
+      "width",
+      "calc(100vw - 24px)"
+    );
+
+    setImportantStyle(
+      root,
+      "max-width",
+      "none"
+    );
+
+    setImportantStyle(
+      root,
+      "margin-left",
+      "0"
+    );
+
+    setImportantStyle(
+      root,
+      "margin-right",
+      "0"
+    );
+
+    setImportantStyle(
+      root,
+      "position",
+      "relative"
+    );
+
+    setImportantStyle(
+      root,
+      "z-index",
+      "10"
+    );
+
+    setImportantStyle(
+      root,
+      "overflow",
+      "visible"
+    );
+
+    /*
+     * Mål etter at forfedrene er utvidet.
+     */
+    root.style.removeProperty(
+      "left"
+    );
+
+    var left =
+      root.getBoundingClientRect()
+        .left;
+
+    var targetLeft = 12;
+    var shift =
+      Math.max(
+        0,
+        left - targetLeft
+      );
+
+    setImportantStyle(
+      root,
+      "left",
+      "-" +
+        String(
+          Math.round(shift)
+        ) +
+        "px"
+    );
   }
 
   function hideStoreCategorySidebarForAdmin() {
-    if (
-      document.body.dataset
-        .skAdminCategorySidebarHidden === "1"
-    ) {
-      return;
+    var alreadyHidden =
+      window.skAdminHiddenStoreSidebar ||
+      null;
+
+    if (alreadyHidden) {
+      prepareAdminHostLayout(
+        alreadyHidden
+      );
+
+      return alreadyHidden;
     }
 
     var rootLeft =
@@ -184,45 +386,108 @@
     });
 
     if (best && best.node) {
-      best.node.dataset.skAdminHiddenByV4 =
-        "1";
-      best.node.style.display = "none";
+      best.node.dataset
+        .skAdminHiddenByV4 = "1";
 
-      document.body.dataset
-        .skAdminCategorySidebarHidden = "1";
+      setImportantStyle(
+        best.node,
+        "display",
+        "none"
+      );
+
+      window.skAdminHiddenStoreSidebar =
+        best.node;
+
+      prepareAdminHostLayout(
+        best.node
+      );
+
+      return best.node;
     }
+
+    return null;
+  }
+
+  function scheduleAdminV4Fit() {
+    if (skAdminV4FitTimer) {
+      clearTimeout(
+        skAdminV4FitTimer
+      );
+    }
+
+    skAdminV4FitTimer =
+      setTimeout(
+        function () {
+          hideStoreCategorySidebarForAdmin();
+          fitAdminRootToViewport();
+        },
+        80
+      );
   }
 
   function activateAdminV4PageMode() {
     document.documentElement.classList.add(
       "sk-admin-v4-page"
     );
+
     document.body.classList.add(
       "sk-admin-v4-page"
     );
 
     hideStoreCategorySidebarForAdmin();
+    fitAdminRootToViewport();
 
-    setTimeout(function () {
-      fitAdminRootToViewport();
-    }, 0);
+    /*
+     * Quickbutik kan endre layout etter at vårt script
+     * er lastet. Vi må derfor kontrollere bredden igjen
+     * når temaet flytter eller bygger om DOM-en.
+     */
+    [
+      100,
+      350,
+      800,
+      1600
+    ].forEach(function (delay) {
+      setTimeout(
+        function () {
+          hideStoreCategorySidebarForAdmin();
+          fitAdminRootToViewport();
+        },
+        delay
+      );
+    });
 
-    setTimeout(function () {
-      hideStoreCategorySidebarForAdmin();
-      fitAdminRootToViewport();
-    }, 250);
+    if (
+      !skAdminV4LayoutObserver &&
+      window.MutationObserver
+    ) {
+      skAdminV4LayoutObserver =
+        new MutationObserver(
+          function () {
+            scheduleAdminV4Fit();
+          }
+        );
+
+      skAdminV4LayoutObserver.observe(
+        document.body,
+        {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: [
+            "class",
+            "style"
+          ]
+        }
+      );
+    }
 
     if (!skAdminV4ResizeBound) {
       skAdminV4ResizeBound = true;
 
       window.addEventListener(
         "resize",
-        function () {
-          setTimeout(
-            fitAdminRootToViewport,
-            40
-          );
-        }
+        scheduleAdminV4Fit
       );
     }
   }
@@ -366,6 +631,8 @@
       "#sk-internal-root table th{position:sticky;top:0;z-index:1;}" +
 
       "@media(max-width:1120px){" +
+      "  #sk-internal-root .sk-v4-layout{grid-template-columns:195px minmax(0,1fr);}" +
+      "  #sk-internal-root .sk-v4-sidebar{padding-left:9px;padding-right:9px;}" +
       "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "}" +
       "@media(max-width:900px){" +
