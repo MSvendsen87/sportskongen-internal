@@ -9415,8 +9415,8 @@ function renderProductControlDashboard(parent, data) {
 
     var checkAllSection =
       createCollapsibleSection(
-        "🚀 Kjør prissjekk på alle",
-        "Kontroller produkter i trygge puljer på 5. Sikre treff lagres som forslag som må godkjennes manuelt.",
+        "🚀 Kjør prissjekk på flere produkter",
+        "Kontroller produkter ett og ett med retry og kildevis fallback. Du kan nå kjøre bare produkter som fortsatt mangler et godkjent pristreff.",
         false
       );
 
@@ -9433,6 +9433,25 @@ function renderProductControlDashboard(parent, data) {
       checkAllWarning
     );
 
+    var missingConfirmedProductIds = {};
+
+    rows.forEach(function (row) {
+      if (
+        row &&
+        row.price_status ===
+          "Mangler prissjekk"
+      ) {
+        missingConfirmedProductIds[
+          String(row.product_id)
+        ] = true;
+      }
+    });
+
+    var missingConfirmedCount =
+      Object.keys(
+        missingConfirmedProductIds
+      ).length;
+
     var checkAllControls = el("div");
 
     checkAllControls.style.display = "grid";
@@ -9444,6 +9463,18 @@ function renderProductControlDashboard(parent, data) {
     var checkAllLimit = el("select");
 
     [
+      {
+        value: "missing20",
+        label:
+          "Test 20 uten godkjent pristreff"
+      },
+      {
+        value: "missing",
+        label:
+          "Kontroller alle uten godkjent pristreff (" +
+          String(missingConfirmedCount) +
+          ")"
+      },
       {
         value: "20",
         label: "Test med 20 produkter"
@@ -9468,6 +9499,11 @@ function renderProductControlDashboard(parent, data) {
         option
       );
     });
+
+    checkAllLimit.value =
+      missingConfirmedCount > 0
+        ? "missing20"
+        : "20";
 
     addField(
       checkAllControls,
@@ -10072,6 +10108,31 @@ function renderProductControlDashboard(parent, data) {
 
           retryFailedRequested = false;
         } else if (
+          requestedLimit === "missing" ||
+          requestedLimit === "missing20"
+        ) {
+          productsToCheck =
+            productsToCheck.filter(
+              function (product) {
+                return (
+                  missingConfirmedProductIds[
+                    String(product.id)
+                  ] === true
+                );
+              }
+            );
+
+          if (
+            requestedLimit ===
+              "missing20"
+          ) {
+            productsToCheck =
+              productsToCheck.slice(
+                0,
+                20
+              );
+          }
+        } else if (
           requestedLimit !== "all"
         ) {
           productsToCheck =
@@ -10088,13 +10149,25 @@ function renderProductControlDashboard(parent, data) {
           return;
         }
 
+        var scopeMessage =
+          (
+            requestedLimit === "missing" ||
+            requestedLimit === "missing20"
+          )
+            ? (
+                "\n\nDisse produktene mangler fortsatt et godkjent pristreff. Nye avvisninger og læring brukes automatisk i denne kjøringen."
+              )
+            : "";
+
         var confirmed =
           window.confirm(
             "Starte prissjekk av " +
             String(
               productsToCheck.length
             ) +
-            " produkter?\n\nSikre treff lagres som forslag, men blir ikke godkjent automatisk."
+            " produkter?" +
+            scopeMessage +
+            "\n\nTreff lagres som forslag og blir ikke godkjent automatisk."
           );
 
         if (!confirmed) {
