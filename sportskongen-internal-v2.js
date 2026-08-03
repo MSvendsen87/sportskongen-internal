@@ -849,6 +849,24 @@
       "#sk-internal-root .sk-diagnostic-list{display:grid;gap:8px;margin-top:10px;}" +
       "#sk-internal-root .sk-diagnostic-row{padding:10px 11px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-size:12px;line-height:1.45;}" +
       "#sk-internal-root .sk-learning-example{padding:11px;border:1px solid #e5e7eb;border-radius:11px;background:#fff;margin-bottom:8px;}" +
+      "#sk-internal-root .sk-market-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:10px 0 14px;}" +
+      "#sk-internal-root .sk-market-box{padding:10px 11px;border:1px solid #e5e7eb;border-radius:11px;background:#fff;}" +
+      "#sk-internal-root .sk-market-box span{display:block;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;}" +
+      "#sk-internal-root .sk-market-box strong{display:block;margin-top:4px;font-size:16px;color:#111827;}" +
+      "#sk-internal-root .sk-market-ranking{display:grid;gap:6px;margin:10px 0;}" +
+      "#sk-internal-root .sk-market-rank-row{display:grid;grid-template-columns:30px minmax(150px,1fr) 95px 95px;gap:8px;align-items:center;padding:8px 9px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;font-size:12px;}" +
+      "#sk-internal-root .sk-market-rank-row.sk-own-store{border-color:#86efac;background:#f0fdf4;box-shadow:inset 3px 0 0 #16a34a;}" +
+      "#sk-internal-root .sk-market-rank-price{text-align:right;font-weight:900;white-space:nowrap;}" +
+      "#sk-internal-root .sk-market-rank-shipping{text-align:right;color:#64748b;white-space:nowrap;font-size:11px;}" +
+      "#sk-internal-root .sk-strategy-choice{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0;}" +
+      "#sk-internal-root .sk-strategy-btn{appearance:none;padding:10px!important;border:1px solid #cbd5e1!important;border-radius:10px!important;background:#fff!important;color:#334155!important;font-weight:800!important;cursor:pointer;}" +
+      "#sk-internal-root .sk-strategy-btn.sk-selected{background:#111827!important;color:#fff!important;border-color:#111827!important;}" +
+      "#sk-internal-root .sk-strategy-advice{padding:11px 12px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a8a;font-size:12px;line-height:1.5;}" +
+      "#sk-internal-root .sk-undo-match-list{display:grid;gap:7px;margin-top:9px;}" +
+      "#sk-internal-root .sk-undo-match-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;}" +
+      "#sk-internal-root .sk-recommendation-down{color:#b91c1c;font-weight:900;}" +
+      "#sk-internal-root .sk-recommendation-up{color:#166534;font-weight:900;}" +
+      "#sk-internal-root .sk-recommendation-stay{color:#475569;font-weight:900;}" +
 
       "#sk-internal-root .sk-note{padding:13px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-warning{padding:13px 14px;border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:14px;line-height:1.5;font-size:14px;}" +
@@ -882,6 +900,10 @@
       "  #sk-internal-root .sk-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-price-tabs{position:static;}" +
       "  #sk-internal-root .sk-price-detail-inner{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-summary{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "  #sk-internal-root .sk-strategy-choice{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-rank-row{grid-template-columns:26px minmax(120px,1fr) 80px;}" +
+      "  #sk-internal-root .sk-market-rank-shipping{display:none;}" +
       "  #sk-internal-root .sk-content{padding:10px;}" +
       "  #sk-internal-root .sk-userbar{padding:9px 12px;}" +
       "}";
@@ -8448,6 +8470,742 @@ function renderProductControlDashboard(parent, data) {
 
     var priceShippingRules =
       data.priceShippingRules || [];
+
+    var priceProductStrategies =
+      data.priceProductStrategies || [];
+
+    function numberOrNullLocal(value) {
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return null;
+      }
+
+      var number = Number(value);
+
+      return Number.isFinite(number)
+        ? number
+        : null;
+    }
+
+    function confirmedMatchesForProduct(
+      productId
+    ) {
+      return priceSuggestions.filter(
+        function (item) {
+          return (
+            item.is_active !== false &&
+            item.match_status ===
+              "confirmed" &&
+            String(item.product_id) ===
+              String(productId) &&
+            numberOrNullLocal(
+              item
+                .competitor_price_inc_vat
+            ) !== null
+          );
+        }
+      );
+    }
+
+    function marketStoresForProduct(
+      productId
+    ) {
+      var byCompetitor = {};
+
+      confirmedMatchesForProduct(
+        productId
+      ).forEach(function (item) {
+        /*
+         * Utsolgte konkurrentvarer vises i treffhistorikken,
+         * men teller ikke i selve markedsposisjonen.
+         */
+        if (
+          item.competitor_in_stock ===
+            false
+        ) {
+          return;
+        }
+
+        var key =
+          String(
+            item.competitor_id ||
+            item.competitor_name ||
+            ""
+          );
+
+        var price =
+          numberOrNullLocal(
+            item
+              .competitor_price_inc_vat
+          );
+
+        if (
+          !key ||
+          price === null
+        ) {
+          return;
+        }
+
+        if (
+          !byCompetitor[key] ||
+          price <
+            byCompetitor[key].price
+        ) {
+          byCompetitor[key] = {
+            key: key,
+            name:
+              item.competitor_name ||
+              "Konkurrent",
+            price: price,
+            shipping:
+              item.shipping_is_known ===
+                true
+                ? numberOrNullLocal(
+                    item
+                      .competitor_shipping_inc_vat
+                  )
+                : null,
+            total:
+              item.shipping_is_known ===
+                true
+                ? numberOrNullLocal(
+                    item
+                      .competitor_total_inc_vat
+                  )
+                : null,
+            inStock:
+              item.competitor_in_stock,
+            match:
+              item
+          };
+        }
+      });
+
+      return Object.keys(
+        byCompetitor
+      ).map(function (key) {
+        return byCompetitor[key];
+      });
+    }
+
+    function medianPrice(values) {
+      var sorted =
+        values
+          .filter(
+            function (value) {
+              return Number.isFinite(
+                Number(value)
+              );
+            }
+          )
+          .map(Number)
+          .sort(
+            function (a, b) {
+              return a - b;
+            }
+          );
+
+      if (!sorted.length) {
+        return null;
+      }
+
+      var middle =
+        Math.floor(
+          sorted.length / 2
+        );
+
+      if (
+        sorted.length % 2 === 1
+      ) {
+        return sorted[middle];
+      }
+
+      return Math.round(
+        (
+          sorted[middle - 1] +
+          sorted[middle]
+        ) / 2
+      );
+    }
+
+    function currentStrategyForProduct(
+      productId
+    ) {
+      var row =
+        priceProductStrategies.find(
+          function (item) {
+            return (
+              String(
+                item.product_id
+              ) ===
+              String(productId)
+            );
+          }
+        );
+
+      return row
+        ? row.strategy
+        : null;
+    }
+
+    function analyzeMarketForProduct(
+      row
+    ) {
+      var ownPrice =
+        numberOrNullLocal(
+          row
+            .golfkongen_price_inc_vat
+        );
+
+      var stores =
+        marketStoresForProduct(
+          row.product_id
+        );
+
+      var competitorPrices =
+        stores.map(
+          function (store) {
+            return store.price;
+          }
+        );
+
+      if (
+        ownPrice === null ||
+        !competitorPrices.length
+      ) {
+        return {
+          ownPrice: ownPrice,
+          stores: stores,
+          competitorCount:
+            stores.length,
+          min: null,
+          max: null,
+          median: null,
+          allSame: false,
+          positionText:
+            "For lite data",
+          positionRank: null,
+          totalStores:
+            stores.length + 1,
+          recommendation:
+            null
+        };
+      }
+
+      var min =
+        Math.min.apply(
+          Math,
+          competitorPrices
+        );
+
+      var max =
+        Math.max.apply(
+          Math,
+          competitorPrices
+        );
+
+      var median =
+        medianPrice(
+          competitorPrices
+        );
+
+      var allSame =
+        competitorPrices.every(
+          function (price) {
+            return price ===
+              competitorPrices[0];
+          }
+        );
+
+      var marketRows =
+        stores.map(
+          function (store) {
+            return {
+              name: store.name,
+              price: store.price,
+              shipping:
+                store.shipping,
+              total:
+                store.total,
+              isOwn: false
+            };
+          }
+        );
+
+      var ownShippingInfo =
+        resolveGolfKongenShipping({
+          productId:
+            row.product_id,
+          category:
+            row.category,
+          golfkongenPrice:
+            ownPrice
+        });
+
+      marketRows.push({
+        name: "GolfKongen",
+        price: ownPrice,
+        shipping:
+          ownShippingInfo.known
+            ? ownShippingInfo.shipping
+            : null,
+        total:
+          ownShippingInfo.known
+            ? ownShippingInfo.total
+            : null,
+        isOwn: true
+      });
+
+      marketRows.sort(
+        function (a, b) {
+          if (a.price !== b.price) {
+            return (
+              a.price - b.price
+            );
+          }
+
+          return String(
+            a.name || ""
+          ).localeCompare(
+            String(
+              b.name || ""
+            ),
+            "nb-NO"
+          );
+        }
+      );
+
+      var cheaperCount =
+        marketRows.filter(
+          function (item) {
+            return (
+              item.price <
+              ownPrice
+            );
+          }
+        ).length;
+
+      var sameCount =
+        marketRows.filter(
+          function (item) {
+            return (
+              item.price ===
+              ownPrice
+            );
+          }
+        ).length;
+
+      var positionRank =
+        cheaperCount + 1;
+
+      var totalStores =
+        marketRows.length;
+
+      var positionText;
+
+      if (ownPrice < min) {
+        positionText =
+          "Billigst av " +
+          String(totalStores);
+      } else if (
+        ownPrice === min
+      ) {
+        positionText =
+          sameCount > 1
+            ? (
+                "Delt billigst av " +
+                String(totalStores)
+              )
+            : (
+                "Billigst av " +
+                String(totalStores)
+              );
+      } else if (
+        ownPrice > max
+      ) {
+        positionText =
+          "Dyrest av " +
+          String(totalStores);
+      } else if (
+        ownPrice === max
+      ) {
+        positionText =
+          sameCount > 1
+            ? (
+                "Delt dyrest av " +
+                String(totalStores)
+              )
+            : (
+                "Dyrest av " +
+                String(totalStores)
+              );
+      } else {
+        positionText =
+          "Nr. " +
+          String(positionRank) +
+          " av " +
+          String(totalStores) +
+          " fra billigst";
+      }
+
+      /*
+       * Generelt markedsråd:
+       * - Alle konkurrenter likt priset -> samme pris.
+       * - Ellers bruker vi medianen som robust "midtpris".
+       * Det hindrer at én ekstrem konkurrent styrer rådet.
+       */
+      var recommendationTarget =
+        allSame
+          ? competitorPrices[0]
+          : median;
+
+      var recommendationDelta =
+        recommendationTarget -
+        ownPrice;
+
+      return {
+        ownPrice: ownPrice,
+        stores: stores,
+        competitorCount:
+          stores.length,
+        marketRows: marketRows,
+        min: min,
+        max: max,
+        median: median,
+        allSame: allSame,
+        positionText:
+          positionText,
+        positionRank:
+          positionRank,
+        totalStores:
+          totalStores,
+        recommendation: {
+          target:
+            recommendationTarget,
+          delta:
+            recommendationDelta,
+          action:
+            recommendationDelta > 0
+              ? "up"
+              : (
+                  recommendationDelta < 0
+                    ? "down"
+                    : "stay"
+                ),
+          reason:
+            allSame
+              ? "Alle konkurrentene har lik varepris."
+              : "Målprisen er medianen av de godkjente konkurrentprisene."
+        }
+      };
+    }
+
+    function strategyAdvice(
+      analysis,
+      strategy
+    ) {
+      if (
+        !analysis ||
+        analysis.ownPrice === null ||
+        analysis.min === null
+      ) {
+        return {
+          target: null,
+          delta: null,
+          text:
+            "For lite godkjent prisdata til å beregne dette."
+        };
+      }
+
+      var target;
+
+      if (
+        strategy === "cheapest"
+      ) {
+        target =
+          analysis.min;
+      } else if (
+        strategy ===
+          "most_expensive"
+      ) {
+        target =
+          analysis.max;
+      } else {
+        target =
+          analysis.median;
+      }
+
+      var delta =
+        target -
+        analysis.ownPrice;
+
+      var text;
+
+      if (
+        strategy === "cheapest"
+      ) {
+        if (
+          analysis.ownPrice <
+          analysis.min
+        ) {
+          text =
+            "Du er allerede billigst. Du kan gå opp " +
+            formatPriceCheckMoney(
+              analysis.min -
+              analysis.ownPrice
+            ) +
+            " til " +
+            formatPriceCheckMoney(
+              analysis.min
+            ) +
+            " og fortsatt være delt billigst.";
+        } else if (
+          analysis.ownPrice ===
+          analysis.min
+        ) {
+          text =
+            "Du er allerede delt billigst på " +
+            formatPriceCheckMoney(
+              analysis.ownPrice
+            ) +
+            ".";
+        } else {
+          text =
+            "Gå ned " +
+            formatPriceCheckMoney(
+              analysis.ownPrice -
+              analysis.min
+            ) +
+            " til " +
+            formatPriceCheckMoney(
+              analysis.min
+            ) +
+            " for å bli delt billigst.";
+        }
+      } else if (
+        strategy ===
+          "most_expensive"
+      ) {
+        if (
+          analysis.ownPrice >
+          analysis.max
+        ) {
+          text =
+            "Du er allerede dyrest i markedet.";
+        } else if (
+          analysis.ownPrice ===
+          analysis.max
+        ) {
+          text =
+            "Du er allerede delt dyrest på " +
+            formatPriceCheckMoney(
+              analysis.ownPrice
+            ) +
+            ".";
+        } else {
+          text =
+            "Gå opp " +
+            formatPriceCheckMoney(
+              analysis.max -
+              analysis.ownPrice
+            ) +
+            " til " +
+            formatPriceCheckMoney(
+              analysis.max
+            ) +
+            " for å bli delt dyrest.";
+        }
+      } else {
+        if (delta > 0) {
+          text =
+            "Gå opp " +
+            formatPriceCheckMoney(
+              delta
+            ) +
+            " til ca. markedsmidten på " +
+            formatPriceCheckMoney(
+              target
+            ) +
+            ".";
+        } else if (delta < 0) {
+          text =
+            "Gå ned " +
+            formatPriceCheckMoney(
+              Math.abs(delta)
+            ) +
+            " til ca. markedsmidten på " +
+            formatPriceCheckMoney(
+              target
+            ) +
+            ".";
+        } else {
+          text =
+            "Du ligger allerede i markedsmidten på " +
+            formatPriceCheckMoney(
+              target
+            ) +
+            ".";
+        }
+      }
+
+      return {
+        target: target,
+        delta: delta,
+        text: text
+      };
+    }
+
+    function saveProductPriceStrategy(
+      productId,
+      strategy,
+      button,
+      callback
+    ) {
+      var originalText =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        "Lagrer…";
+
+      sb.rpc(
+        "internal_set_price_product_strategy",
+        {
+          p_product_id:
+            productId,
+          p_strategy:
+            strategy
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            var existing =
+              priceProductStrategies.find(
+                function (item) {
+                  return (
+                    String(
+                      item.product_id
+                    ) ===
+                    String(productId)
+                  );
+                }
+              );
+
+            if (existing) {
+              existing.strategy =
+                strategy;
+              existing.updated_at =
+                new Date()
+                  .toISOString();
+            } else {
+              priceProductStrategies.push({
+                product_id:
+                  productId,
+                strategy:
+                  strategy,
+                updated_at:
+                  new Date()
+                    .toISOString()
+              });
+            }
+
+            if (callback) {
+              callback();
+            }
+          }
+        )
+        .catch(
+          function (error) {
+            button.disabled = false;
+            button.textContent =
+              originalText;
+
+            alert(
+              "Kunne ikke lagre prisstrategi: " +
+              (
+                error.message ||
+                String(error)
+              )
+            );
+          }
+        );
+    }
+
+    function undoConfirmedPriceMatch(
+      suggestion,
+      button
+    ) {
+      if (
+        !window.confirm(
+          "Flytte dette godkjente pristreffet tilbake til kontroll? Det blir ikke avvist og brukes ikke som negativ læring."
+        )
+      ) {
+        return;
+      }
+
+      var originalText =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        "Angrer…";
+
+      sb.rpc(
+        "internal_review_price_match",
+        {
+          p_match_id:
+            suggestion
+              .price_match_id,
+          p_match_status:
+            "probable",
+          p_reason_code:
+            null,
+          p_comment:
+            null,
+          p_use_for_learning:
+            false
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            suggestion.match_status =
+              "probable";
+
+            localStorage.setItem(
+              "sk_pricecheck_subtab_v1",
+              "overview"
+            );
+
+            window.location.reload();
+          }
+        )
+        .catch(
+          function (error) {
+            button.disabled = false;
+            button.textContent =
+              originalText;
+
+            alert(
+              "Kunne ikke angre pristreffet: " +
+              (
+                error.message ||
+                String(error)
+              )
+            );
+          }
+        );
+    }
 
     var probableCount =
       priceSuggestions.filter(
@@ -16912,11 +17670,113 @@ var competitorSection = createCollapsibleSection(
     createPageHeader(
       overviewPane,
       "Prisoversikt",
-      "Standardlisten viser bare det du trenger for å vurdere varepris. Åpne detaljer på en rad for frakt, levertpris og lenker.",
+      "Varepris styrer posisjon og råd. Markedsrådet bruker medianen av godkjente konkurrentpriser; dersom alle konkurrentene har samme pris anbefales den samme prisen.",
       String(
         overviewRows.length
       ) +
         " produkter"
+    );
+
+    overviewRows.forEach(
+      function (row) {
+        row._market =
+          analyzeMarketForProduct(
+            row
+          );
+      }
+    );
+
+    var adviceDown =
+      overviewRows.filter(
+        function (row) {
+          return (
+            row._market &&
+            row._market
+              .recommendation &&
+            row._market
+              .recommendation
+              .action === "down"
+          );
+        }
+      ).length;
+
+    var adviceUp =
+      overviewRows.filter(
+        function (row) {
+          return (
+            row._market &&
+            row._market
+              .recommendation &&
+            row._market
+              .recommendation
+              .action === "up"
+          );
+        }
+      ).length;
+
+    var adviceStay =
+      overviewRows.filter(
+        function (row) {
+          return (
+            row._market &&
+            row._market
+              .recommendation &&
+            row._market
+              .recommendation
+              .action === "stay"
+          );
+        }
+      ).length;
+
+    var adviceMissing =
+      overviewRows.filter(
+        function (row) {
+          return (
+            !row._market ||
+            !row._market
+              .recommendation
+          );
+        }
+      ).length;
+
+    addProStatGrid(
+      overviewPane,
+      [
+        {
+          label:
+            "Markedsråd: gå ned",
+          value:
+            String(adviceDown),
+          tone:
+            adviceDown
+              ? "danger"
+              : "ok"
+        },
+        {
+          label:
+            "Markedsråd: gå opp",
+          value:
+            String(adviceUp),
+          tone: "ok"
+        },
+        {
+          label:
+            "Markedsråd: behold",
+          value:
+            String(adviceStay),
+          tone: "ok"
+        },
+        {
+          label:
+            "For lite prisdata",
+          value:
+            String(adviceMissing),
+          tone:
+            adviceMissing
+              ? "warning"
+              : "ok"
+        }
+      ]
     );
 
     var overviewFilterGrid =
@@ -17025,6 +17885,10 @@ var competitorSection = createCollapsibleSection(
         "difference-asc",
         "GolfKongen mest billigere"
       ],
+      [
+        "advice-change",
+        "Største anbefalte prisendring"
+      ],
       ["product", "Produkt A–Å"],
       ["competitor", "Konkurrent"]
     ].forEach(
@@ -17091,6 +17955,15 @@ var competitorSection = createCollapsibleSection(
 
     function renderCompactPriceOverview() {
       clear(compactTableWrap);
+
+      overviewRows.forEach(
+        function (row) {
+          row._market =
+            analyzeMarketForProduct(
+              row
+            );
+        }
+      );
 
       var search =
         String(
@@ -17171,6 +18044,37 @@ var competitorSection = createCollapsibleSection(
 
           if (
             overviewSort.value ===
+              "advice-change"
+          ) {
+            var aDelta =
+              a._market &&
+              a._market.recommendation
+                ? Math.abs(
+                    Number(
+                      a._market
+                        .recommendation
+                        .delta || 0
+                    )
+                  )
+                : -1;
+
+            var bDelta =
+              b._market &&
+              b._market.recommendation
+                ? Math.abs(
+                    Number(
+                      b._market
+                        .recommendation
+                        .delta || 0
+                    )
+                  )
+                : -1;
+
+            return bDelta - aDelta;
+          }
+
+          if (
+            overviewSort.value ===
               "product"
           ) {
             return String(
@@ -17233,6 +18137,7 @@ var competitorSection = createCollapsibleSection(
         "Konkurrent",
         "Konk. vare",
         "Forskjell",
+        "Markedsråd",
         "Status",
         ""
       ].forEach(
@@ -17348,6 +18253,82 @@ var competitorSection = createCollapsibleSection(
                   );
           }
 
+          var marketRecommendation =
+            row._market &&
+            row._market
+              .recommendation
+              ? row._market
+                  .recommendation
+              : null;
+
+          var adviceText = "-";
+          var adviceClass =
+            "sk-recommendation-stay";
+
+          if (
+            marketRecommendation
+          ) {
+            if (
+              marketRecommendation
+                .action === "down"
+            ) {
+              adviceText =
+                "↓ " +
+                formatPriceCheckMoney(
+                  Math.abs(
+                    marketRecommendation
+                      .delta
+                  )
+                ) +
+                " til " +
+                formatPriceCheckMoney(
+                  marketRecommendation
+                    .target
+                );
+
+              adviceClass =
+                "sk-recommendation-down";
+            } else if (
+              marketRecommendation
+                .action === "up"
+            ) {
+              adviceText =
+                "↑ " +
+                formatPriceCheckMoney(
+                  marketRecommendation
+                    .delta
+                ) +
+                " til " +
+                formatPriceCheckMoney(
+                  marketRecommendation
+                    .target
+                );
+
+              adviceClass =
+                "sk-recommendation-up";
+            } else {
+              adviceText =
+                "Behold " +
+                formatPriceCheckMoney(
+                  marketRecommendation
+                    .target
+                );
+            }
+          }
+
+          var adviceTd =
+            el(
+              "td",
+              adviceText
+            );
+
+          adviceTd.className =
+            adviceClass;
+          adviceTd.style.whiteSpace =
+            "nowrap";
+          adviceTd.style.fontSize =
+            "11px";
+
           var statusTd =
             el(
               "td",
@@ -17377,6 +18358,7 @@ var competitorSection = createCollapsibleSection(
             competitorTd,
             competitorPriceTd,
             diffTd,
+            adviceTd,
             statusTd,
             actionTd
           ].forEach(
@@ -17395,7 +18377,7 @@ var competitorSection = createCollapsibleSection(
             "none";
 
           var detailTd = el("td");
-          detailTd.colSpan = 7;
+          detailTd.colSpan = 8;
 
           var detailInner =
             el("div");
@@ -17480,7 +18462,13 @@ var competitorSection = createCollapsibleSection(
             return box;
           }
 
-          detailInner.appendChild(
+          var analysis =
+            row._market ||
+            analyzeMarketForProduct(
+              row
+            );
+
+          var ownBox =
             detailBox(
               "GolfKongen",
               row
@@ -17490,13 +18478,16 @@ var competitorSection = createCollapsibleSection(
               row
                 .golfkongen_total_inc_vat,
               row.product_url
-            )
-          );
+            );
 
-          detailInner.appendChild(
+          var cheapestBox =
             detailBox(
-              row.competitor_name ||
-                "Konkurrent",
+              row.competitor_name
+                ? (
+                    "Billigste konkurrent: " +
+                    row.competitor_name
+                  )
+                : "Billigste konkurrent",
               row
                 .competitor_price_inc_vat,
               row
@@ -17505,7 +18496,530 @@ var competitorSection = createCollapsibleSection(
                 .competitor_total_display,
               row
                 .competitor_product_url
+            );
+
+          detailInner.appendChild(
+            ownBox
+          );
+
+          detailInner.appendChild(
+            cheapestBox
+          );
+
+          var marketBox = el("div");
+          marketBox.className =
+            "sk-price-detail-box";
+          marketBox.style.gridColumn =
+            "1 / -1";
+
+          marketBox.appendChild(
+            el(
+              "strong",
+              "Markedsposisjon"
             )
+          );
+
+          if (
+            analysis &&
+            analysis.min !== null
+          ) {
+            var summary =
+              el("div");
+            summary.className =
+              "sk-market-summary";
+
+            [
+              [
+                "Din posisjon",
+                analysis.positionText
+              ],
+              [
+                "Billigste",
+                formatPriceCheckMoney(
+                  analysis.min
+                )
+              ],
+              [
+                "Markedsmidten",
+                formatPriceCheckMoney(
+                  analysis.median
+                )
+              ],
+              [
+                "Dyreste",
+                formatPriceCheckMoney(
+                  analysis.max
+                )
+              ]
+            ].forEach(
+              function (item) {
+                var box =
+                  el("div");
+                box.className =
+                  "sk-market-box";
+
+                box.appendChild(
+                  el(
+                    "span",
+                    item[0]
+                  )
+                );
+
+                box.appendChild(
+                  el(
+                    "strong",
+                    item[1]
+                  )
+                );
+
+                summary.appendChild(
+                  box
+                );
+              }
+            );
+
+            marketBox.appendChild(
+              summary
+            );
+
+            var ranking =
+              el("div");
+            ranking.className =
+              "sk-market-ranking";
+
+            (
+              analysis.marketRows ||
+              []
+            ).forEach(
+              function (
+                marketRow,
+                index
+              ) {
+                var rankRow =
+                  el("div");
+
+                rankRow.className =
+                  "sk-market-rank-row";
+
+                if (
+                  marketRow.isOwn
+                ) {
+                  rankRow.className +=
+                    " sk-own-store";
+                }
+
+                rankRow.appendChild(
+                  el(
+                    "div",
+                    String(
+                      index + 1
+                    ) +
+                      "."
+                  )
+                );
+
+                var storeName =
+                  el(
+                    "div",
+                    marketRow.name +
+                      (
+                        marketRow.isOwn
+                          ? " (oss)"
+                          : ""
+                      )
+                  );
+
+                if (
+                  marketRow.isOwn
+                ) {
+                  storeName.style.fontWeight =
+                    "900";
+                }
+
+                rankRow.appendChild(
+                  storeName
+                );
+
+                var priceCell =
+                  el(
+                    "div",
+                    formatPriceCheckMoney(
+                      marketRow.price
+                    )
+                  );
+                priceCell.className =
+                  "sk-market-rank-price";
+
+                rankRow.appendChild(
+                  priceCell
+                );
+
+                var shippingCell =
+                  el(
+                    "div",
+                    marketRow.shipping ===
+                      null ||
+                    marketRow.shipping ===
+                      undefined
+                      ? "frakt ?"
+                      : (
+                          "+ " +
+                          formatPriceCheckMoney(
+                            marketRow.shipping
+                          )
+                        )
+                  );
+
+                shippingCell.className =
+                  "sk-market-rank-shipping";
+
+                rankRow.appendChild(
+                  shippingCell
+                );
+
+                ranking.appendChild(
+                  rankRow
+                );
+              }
+            );
+
+            marketBox.appendChild(
+              ranking
+            );
+
+            var generalAdvice =
+              analysis
+                .recommendation;
+
+            if (generalAdvice) {
+              var advice =
+                el("div");
+
+              advice.className =
+                "sk-strategy-advice";
+
+              var directionText;
+
+              if (
+                generalAdvice
+                  .action === "down"
+              ) {
+                directionText =
+                  "Forslag: gå ned " +
+                  formatPriceCheckMoney(
+                    Math.abs(
+                      generalAdvice
+                        .delta
+                    )
+                  ) +
+                  " til " +
+                  formatPriceCheckMoney(
+                    generalAdvice
+                      .target
+                  ) +
+                  ".";
+              } else if (
+                generalAdvice
+                  .action === "up"
+              ) {
+                directionText =
+                  "Forslag: gå opp " +
+                  formatPriceCheckMoney(
+                    generalAdvice
+                      .delta
+                  ) +
+                  " til " +
+                  formatPriceCheckMoney(
+                    generalAdvice
+                      .target
+                  ) +
+                  ".";
+              } else {
+                directionText =
+                  "Forslag: behold " +
+                  formatPriceCheckMoney(
+                    generalAdvice
+                      .target
+                  ) +
+                  ".";
+              }
+
+              advice.textContent =
+                directionText +
+                " " +
+                generalAdvice.reason;
+
+              marketBox.appendChild(
+                advice
+              );
+            }
+          } else {
+            marketBox.appendChild(
+              el(
+                "div",
+                "For lite godkjent konkurrentdata til å plassere produktet i markedet."
+              )
+            );
+          }
+
+          detailInner.appendChild(
+            marketBox
+          );
+
+          var strategyBox = el("div");
+          strategyBox.className =
+            "sk-price-detail-box";
+          strategyBox.style.gridColumn =
+            "1 / -1";
+
+          strategyBox.appendChild(
+            el(
+              "strong",
+              "Ønsket prisposisjon"
+            )
+          );
+
+          strategyBox.appendChild(
+            el(
+              "div",
+              "Velg hvor du ønsker at GolfKongen skal ligge for dette produktet. Valget lagres og kan endres senere."
+            )
+          );
+
+          var strategyChoice =
+            el("div");
+          strategyChoice.className =
+            "sk-strategy-choice";
+
+          var strategyAdviceBox =
+            el("div");
+          strategyAdviceBox.className =
+            "sk-strategy-advice";
+
+          var selectedStrategy =
+            currentStrategyForProduct(
+              row.product_id
+            );
+
+          function renderStrategyChoice() {
+            clear(strategyChoice);
+
+            [
+              [
+                "cheapest",
+                "✓ Billigst"
+              ],
+              [
+                "middle",
+                "✓ Midten"
+              ],
+              [
+                "most_expensive",
+                "✓ Dyrest"
+              ]
+            ].forEach(
+              function (item) {
+                var button =
+                  el(
+                    "button",
+                    item[1]
+                  );
+
+                button.type =
+                  "button";
+
+                button.className =
+                  "sk-strategy-btn";
+
+                if (
+                  selectedStrategy ===
+                    item[0]
+                ) {
+                  button.className +=
+                    " sk-selected";
+                }
+
+                button.onclick =
+                  function () {
+                    saveProductPriceStrategy(
+                      row.product_id,
+                      item[0],
+                      button,
+                      function () {
+                        selectedStrategy =
+                          item[0];
+
+                        renderStrategyChoice();
+                        renderStrategyAdvice();
+                      }
+                    );
+                  };
+
+                strategyChoice.appendChild(
+                  button
+                );
+              }
+            );
+          }
+
+          function renderStrategyAdvice() {
+            var strategy =
+              selectedStrategy;
+
+            if (!strategy) {
+              strategyAdviceBox.textContent =
+                "Ingen ønsket posisjon er valgt ennå. Det generelle markedsrådet over bruker markedsmidten.";
+              return;
+            }
+
+            var advice =
+              strategyAdvice(
+                analysis,
+                strategy
+              );
+
+            strategyAdviceBox.textContent =
+              advice.text;
+          }
+
+          renderStrategyChoice();
+          renderStrategyAdvice();
+
+          strategyBox.appendChild(
+            strategyChoice
+          );
+
+          strategyBox.appendChild(
+            strategyAdviceBox
+          );
+
+          detailInner.appendChild(
+            strategyBox
+          );
+
+          var matchesBox = el("div");
+          matchesBox.className =
+            "sk-price-detail-box";
+          matchesBox.style.gridColumn =
+            "1 / -1";
+
+          var confirmedMatches =
+            confirmedMatchesForProduct(
+              row.product_id
+            );
+
+          matchesBox.appendChild(
+            el(
+              "strong",
+              "Godkjente pristreff (" +
+                String(
+                  confirmedMatches.length
+                ) +
+                ")"
+            )
+          );
+
+          matchesBox.appendChild(
+            el(
+              "div",
+              "Her kan du angre dersom et treff ble godkjent for raskt. Angre flytter treffet tilbake til kontroll; det blir ikke registrert som et feiltreff."
+            )
+          );
+
+          var undoList =
+            el("div");
+          undoList.className =
+            "sk-undo-match-list";
+
+          if (
+            !confirmedMatches.length
+          ) {
+            undoList.appendChild(
+              el(
+                "div",
+                "Ingen godkjente treff."
+              )
+            );
+          }
+
+          confirmedMatches.forEach(
+            function (match) {
+              var matchRow =
+                el("div");
+
+              matchRow.className =
+                "sk-undo-match-row";
+
+              var matchInfo =
+                el("div");
+
+              matchInfo.appendChild(
+                el(
+                  "strong",
+                  (
+                    match.competitor_name ||
+                    "Konkurrent"
+                  ) +
+                    " · " +
+                    formatPriceCheckMoney(
+                      match
+                        .competitor_price_inc_vat
+                    )
+                )
+              );
+
+              var productName =
+                el(
+                  "div",
+                  match
+                    .competitor_product_name ||
+                    "-"
+                );
+
+              productName.style.fontSize =
+                "11px";
+              productName.style.color =
+                "#64748b";
+              productName.style.marginTop =
+                "3px";
+
+              matchInfo.appendChild(
+                productName
+              );
+
+              var undoButton =
+                createButton(
+                  "Angre godkjenning"
+                );
+
+              undoButton.onclick =
+                function () {
+                  undoConfirmedPriceMatch(
+                    match,
+                    undoButton
+                  );
+                };
+
+              matchRow.appendChild(
+                matchInfo
+              );
+
+              matchRow.appendChild(
+                undoButton
+              );
+
+              undoList.appendChild(
+                matchRow
+              );
+            }
+          );
+
+          matchesBox.appendChild(
+            undoList
+          );
+
+          detailInner.appendChild(
+            matchesBox
           );
 
           detailTd.appendChild(
@@ -17840,7 +19354,14 @@ var competitorSection = createCollapsibleSection(
       .from("internal_price_own_shipping_rules")
       .select("*")
       .order("priority", { ascending: true })
-      .order("rule_name", { ascending: true })
+      .order("rule_name", { ascending: true }),
+
+    sb
+      .from("internal_price_product_strategies")
+      .select("*")
+      .order("updated_at", {
+        ascending: false
+      })
 
 
   ]).then(function (results) {
@@ -17946,6 +19467,14 @@ var competitorSection = createCollapsibleSection(
       return;
     }
 
+    if (results[18].error) {
+      renderError(
+        "Kunne ikke hente prisstrategier: " +
+          results[18].error.message
+      );
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -17964,7 +19493,9 @@ var competitorSection = createCollapsibleSection(
       priceReviewReasons: results[14].data || [],
       priceFollowUps: results[15].data || [],
       priceShippingRules: results[16].data || [],
-      priceOwnShippingRules: results[17].data || []
+      priceOwnShippingRules: results[17].data || [],
+      priceProductStrategies:
+        results[18].data || []
     });
   });
 } 
