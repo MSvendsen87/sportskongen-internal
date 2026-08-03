@@ -6840,6 +6840,10 @@ function renderProductControlDashboard(parent, data) {
       return row.price_status === "GolfKongen billigst";
     }).length;
 
+    var samePrice = rows.filter(function (row) {
+      return row.price_status === "Samme pris";
+    }).length;
+
     addProStatGrid(parent, [
       {
         label: "Produkter med lager",
@@ -6857,6 +6861,11 @@ function renderProductControlDashboard(parent, data) {
         tone: expensive ? "danger" : "ok"
       },
       {
+        label: "Samme varepris",
+        value: String(samePrice),
+        tone: "ok"
+      },
+      {
         label: "GolfKongen billigst",
         value: String(cheapest),
         tone: "ok"
@@ -6865,7 +6874,7 @@ function renderProductControlDashboard(parent, data) {
 
     var note = el(
       "div",
-      "Prissjekken søker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf. Tidligere avvisninger brukes til å filtrere kjente feiltreff, og sikre treff må fortsatt godkjennes manuelt."
+      "Prissjekken søker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf. Billigst/dyrest og sorteringen bestemmes kun av varepris mot varepris. Frakt for både GolfKongen og konkurrent vises separat og påvirker ikke rangeringen."
     );
     note.className = "sk-note";
     note.style.marginBottom = "16px";
@@ -13948,6 +13957,40 @@ var competitorSection = createCollapsibleSection(
     parent.appendChild(competitorSection.wrap);
 
 
+    var overviewRows = rows.map(function (row) {
+      var overviewRow = Object.assign({}, row);
+
+      var ownShippingInfo =
+        resolveGolfKongenShipping({
+          productId: row.product_id,
+          category: row.category,
+          golfkongenPrice:
+            row.golfkongen_price_inc_vat
+        });
+
+      overviewRow.golfkongen_shipping_inc_vat =
+        ownShippingInfo.known
+          ? ownShippingInfo.shipping
+          : null;
+
+      overviewRow.golfkongen_total_inc_vat =
+        ownShippingInfo.known
+          ? ownShippingInfo.total
+          : null;
+
+      overviewRow.competitor_shipping_display =
+        row.shipping_is_known === true
+          ? row.competitor_shipping_inc_vat
+          : null;
+
+      overviewRow.competitor_total_display =
+        row.shipping_is_known === true
+          ? row.competitor_total_inc_vat
+          : null;
+
+      return overviewRow;
+    });
+
     addTable(
       parent,
       [
@@ -13956,22 +13999,46 @@ var competitorSection = createCollapsibleSection(
         { key: "stock_quantity", label: "Lager" },
         {
           key: "golfkongen_price_inc_vat",
-          label: "GolfKongen",
+          label: "GK vare",
           format: "money"
         },
         {
-          key: "competitor_total_inc_vat",
-          label: "Laveste konkurrent",
+          key: "golfkongen_shipping_inc_vat",
+          label: "GK frakt",
+          format: "money"
+        },
+        {
+          key: "golfkongen_total_inc_vat",
+          label: "GK levert",
+          format: "money"
+        },
+        {
+          key: "competitor_name",
+          label: "Laveste konkurrentvare"
+        },
+        {
+          key: "competitor_price_inc_vat",
+          label: "Konk. vare",
+          format: "money"
+        },
+        {
+          key: "competitor_shipping_display",
+          label: "Konk. frakt",
+          format: "money"
+        },
+        {
+          key: "competitor_total_display",
+          label: "Konk. levert",
           format: "money"
         },
         {
           key: "price_difference_inc_vat",
-          label: "Forskjell",
+          label: "Vareforskjell",
           format: "money"
         },
-        { key: "price_status", label: "Status" }
+        { key: "price_status", label: "Status varepris" }
       ],
-      rows,
+      overviewRows,
       "Ingen lagerførte produkter funnet."
     );
   }
