@@ -19277,12 +19277,55 @@ function skFormatMoney(value) {
 }
 
 
+function skIsGolfProduct(row) {
+  var group =
+    String(
+      row.inventory_main_group ||
+      ""
+    ).toLowerCase();
+
+  var category =
+    String(
+      row.category ||
+      ""
+    ).toLowerCase();
+
+  var url =
+    String(
+      row.product_url ||
+      ""
+    ).toLowerCase();
+
+  return (
+    url.indexOf(
+      "/golfutstyr/"
+    ) >= 0 ||
+    group.indexOf(
+      "golfball"
+    ) >= 0 ||
+    group.indexOf(
+      "golfhansk"
+    ) >= 0 ||
+    category ===
+      "golfballer" ||
+    category ===
+      "golfhansker"
+  );
+}
+
+
 function skInventoryBucket(row) {
   var group =
     String(
       row.inventory_main_group ||
       ""
     ).toLowerCase();
+
+  if (
+    skIsGolfProduct(row)
+  ) {
+    return "Golfutstyr";
+  }
 
   if (group === "discer") {
     return "Discer";
@@ -19298,7 +19341,7 @@ function skInventoryBucket(row) {
   if (
     group.indexOf("tilbeh") >= 0
   ) {
-    return "Tilbehør";
+    return "Discgolf-tilbehør";
   }
 
   return "Annet utstyr";
@@ -19434,7 +19477,7 @@ function renderInventoryAnalytics(
     parent,
     "Lageranalyse",
     "Lagerverdi, dødt lager, populære produkter med lav beholdning og innkjøpsforslag samlet på ett sted.",
-    "Lager v4.3"
+    "Lager v4.3.3"
   );
 
   var rows =
@@ -19493,7 +19536,14 @@ function renderInventoryAnalytics(
       ["all", "Alt lager"],
       ["Discer", "Discer"],
       ["Sekker", "Sekker"],
-      ["Tilbehør", "Tilbehør"],
+      [
+        "Discgolf-tilbehør",
+        "Discgolf-tilbehør"
+      ],
+      [
+        "Golfutstyr",
+        "Golfutstyr"
+      ],
       [
         "Annet utstyr",
         "Annet utstyr"
@@ -19517,16 +19567,46 @@ function renderInventoryAnalytics(
     var groupSelect =
       makeGroupSelect();
 
+    var vatModeSelect =
+      el("select");
+
+    addOption(
+      vatModeSelect,
+      "ex",
+      "Verdier eks. MVA"
+    );
+
+    addOption(
+      vatModeSelect,
+      "inc",
+      "Verdier inkl. MVA"
+    );
+
+    vatModeSelect.value =
+      localStorage.getItem(
+        "sk_inventory_value_vat_mode_v1"
+      ) ||
+      "ex";
+
     toolbar.appendChild(
       groupSelect
     );
+
+    toolbar.appendChild(
+      vatModeSelect
+    );
+
     content.appendChild(toolbar);
 
     var summaryHost = el("div");
+    var noteHost = el("div");
     var tableHost = el("div");
 
     content.appendChild(
       summaryHost
+    );
+    content.appendChild(
+      noteHost
     );
     content.appendChild(
       tableHost
@@ -19534,7 +19614,13 @@ function renderInventoryAnalytics(
 
     function rerender() {
       clear(summaryHost);
+      clear(noteHost);
       clear(tableHost);
+
+      localStorage.setItem(
+        "sk_inventory_value_vat_mode_v1",
+        vatModeSelect.value
+      );
 
       var filtered =
         rows.filter(
@@ -19548,14 +19634,29 @@ function renderInventoryAnalytics(
           }
         );
 
+      var isEx =
+        vatModeSelect.value ===
+        "ex";
+
+      var purchaseKey =
+        isEx
+          ? "stock_purchase_value_ex_vat"
+          : "stock_purchase_value_inc_vat";
+
+      var retailKey =
+        isEx
+          ? "stock_retail_value_ex_vat"
+          : "stock_retail_value_inc_vat";
+
       var purchaseValue =
         filtered.reduce(
           function (sum, row) {
             return (
               sum +
               Number(
-                row
-                  .stock_purchase_value_inc_vat ||
+                row[
+                  purchaseKey
+                ] ||
                 0
               )
             );
@@ -19569,8 +19670,9 @@ function renderInventoryAnalytics(
             return (
               sum +
               Number(
-                row
-                  .stock_retail_value_inc_vat ||
+                row[
+                  retailKey
+                ] ||
                 0
               )
             );
@@ -19592,12 +19694,18 @@ function renderInventoryAnalytics(
           0
         );
 
+      var difference =
+        retailValue -
+        purchaseValue;
+
       addProStatGrid(
         summaryHost,
         [
           {
             label:
-              "Innkjøpsverdi",
+              isEx
+                ? "Innkjøpsverdi eks. MVA"
+                : "Innkjøpsverdi inkl. MVA",
             value:
               skFormatMoney(
                 purchaseValue
@@ -19606,7 +19714,9 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Utsalgsverdi",
+              isEx
+                ? "Utsalgsverdi eks. MVA"
+                : "Utsalgsverdi inkl. MVA",
             value:
               skFormatMoney(
                 retailValue
@@ -19615,13 +19725,17 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Potensiell differanse",
+              isEx
+                ? "Potensiell bruttofortjeneste eks. MVA"
+                : "Prisforskjell inkl. MVA",
             value:
               skFormatMoney(
-                retailValue -
-                purchaseValue
+                difference
               ),
-            tone: "ok"
+            tone:
+              difference < 0
+                ? "danger"
+                : "ok"
           },
           {
             label:
@@ -19635,18 +19749,43 @@ function renderInventoryAnalytics(
         ]
       );
 
+      var valueNote =
+        el(
+          "div",
+          isEx
+            ? (
+                "Potensiell bruttofortjeneste er utsalgsverdi minus innkjøpsverdi eks. MVA. " +
+                "Tallet er før frakt, betalingskostnader, rabatter og andre kostnader."
+              )
+            : (
+                "Inkl. MVA viser butikkverdien av lageret. Prisforskjellen inkl. MVA er ikke det samme som fortjeneste. " +
+                "Velg «Verdier eks. MVA» for økonomisk bruttofortjeneste før frakt, betalingskostnader og andre kostnader."
+              )
+        );
+
+      valueNote.className =
+        "sk-note";
+      valueNote.style.marginBottom =
+        "10px";
+
+      noteHost.appendChild(
+        valueNote
+      );
+
       var sorted =
         filtered.slice().sort(
           function (a, b) {
             return (
               Number(
-                b
-                  .stock_purchase_value_inc_vat ||
+                b[
+                  purchaseKey
+                ] ||
                 0
               ) -
               Number(
-                a
-                  .stock_purchase_value_inc_vat ||
+                a[
+                  purchaseKey
+                ] ||
                 0
               )
             );
@@ -19676,17 +19815,29 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Innkjøpsverdi",
-            key:
-              "stock_purchase_value_inc_vat",
+              isEx
+                ? "Innkjøpsverdi eks. MVA"
+                : "Innkjøpsverdi inkl. MVA",
+            value:
+              function (row) {
+                return row[
+                  purchaseKey
+                ];
+              },
             format: "money",
             align: "right"
           },
           {
             label:
-              "Utsalgsverdi",
-            key:
-              "stock_retail_value_inc_vat",
+              isEx
+                ? "Utsalgsverdi eks. MVA"
+                : "Utsalgsverdi inkl. MVA",
+            value:
+              function (row) {
+                return row[
+                  retailKey
+                ];
+              },
             format: "money",
             align: "right"
           }
@@ -19698,132 +19849,220 @@ function renderInventoryAnalytics(
 
     groupSelect.onchange =
       rerender;
+
+    vatModeSelect.onchange =
+      rerender;
+
     rerender();
   }
 
+
   function renderLow() {
-    var low =
-      rows
-        .filter(
-          function (row) {
-            return (
-              row.popular_low_stock ===
-              true
-            );
+    var toolbar = el("div");
+    toolbar.className =
+      "sk-analysis-toolbar";
+
+    var hideGolfLabel =
+      el("label");
+
+    hideGolfLabel.style.display =
+      "inline-flex";
+    hideGolfLabel.style.alignItems =
+      "center";
+    hideGolfLabel.style.gap =
+      "6px";
+    hideGolfLabel.style.fontSize =
+      "12px";
+    hideGolfLabel.style.fontWeight =
+      "800";
+
+    var hideGolf =
+      el("input");
+
+    hideGolf.type =
+      "checkbox";
+    hideGolf.checked =
+      true;
+
+    hideGolfLabel.appendChild(
+      hideGolf
+    );
+
+    hideGolfLabel.appendChild(
+      document.createTextNode(
+        "Ikke vis golfutstyr"
+      )
+    );
+
+    toolbar.appendChild(
+      hideGolfLabel
+    );
+
+    content.appendChild(
+      toolbar
+    );
+
+    var host = el("div");
+    content.appendChild(host);
+
+    function rerender() {
+      clear(host);
+
+      var low =
+        rows
+          .filter(
+            function (row) {
+              return (
+                row.popular_low_stock ===
+                  true &&
+                (
+                  !hideGolf.checked ||
+                  !skIsGolfProduct(
+                    row
+                  )
+                )
+              );
+            }
+          )
+          .sort(
+            function (a, b) {
+              return (
+                Number(
+                  a.days_of_supply ||
+                  999999
+                ) -
+                Number(
+                  b.days_of_supply ||
+                  999999
+                )
+              );
+            }
+          );
+
+      addProStatGrid(
+        host,
+        [
+          {
+            label:
+              "Populære med lavt lager",
+            value:
+              String(low.length),
+            tone:
+              low.length
+                ? "warning"
+                : "ok"
+          },
+          {
+            label:
+              "0–7 lagerdager",
+            value:
+              String(
+                low.filter(
+                  function (row) {
+                    return (
+                      Number(
+                        row
+                          .days_of_supply
+                      ) <= 7
+                    );
+                  }
+                ).length
+              ),
+            tone: "danger"
+          },
+          {
+            label:
+              "Solgt siste 30 dager",
+            value:
+              String(
+                low.reduce(
+                  function (
+                    sum,
+                    row
+                  ) {
+                    return (
+                      sum +
+                      Number(
+                        row
+                          .units_sold_30d ||
+                        0
+                      )
+                    );
+                  },
+                  0
+                )
+              ),
+            tone: "ok"
           }
-        )
-        .sort(
-          function (a, b) {
-            return (
-              Number(
-                a.days_of_supply ||
-                999999
-              ) -
-              Number(
-                b.days_of_supply ||
-                999999
-              )
-            );
-          }
+        ]
+      );
+
+      var info =
+        el(
+          "div",
+          hideGolf.checked
+            ? "Golfutstyr er skjult fordi det ikke skal fylles opp igjen. Slå av valget for å se det."
+            : "Golfutstyr er med i listen."
         );
 
-    addProStatGrid(
-      content,
-      [
-        {
-          label:
-            "Populære med lavt lager",
-          value:
-            String(low.length),
-          tone:
-            low.length
-              ? "warning"
-              : "ok"
-        },
-        {
-          label:
-            "0–7 lagerdager",
-          value:
-            String(
-              low.filter(
-                function (row) {
-                  return (
-                    Number(
-                      row
-                        .days_of_supply
-                    ) <= 7
-                  );
-                }
-              ).length
-            ),
-          tone: "danger"
-        },
-        {
-          label:
-            "Solgt siste 30 dager",
-          value:
-            String(
-              low.reduce(
-                function (
-                  sum,
-                  row
-                ) {
-                  return (
-                    sum +
-                    Number(
-                      row
-                        .units_sold_30d ||
-                      0
-                    )
-                  );
-                },
-                0
-              )
-            ),
-          tone: "ok"
-        }
-      ]
-    );
+      info.className =
+        "sk-note";
+      info.style.marginBottom =
+        "10px";
 
-    skCreateAnalysisTable(
-      content,
-      [
-        {
-          label: "Produkt",
-          key: "name"
-        },
-        {
-          label: "Lager",
-          key:
-            "stock_quantity",
-          align: "right"
-        },
-        {
-          label:
-            "Solgt 30d",
-          key:
-            "units_sold_30d",
-          align: "right"
-        },
-        {
-          label:
-            "Lagerdager",
-          key:
-            "days_of_supply",
-          align: "right"
-        },
-        {
-          label:
-            "Foreslå kjøp",
-          key:
-            "suggested_purchase_qty_60d",
-          align: "right"
-        }
-      ],
-      low,
-      "Ingen populære produkter er klassifisert som snart utsolgt."
-    );
+      host.appendChild(info);
+
+      skCreateAnalysisTable(
+        host,
+        [
+          {
+            label: "Produkt",
+            key: "name"
+          },
+          {
+            label: "Gruppe",
+            value:
+              skInventoryBucket
+          },
+          {
+            label: "Lager",
+            key:
+              "stock_quantity",
+            align: "right"
+          },
+          {
+            label:
+              "Solgt 30d",
+            key:
+              "units_sold_30d",
+            align: "right"
+          },
+          {
+            label:
+              "Lagerdager",
+            key:
+              "days_of_supply",
+            align: "right"
+          },
+          {
+            label:
+              "Foreslå kjøp",
+            key:
+              "suggested_purchase_qty_60d",
+            align: "right"
+          }
+        ],
+        low,
+        "Ingen populære produkter er klassifisert som snart utsolgt."
+      );
+    }
+
+    hideGolf.onchange =
+      rerender;
+
+    rerender();
   }
+
 
   function renderDead() {
     var toolbar = el("div");
@@ -19987,141 +20226,225 @@ function renderInventoryAnalytics(
   }
 
   function renderPurchase() {
-    var suggestions =
-      rows
-        .filter(
-          function (row) {
-            return (
-              Number(
-                row
-                  .suggested_purchase_qty_60d ||
-                0
-              ) > 0
-            );
-          }
-        )
-        .sort(
-          function (a, b) {
-            var aUrgency =
-              Number(
-                a.days_of_supply ||
-                999999
-              );
+    var toolbar = el("div");
+    toolbar.className =
+      "sk-analysis-toolbar";
 
-            var bUrgency =
-              Number(
-                b.days_of_supply ||
-                999999
-              );
+    var hideGolfLabel =
+      el("label");
 
-            return (
-              aUrgency - bUrgency
-            );
-          }
-        );
+    hideGolfLabel.style.display =
+      "inline-flex";
+    hideGolfLabel.style.alignItems =
+      "center";
+    hideGolfLabel.style.gap =
+      "6px";
+    hideGolfLabel.style.fontSize =
+      "12px";
+    hideGolfLabel.style.fontWeight =
+      "800";
 
-    addProStatGrid(
-      content,
-      [
-        {
-          label:
-            "Innkjøpsforslag",
-          value:
-            String(
-              suggestions.length
-            ),
-          tone:
-            suggestions.length
-              ? "warning"
-              : "ok"
-        },
-        {
-          label:
-            "Foreslåtte enheter",
-          value:
-            String(
-              suggestions.reduce(
-                function (
-                  sum,
-                  row
-                ) {
-                  return (
-                    sum +
-                    Number(
-                      row
-                        .suggested_purchase_qty_60d ||
-                      0
-                    )
-                  );
-                },
-                0
-              )
-            ),
-          tone: "ok"
-        }
-      ]
+    var hideGolf =
+      el("input");
+
+    hideGolf.type =
+      "checkbox";
+    hideGolf.checked =
+      true;
+
+    hideGolfLabel.appendChild(
+      hideGolf
     );
 
-    skCreateAnalysisTable(
-      content,
-      [
-        {
-          label:
-            "Produkt",
-          key: "name"
-        },
-        {
-          label:
-            "Leverandør",
-          value:
+    hideGolfLabel.appendChild(
+      document.createTextNode(
+        "Ikke vis golfutstyr"
+      )
+    );
+
+    toolbar.appendChild(
+      hideGolfLabel
+    );
+
+    content.appendChild(
+      toolbar
+    );
+
+    var host = el("div");
+    content.appendChild(host);
+
+    function rerender() {
+      clear(host);
+
+      var suggestions =
+        rows
+          .filter(
             function (row) {
               return (
-                row.supplier_name ||
-                row.brand ||
-                "Ukjent"
+                Number(
+                  row
+                    .suggested_purchase_qty_60d ||
+                  0
+                ) > 0 &&
+                (
+                  !hideGolf.checked ||
+                  !skIsGolfProduct(
+                    row
+                  )
+                )
               );
             }
-        },
-        {
-          label:
-            "Lager",
-          key:
-            "stock_quantity",
-          align: "right"
-        },
-        {
-          label:
-            "Solgt 30d",
-          key:
-            "units_sold_30d",
-          align: "right"
-        },
-        {
-          label:
-            "Solgt 90d",
-          key:
-            "units_sold_90d",
-          align: "right"
-        },
-        {
-          label:
-            "Lagerdager",
-          key:
-            "days_of_supply",
-          align: "right"
-        },
-        {
-          label:
-            "Foreslå kjøp",
-          key:
-            "suggested_purchase_qty_60d",
-          align: "right"
-        }
-      ],
-      suggestions,
-      "Ingen innkjøpsforslag akkurat nå."
-    );
+          )
+          .sort(
+            function (a, b) {
+              var aUrgency =
+                Number(
+                  a.days_of_supply ||
+                  999999
+                );
+
+              var bUrgency =
+                Number(
+                  b.days_of_supply ||
+                  999999
+                );
+
+              return (
+                aUrgency - bUrgency
+              );
+            }
+          );
+
+      addProStatGrid(
+        host,
+        [
+          {
+            label:
+              "Innkjøpsforslag",
+            value:
+              String(
+                suggestions.length
+              ),
+            tone:
+              suggestions.length
+                ? "warning"
+                : "ok"
+          },
+          {
+            label:
+              "Foreslåtte enheter",
+            value:
+              String(
+                suggestions.reduce(
+                  function (
+                    sum,
+                    row
+                  ) {
+                    return (
+                      sum +
+                      Number(
+                        row
+                          .suggested_purchase_qty_60d ||
+                        0
+                      )
+                    );
+                  },
+                  0
+                )
+              ),
+            tone: "ok"
+          }
+        ]
+      );
+
+      var info =
+        el(
+          "div",
+          hideGolf.checked
+            ? "Golfutstyr er skjult fra innkjøpsforslag fordi det ikke skal fylles opp igjen. Slå av valget for å se det."
+            : "Golfutstyr er med i innkjøpsforslagene."
+        );
+
+      info.className =
+        "sk-note";
+      info.style.marginBottom =
+        "10px";
+
+      host.appendChild(info);
+
+      skCreateAnalysisTable(
+        host,
+        [
+          {
+            label:
+              "Produkt",
+            key: "name"
+          },
+          {
+            label:
+              "Gruppe",
+            value:
+              skInventoryBucket
+          },
+          {
+            label:
+              "Leverandør",
+            value:
+              function (row) {
+                return (
+                  row.supplier_name ||
+                  row.brand ||
+                  "Ukjent"
+                );
+              }
+          },
+          {
+            label:
+              "Lager",
+            key:
+              "stock_quantity",
+            align: "right"
+          },
+          {
+            label:
+              "Solgt 30d",
+            key:
+              "units_sold_30d",
+            align: "right"
+          },
+          {
+            label:
+              "Solgt 90d",
+            key:
+              "units_sold_90d",
+            align: "right"
+          },
+          {
+            label:
+              "Lagerdager",
+            key:
+              "days_of_supply",
+            align: "right"
+          },
+          {
+            label:
+              "Foreslå kjøp",
+            key:
+              "suggested_purchase_qty_60d",
+            align: "right"
+          }
+        ],
+        suggestions,
+        "Ingen innkjøpsforslag akkurat nå."
+      );
+    }
+
+    hideGolf.onchange =
+      rerender;
+
+    rerender();
   }
+
 
   function renderSuspicious() {
     var suspicious =
@@ -20504,7 +20827,7 @@ function renderSalesAnalytics(
     parent,
     "Salgsanalyse",
     "Se bestselgere og dårligst selgende produkter basert på synket Quickbutik-salg.",
-    "Salg v4.3"
+    "Salg v4.3.3"
   );
 
   var rows =
@@ -20556,7 +20879,14 @@ function renderSalesAnalytics(
     ["all", "Alle grupper"],
     ["Discer", "Discer"],
     ["Sekker", "Sekker"],
-    ["Tilbehør", "Tilbehør"],
+    [
+      "Discgolf-tilbehør",
+      "Discgolf-tilbehør"
+    ],
+    [
+      "Golfutstyr",
+      "Golfutstyr"
+    ],
     [
       "Annet utstyr",
       "Annet utstyr"
