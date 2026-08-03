@@ -58,45 +58,337 @@
   }
 
 
-  function ensurePortalUiStyle() {
-    if (document.getElementById("sk-internal-pro-style")) {
+  var skAdminV4ResizeBound = false;
+
+  function fitAdminRootToViewport() {
+    if (!root) return;
+
+    var left = root.getBoundingClientRect().left;
+    var targetLeft = 12;
+    var shift = Math.max(0, left - targetLeft);
+
+    root.style.width =
+      "calc(100vw - 24px)";
+    root.style.maxWidth = "none";
+    root.style.marginLeft =
+      "-" + String(shift) + "px";
+    root.style.marginRight = "0";
+    root.style.position = "relative";
+    root.style.zIndex = "10";
+  }
+
+  function hideStoreCategorySidebarForAdmin() {
+    if (
+      document.body.dataset
+        .skAdminCategorySidebarHidden === "1"
+    ) {
       return;
     }
 
-    var style = document.createElement("style");
-    style.id = "sk-internal-pro-style";
+    var rootLeft =
+      root.getBoundingClientRect().left;
+
+    var labels = [
+      "Dartpiler",
+      "Dartskiver",
+      "Dart Tilbehør",
+      "Golfutstyr",
+      "Golfballer",
+      "Bager og sekker",
+      "Glow Disc",
+      "Discgolf sett"
+    ];
+
+    var selectors = [
+      "aside",
+      "nav",
+      "[class*='sidebar']",
+      "[class*='side-menu']",
+      "[class*='sidemenu']",
+      "[class*='category-menu']",
+      "[class*='categories']"
+    ];
+
+    var candidates =
+      Array.prototype.slice.call(
+        document.querySelectorAll(
+          selectors.join(",")
+        )
+      );
+
+    var best = null;
+
+    candidates.forEach(function (candidate) {
+      if (
+        !candidate ||
+        candidate === root ||
+        candidate.contains(root)
+      ) {
+        return;
+      }
+
+      var rect =
+        candidate.getBoundingClientRect();
+
+      if (
+        rect.width < 70 ||
+        rect.width > 380 ||
+        rect.height < 220 ||
+        rect.left > rootLeft + 30
+      ) {
+        return;
+      }
+
+      var text =
+        String(
+          candidate.innerText ||
+          candidate.textContent ||
+          ""
+        );
+
+      var score = labels.reduce(
+        function (sum, label) {
+          return (
+            sum +
+            (
+              text.indexOf(label) >= 0
+                ? 1
+                : 0
+            )
+          );
+        },
+        0
+      );
+
+      if (score < 4) {
+        return;
+      }
+
+      var area =
+        rect.width * rect.height;
+
+      if (
+        !best ||
+        score > best.score ||
+        (
+          score === best.score &&
+          area < best.area
+        )
+      ) {
+        best = {
+          node: candidate,
+          score: score,
+          area: area
+        };
+      }
+    });
+
+    if (best && best.node) {
+      best.node.dataset.skAdminHiddenByV4 =
+        "1";
+      best.node.style.display = "none";
+
+      document.body.dataset
+        .skAdminCategorySidebarHidden = "1";
+    }
+  }
+
+  function activateAdminV4PageMode() {
+    document.documentElement.classList.add(
+      "sk-admin-v4-page"
+    );
+    document.body.classList.add(
+      "sk-admin-v4-page"
+    );
+
+    hideStoreCategorySidebarForAdmin();
+
+    setTimeout(function () {
+      fitAdminRootToViewport();
+    }, 0);
+
+    setTimeout(function () {
+      hideStoreCategorySidebarForAdmin();
+      fitAdminRootToViewport();
+    }, 250);
+
+    if (!skAdminV4ResizeBound) {
+      skAdminV4ResizeBound = true;
+
+      window.addEventListener(
+        "resize",
+        function () {
+          setTimeout(
+            fitAdminRootToViewport,
+            40
+          );
+        }
+      );
+    }
+  }
+
+  function formatAdminDateTime(value) {
+    if (!value) return "Ikke registrert";
+
+    var date = new Date(value);
+
+    if (isNaN(date.getTime())) {
+      return "Ikke registrert";
+    }
+
+    return date.toLocaleString(
+      "nb-NO",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }
+    );
+  }
+
+  function newestDate(rows, key) {
+    var newest = null;
+
+    (rows || []).forEach(function (row) {
+      var raw = row && row[key];
+
+      if (!raw) return;
+
+      var date = new Date(raw);
+
+      if (
+        !isNaN(date.getTime()) &&
+        (
+          !newest ||
+          date.getTime() >
+            newest.getTime()
+        )
+      ) {
+        newest = date;
+      }
+    });
+
+    return newest
+      ? newest.toISOString()
+      : null;
+  }
+
+  var skPortalNavigate = null;
+
+
+  function ensurePortalUiStyle() {
+    if (
+      document.getElementById(
+        "sk-internal-pro-style"
+      )
+    ) {
+      return;
+    }
+
+    var style =
+      document.createElement("style");
+
+    style.id =
+      "sk-internal-pro-style";
+
     style.textContent =
+      "html.sk-admin-v4-page,body.sk-admin-v4-page{overflow-x:hidden!important;}" +
+      "body.sk-admin-v4-page{background:#f3f6fa!important;}" +
+      "#sk-internal-root{box-sizing:border-box!important;background:#f3f6fa;padding:0 0 36px 0!important;}" +
       "#sk-internal-root *{box-sizing:border-box;}" +
       "#sk-internal-root input,#sk-internal-root select,#sk-internal-root textarea,#sk-internal-root button{font-family:Arial,sans-serif;}" +
-      "#sk-internal-root button{transition:background .15s ease,border-color .15s ease,transform .08s ease;}" +
+      "#sk-internal-root button{transition:background .15s ease,border-color .15s ease,transform .08s ease,box-shadow .15s ease;}" +
       "#sk-internal-root button:hover{transform:translateY(-1px);}" +
-      "#sk-internal-root .sk-app-shell{max-width:1240px;margin:24px auto;padding:22px;border:1px solid #e5e7eb;border-radius:22px;background:#fff;color:#111827;font-family:Arial,sans-serif;box-shadow:0 18px 50px rgba(15,23,42,.08);}" +
-      "#sk-internal-root .sk-topline{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid #eef2f7;}" +
-      "#sk-internal-root .sk-title{margin:0;font-size:30px;letter-spacing:-.03em;}" +
-      "#sk-internal-root .sk-subtitle{margin:6px 0 0 0;color:#64748b;line-height:1.5;max-width:760px;}" +
-      "#sk-internal-root .sk-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#ecfdf5;color:#14532d;font-weight:800;font-size:13px;border:1px solid #bbf7d0;white-space:nowrap;}" +
-      "#sk-internal-root .sk-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;padding:10px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;}" +
-      "#sk-internal-root .sk-tab-btn{border-radius:12px!important;padding:11px 14px!important;}" +
-      "#sk-internal-root .sk-content{margin-top:20px;}" +
+
+      "#sk-internal-root .sk-app-shell{width:100%;max-width:none;margin:12px 0 0 0;padding:0;border:1px solid #dfe5ec;border-radius:18px;background:#f8fafc;color:#111827;font-family:Arial,sans-serif;box-shadow:0 18px 50px rgba(15,23,42,.08);overflow:hidden;}" +
+
+      "#sk-internal-root .sk-topline{display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap;padding:18px 22px;background:#111827;color:#fff;border-bottom:0;}" +
+      "#sk-internal-root .sk-title{margin:0;font-size:24px;letter-spacing:-.03em;color:#fff;}" +
+      "#sk-internal-root .sk-subtitle{margin:5px 0 0 0;color:#cbd5e1;line-height:1.45;max-width:760px;font-size:13px;}" +
+      "#sk-internal-root .sk-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#ecfdf5;color:#14532d;font-weight:800;font-size:12px;border:1px solid #bbf7d0;white-space:nowrap;}" +
+
+      "#sk-internal-root .sk-userbar{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0;padding:10px 18px;background:#fff;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;}" +
+      "#sk-internal-root .sk-userbar button{padding:7px 11px!important;font-size:12px;}" +
+
+      "#sk-internal-root .sk-v4-layout{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:720px;}" +
+      "#sk-internal-root .sk-v4-sidebar{position:relative;background:#0f172a;color:#e2e8f0;padding:16px 12px;border-right:1px solid #1e293b;min-width:0;}" +
+      "#sk-internal-root .sk-v4-sidebar-inner{position:sticky;top:12px;}" +
+      "#sk-internal-root .sk-v4-nav-title{font-size:11px;font-weight:900;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin:15px 8px 7px;}" +
+      "#sk-internal-root .sk-v4-nav-title:first-child{margin-top:3px;}" +
+      "#sk-internal-root .sk-v4-nav-search{width:100%;padding:10px 11px;border-radius:10px;border:1px solid #334155;background:#111827;color:#fff;margin-bottom:12px;outline:none;}" +
+      "#sk-internal-root .sk-v4-nav-search::placeholder{color:#94a3b8;}" +
+      "#sk-internal-root .sk-v4-nav-btn{width:100%;display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent!important;border-radius:10px!important;padding:10px 11px!important;background:transparent!important;color:#cbd5e1!important;font-weight:700!important;margin:2px 0;cursor:pointer;}" +
+      "#sk-internal-root .sk-v4-nav-btn:hover{background:#1e293b!important;color:#fff!important;transform:none;}" +
+      "#sk-internal-root .sk-v4-nav-btn.sk-active{background:#fff!important;color:#111827!important;border-color:#fff!important;box-shadow:0 6px 20px rgba(15,23,42,.18);}" +
+      "#sk-internal-root .sk-v4-nav-icon{width:20px;text-align:center;font-size:16px;}" +
+      "#sk-internal-root .sk-v4-main{min-width:0;background:#f8fafc;}" +
+      "#sk-internal-root .sk-v4-content-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:4;}" +
+      "#sk-internal-root .sk-v4-breadcrumb{font-size:12px;color:#64748b;font-weight:700;}" +
+      "#sk-internal-root .sk-v4-mobile-toggle{display:none;}" +
+      "#sk-internal-root .sk-content{margin:0;padding:20px;min-width:0;}" +
+
       "#sk-internal-root .sk-page-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px;}" +
       "#sk-internal-root .sk-page-head h2{margin:0;font-size:24px;letter-spacing:-.02em;}" +
       "#sk-internal-root .sk-page-head p{margin:5px 0 0 0;color:#64748b;line-height:1.5;max-width:780px;}" +
-      "#sk-internal-root .sk-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0;}" +
-      "#sk-internal-root .sk-card{padding:16px;border:1px solid #e5e7eb;border-radius:16px;background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.04);}" +
-      "#sk-internal-root .sk-card-label{color:#64748b;font-size:13px;font-weight:700;}" +
-      "#sk-internal-root .sk-card-value{display:block;margin-top:7px;font-size:26px;font-weight:900;letter-spacing:-.03em;}" +
+
+      "#sk-internal-root .sk-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0;}" +
+      "#sk-internal-root .sk-card{padding:15px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.035);}" +
+      "#sk-internal-root .sk-card-label{color:#64748b;font-size:12px;font-weight:800;}" +
+      "#sk-internal-root .sk-card-value{display:block;margin-top:6px;font-size:25px;font-weight:900;letter-spacing:-.03em;}" +
+
+      "#sk-internal-root .sk-v4-attention-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:12px 0 20px;}" +
+      "#sk-internal-root .sk-v4-action-card{appearance:none;width:100%;text-align:left;padding:15px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;cursor:pointer;box-shadow:0 3px 12px rgba(15,23,42,.035);}" +
+      "#sk-internal-root .sk-v4-action-card:hover{border-color:#94a3b8;box-shadow:0 8px 22px rgba(15,23,42,.08);}" +
+      "#sk-internal-root .sk-v4-action-card .sk-v4-action-value{font-size:26px;font-weight:900;display:block;letter-spacing:-.03em;}" +
+      "#sk-internal-root .sk-v4-action-card .sk-v4-action-label{display:block;font-size:13px;font-weight:800;margin-top:4px;}" +
+      "#sk-internal-root .sk-v4-action-card .sk-v4-action-help{display:block;font-size:11px;color:#64748b;margin-top:5px;line-height:1.35;}" +
+      "#sk-internal-root .sk-v4-action-card.sk-warning-card{background:#fffbeb;border-color:#fde68a;}" +
+      "#sk-internal-root .sk-v4-action-card.sk-danger-card{background:#fef2f2;border-color:#fecaca;}" +
+      "#sk-internal-root .sk-v4-action-card.sk-ok-card{background:#f0fdf4;border-color:#bbf7d0;}" +
+
+      "#sk-internal-root .sk-v4-section-title{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:22px 0 10px;}" +
+      "#sk-internal-root .sk-v4-section-title h3{margin:0;font-size:17px;}" +
+      "#sk-internal-root .sk-v4-section-title span{font-size:12px;color:#64748b;}" +
+      "#sk-internal-root .sk-v4-quick-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px;}" +
+      "#sk-internal-root .sk-v4-quick-actions button{padding:9px 12px!important;font-size:13px;}" +
+      "#sk-internal-root .sk-v4-status-list{display:grid;gap:9px;}" +
+      "#sk-internal-root .sk-v4-status-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border:1px solid #e5e7eb;border-radius:11px;background:#fff;}" +
+      "#sk-internal-root .sk-v4-status-row strong{font-size:13px;}" +
+      "#sk-internal-root .sk-v4-status-row span{font-size:12px;color:#64748b;text-align:right;}" +
+
       "#sk-internal-root .sk-note{padding:13px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-warning{padding:13px 14px;border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-danger-zone{padding:14px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:14px;}" +
-      "#sk-internal-root .sk-two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:16px;align-items:start;}" +
-      "@media(max-width:820px){" +
-      "  #sk-internal-root .sk-app-shell{margin:10px auto;padding:14px;border-radius:16px;}" +
-      "  #sk-internal-root .sk-title{font-size:24px;}" +
-      "  #sk-internal-root .sk-tabs{overflow-x:auto;flex-wrap:nowrap;padding:8px;}" +
-      "  #sk-internal-root .sk-tab-btn{white-space:nowrap;}" +
+      "#sk-internal-root .sk-two-col{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:14px;align-items:start;}" +
+
+      "#sk-internal-root table{max-width:100%;}" +
+      "#sk-internal-root table th{position:sticky;top:0;z-index:1;}" +
+
+      "@media(max-width:1120px){" +
+      "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "}" +
+      "@media(max-width:900px){" +
+      "  #sk-internal-root .sk-app-shell{margin-top:8px;border-radius:14px;}" +
+      "  #sk-internal-root .sk-topline{padding:14px 16px;}" +
+      "  #sk-internal-root .sk-title{font-size:21px;}" +
+      "  #sk-internal-root .sk-v4-layout{display:block;min-height:0;}" +
+      "  #sk-internal-root .sk-v4-sidebar{display:none;border-right:0;border-bottom:1px solid #1e293b;}" +
+      "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-sidebar{display:block;}" +
+      "  #sk-internal-root .sk-v4-sidebar-inner{position:static;}" +
+      "  #sk-internal-root .sk-v4-content-head{position:sticky;top:0;padding:9px 12px;}" +
+      "  #sk-internal-root .sk-v4-mobile-toggle{display:inline-flex!important;padding:7px 10px!important;font-size:12px!important;}" +
+      "  #sk-internal-root .sk-content{padding:14px;}" +
       "  #sk-internal-root .sk-two-col{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-page-head h2{font-size:21px;}" +
+      "}" +
+      "@media(max-width:620px){" +
+      "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "  #sk-internal-root .sk-content{padding:10px;}" +
+      "  #sk-internal-root .sk-userbar{padding:9px 12px;}" +
       "}";
+
     document.head.appendChild(style);
   }
 
@@ -198,36 +490,335 @@
     ], data.quotes, "Ingen kalkyler funnet.");
   }
 
-  function renderOverviewDashboard(parent, data) {
-    createPageHeader(parent, "Oversikt", "Rask status for produkter, tilbud og varetelling.", "Internt driftssystem");
-    addMobileAdvice(parent);
+  function createDashboardActionCard(
+    parent,
+    value,
+    label,
+    help,
+    tone,
+    tabKey
+  ) {
+    var card = el("button");
+    card.type = "button";
+    card.className =
+      "sk-v4-action-card";
 
-    var products = data.products || [];
-    var quotes = data.customerQuotes || data.quotes || [];
-    var stockCounts = data.stockCounts || [];
+    if (tone === "warning") {
+      card.className +=
+        " sk-warning-card";
+    }
 
-    var missingCost = products.filter(function (p) {
-      return Number(p.purchase_price_ex_vat || 0) <= 0 && Number(p.purchase_price_inc_vat || 0) <= 0;
-    }).length;
+    if (tone === "danger") {
+      card.className +=
+        " sk-danger-card";
+    }
 
-    var lowProfit = products.filter(function (p) {
-      return p.low_profit_warning === true || Number(p.profit_margin_percent || 0) < 20;
-    }).length;
+    if (tone === "ok") {
+      card.className +=
+        " sk-ok-card";
+    }
 
-    var latestStock = stockCounts.length ? stockCounts[0] : null;
-    var latestQuote = quotes.length ? quotes[0] : null;
-    var waitingQuotes = quotes.filter(function (q) {
-      return q.status === "sent" || q.status === "draft";
-    }).length;
+    var valueEl =
+      el("span", String(value));
 
-    addProStatGrid(parent, [
-      { label: "Produkter", value: String(products.length), tone: "ok" },
-      { label: "Mangler innpris", value: String(missingCost), tone: missingCost ? "warning" : "ok" },
-      { label: "Lav fortjeneste", value: String(lowProfit), tone: lowProfit ? "danger" : "ok" },
-      { label: "Tilbud åpne/utkast", value: String(waitingQuotes), tone: waitingQuotes ? "warning" : "ok" },
-      { label: "Siste varetelling", value: latestStock ? latestStock.count_number : "-", tone: latestStock && latestStock.quickbutik_updated_at ? "ok" : "warning" },
-      { label: "Quickbutik lager", value: latestStock && latestStock.quickbutik_updated_at ? "Oppdatert" : "Sjekk", tone: latestStock && latestStock.quickbutik_updated_at ? "ok" : "warning" }
-    ]);
+    valueEl.className =
+      "sk-v4-action-value";
+
+    var labelEl =
+      el("span", label);
+
+    labelEl.className =
+      "sk-v4-action-label";
+
+    var helpEl =
+      el("span", help || "");
+
+    helpEl.className =
+      "sk-v4-action-help";
+
+    card.appendChild(valueEl);
+    card.appendChild(labelEl);
+
+    if (help) {
+      card.appendChild(helpEl);
+    }
+
+    if (tabKey) {
+      card.onclick = function () {
+        if (skPortalNavigate) {
+          skPortalNavigate(tabKey);
+        }
+      };
+    }
+
+    parent.appendChild(card);
+
+    return card;
+  }
+
+  function addDashboardSectionTitle(
+    parent,
+    title,
+    description
+  ) {
+    var wrap = el("div");
+    wrap.className =
+      "sk-v4-section-title";
+
+    var h3 = el("h3", title);
+    var desc =
+      el("span", description || "");
+
+    wrap.appendChild(h3);
+
+    if (description) {
+      wrap.appendChild(desc);
+    }
+
+    parent.appendChild(wrap);
+  }
+
+  function addDashboardStatusRow(
+    parent,
+    label,
+    value
+  ) {
+    var row = el("div");
+    row.className =
+      "sk-v4-status-row";
+
+    row.appendChild(
+      el("strong", label)
+    );
+
+    row.appendChild(
+      el("span", value)
+    );
+
+    parent.appendChild(row);
+  }
+
+  function renderOverviewDashboard(
+    parent,
+    data
+  ) {
+    var hour =
+      new Date().getHours();
+
+    var greeting =
+      hour < 12
+        ? "God morgen"
+        : (
+            hour < 18
+              ? "God ettermiddag"
+              : "God kveld"
+          );
+
+    createPageHeader(
+      parent,
+      greeting,
+      "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
+      "Admin v4"
+    );
+
+    var products =
+      data.products || [];
+
+    var quotes =
+      data.customerQuotes ||
+      data.quotes ||
+      [];
+
+    var stockCounts =
+      data.stockCounts || [];
+
+    var productIssues =
+      data.productControlIssues || [];
+
+    var comparisons =
+      data.priceComparisons || [];
+
+    var suggestions =
+      data.priceSuggestions || [];
+
+    var followUps =
+      data.priceFollowUps || [];
+
+    var missingPriceMatch =
+      comparisons.filter(
+        function (row) {
+          return (
+            row.price_status ===
+            "Mangler prissjekk"
+          );
+        }
+      ).length;
+
+    var waitingSuggestions =
+      suggestions.filter(
+        function (row) {
+          return (
+            row.is_active !== false &&
+            row.match_status ===
+              "probable"
+          );
+        }
+      ).length;
+
+    var priceFollowUpNow =
+      followUps.filter(
+        function (row) {
+          return (
+            row.needs_follow_up ===
+            true
+          );
+        }
+      ).length;
+
+    var missingCost =
+      products.filter(
+        function (product) {
+          return (
+            Number(
+              product.purchase_price_ex_vat ||
+              0
+            ) <= 0 &&
+            Number(
+              product.purchase_price_inc_vat ||
+              0
+            ) <= 0
+          );
+        }
+      ).length;
+
+    var openQuotes =
+      quotes.filter(
+        function (quote) {
+          return (
+            quote.status === "sent" ||
+            quote.status === "draft"
+          );
+        }
+      ).length;
+
+    var latestStock =
+      stockCounts.length
+        ? stockCounts[0]
+        : null;
+
+    addDashboardSectionTitle(
+      parent,
+      "Krever oppmerksomhet",
+      "Klikk på et kort for å gå direkte til riktig modul."
+    );
+
+    var attentionGrid =
+      el("div");
+
+    attentionGrid.className =
+      "sk-v4-attention-grid";
+
+    createDashboardActionCard(
+      attentionGrid,
+      missingPriceMatch,
+      "Mangler godkjent pristreff",
+      "Produkter uten en godkjent konkurrentkobling.",
+      missingPriceMatch
+        ? "warning"
+        : "ok",
+      "priceCheck"
+    );
+
+    createDashboardActionCard(
+      attentionGrid,
+      waitingSuggestions,
+      "Prisforslag venter",
+      "Forslag som fortsatt må godkjennes eller avvises.",
+      waitingSuggestions
+        ? "warning"
+        : "ok",
+      "priceCheck"
+    );
+
+    createDashboardActionCard(
+      attentionGrid,
+      productIssues.length,
+      "Produktavvik",
+      "Produkter som produktkontrollen mener bør undersøkes.",
+      productIssues.length
+        ? "danger"
+        : "ok",
+      "productControl"
+    );
+
+    createDashboardActionCard(
+      attentionGrid,
+      priceFollowUpNow,
+      "Prisoppfølging nå",
+      "Godkjente koblinger som trenger ny vurdering.",
+      priceFollowUpNow
+        ? "warning"
+        : "ok",
+      "priceCheck"
+    );
+
+    parent.appendChild(
+      attentionGrid
+    );
+
+    addDashboardSectionTitle(
+      parent,
+      "Hurtighandlinger",
+      "De vanligste oppgavene er ett klikk unna."
+    );
+
+    var quick =
+      el("div");
+
+    quick.className =
+      "sk-v4-quick-actions";
+
+    [
+      {
+        label: "💰 Prissjekk",
+        key: "priceCheck"
+      },
+      {
+        label: "📦 Varetelling",
+        key: "stock"
+      },
+      {
+        label: "🧾 Nytt tilbud",
+        key: "offers"
+      },
+      {
+        label: "📅 Booking",
+        key: "booking"
+      },
+      {
+        label: "🛒 Produkter",
+        key: "products"
+      },
+      {
+        label: "🔎 Produktkontroll",
+        key: "productControl"
+      }
+    ].forEach(function (item) {
+      var button =
+        createButton(item.label);
+
+      button.onclick = function () {
+        if (skPortalNavigate) {
+          skPortalNavigate(
+            item.key
+          );
+        }
+      };
+
+      quick.appendChild(button);
+    });
+
+    parent.appendChild(quick);
 
     var grid = el("div");
     grid.className = "sk-two-col";
@@ -235,51 +826,226 @@
     var left = el("div");
     var right = el("div");
 
-    var tasks = createCollapsibleSection("📌 Viktige punkter", "Ting som bør sjekkes først.", true);
-    var ul = el("ul");
-    ul.style.marginTop = "0";
-    ul.style.lineHeight = "1.8";
+    var work =
+      createCollapsibleSection(
+        "📌 Drift akkurat nå",
+        "Kort status på produkter, tilbud og lager.",
+        true
+      );
 
-    if (missingCost) {
-      ul.appendChild(el("li", missingCost + " produkter mangler innpris."));
-    }
+    addProStatGrid(
+      work.body,
+      [
+        {
+          label:
+            "Produkter",
+          value:
+            String(products.length),
+          tone: "ok"
+        },
+        {
+          label:
+            "Mangler innpris",
+          value:
+            String(missingCost),
+          tone:
+            missingCost
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Åpne/utkast tilbud",
+          value:
+            String(openQuotes),
+          tone:
+            openQuotes
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Siste varetelling",
+          value:
+            latestStock
+              ? (
+                  latestStock
+                    .count_number ||
+                  "-"
+                )
+              : "-",
+          tone:
+            latestStock
+              ? "ok"
+              : "warning"
+        }
+      ]
+    );
 
-    if (lowProfit) {
-      ul.appendChild(el("li", lowProfit + " produkter har lav fortjeneste."));
-    }
+    left.appendChild(
+      work.wrap
+    );
 
-    if (latestStock && !latestStock.quickbutik_updated_at) {
-      ul.appendChild(el("li", "Siste varetelling er ikke markert som oppdatert mot Quickbutik."));
-    }
+    var recent =
+      createCollapsibleSection(
+        "🧾 Siste tilbud",
+        "De siste kundetilbudene.",
+        true
+      );
 
-    if (!ul.childNodes.length) {
-      ul.appendChild(el("li", "Ingen kritiske varsler akkurat nå."));
-    }
+    addTable(
+      recent.body,
+      [
+        {
+          key: "quote_number",
+          label: "Tilbud"
+        },
+        {
+          key: "customer_name",
+          label: "Kunde"
+        },
+        {
+          key: "status",
+          label: "Status"
+        },
+        {
+          key:
+            "total_sales_inc_vat",
+          label: "Sum inkl.",
+          format: "money"
+        }
+      ],
+      quotes.slice(0, 5),
+      "Ingen tilbud funnet."
+    );
 
-    tasks.body.appendChild(ul);
-    left.appendChild(tasks.wrap);
+    left.appendChild(
+      recent.wrap
+    );
 
-    var recent = createCollapsibleSection("🧾 Siste tilbud", "Rask oversikt over de siste kundetilbudene.", true);
-    addTable(recent.body, [
-      { key: "quote_number", label: "Tilbud" },
-      { key: "customer_name", label: "Kunde" },
-      { key: "status", label: "Status" },
-      { key: "total_sales_inc_vat", label: "Sum inkl.", format: "money" }
-    ], (quotes || []).slice(0, 6), "Ingen tilbud funnet.");
-    left.appendChild(recent.wrap);
+    var system =
+      createCollapsibleSection(
+        "⚙️ Systemstatus",
+        "Når data sist ble oppdatert i de viktigste delene av portalen.",
+        true
+      );
 
-    var stock = createCollapsibleSection("📦 Siste varetelling", "Status for siste varetelling.", true);
-    if (latestStock) {
-      addProStatGrid(stock.body, [
-        { label: "Telling", value: latestStock.count_number },
-        { label: "Status", value: statusLabel(latestStock.status) },
-        { label: "Linjer telt", value: String(Number(latestStock.counted_line_count || 0)) + "/" + String(Number(latestStock.line_count || 0)) },
-        { label: "Quickbutik", value: latestStock.quickbutik_updated_at ? "Oppdatert" : "Ikke oppdatert", tone: latestStock.quickbutik_updated_at ? "ok" : "warning" }
-      ]);
-    } else {
-      stock.body.appendChild(el("p", "Ingen varetellinger funnet."));
-    }
-    right.appendChild(stock.wrap);
+    var statusList =
+      el("div");
+
+    statusList.className =
+      "sk-v4-status-list";
+
+    addDashboardStatusRow(
+      statusList,
+      "Produktdata / Quickbutik",
+      formatAdminDateTime(
+        newestDate(
+          products,
+          "last_synced_at"
+        )
+      )
+    );
+
+    addDashboardStatusRow(
+      statusList,
+      "Siste prissjekk",
+      formatAdminDateTime(
+        newestDate(
+          suggestions,
+          "checked_at"
+        ) ||
+        newestDate(
+          comparisons,
+          "checked_at"
+        )
+      )
+    );
+
+    addDashboardStatusRow(
+      statusList,
+      "Varetelling",
+      latestStock
+        ? (
+            (
+              latestStock
+                .quickbutik_updated_at
+                ? "Quickbutik oppdatert · "
+                : "Ikke oppdatert mot Quickbutik · "
+            ) +
+            String(
+              latestStock.status ||
+              "-"
+            )
+          )
+        : "Ingen varetelling"
+    );
+
+    addDashboardStatusRow(
+      statusList,
+      "Portaldata",
+      "Lastet OK nå"
+    );
+
+    system.body.appendChild(
+      statusList
+    );
+
+    right.appendChild(
+      system.wrap
+    );
+
+    var navigation =
+      createCollapsibleSection(
+        "🧭 Hvor finner jeg hva?",
+        "Kort forklart, så forsiden også fungerer som inngang til portalen.",
+        false
+      );
+
+    var navList = el("div");
+    navList.className =
+      "sk-v4-status-list";
+
+    [
+      [
+        "Produkter",
+        "Opprette, redigere og synkronisere produkter."
+      ],
+      [
+        "Produktkontroll",
+        "Avvik og produkter som bør undersøkes."
+      ],
+      [
+        "Varetelling",
+        "Telling, avvik og oppdatering mot Quickbutik."
+      ],
+      [
+        "Prissjekk",
+        "Konkurrentpriser, forslag, oppfølging og læring."
+      ],
+      [
+        "Tilbud",
+        "Tilbudsbygger, kundetilbud og arkiv."
+      ],
+      [
+        "Leverandører",
+        "Leverandører, kostnader og tillegg."
+      ]
+    ].forEach(function (item) {
+      addDashboardStatusRow(
+        navList,
+        item[0],
+        item[1]
+      );
+    });
+
+    navigation.body.appendChild(
+      navList
+    );
+
+    right.appendChild(
+      navigation.wrap
+    );
 
     grid.appendChild(left);
     grid.appendChild(right);
@@ -485,6 +1251,7 @@
 
   function renderShell(title, subtitle) {
     ensurePortalUiStyle();
+    activateAdminV4PageMode();
     clear(root);
 
     var app = el("div");
@@ -517,7 +1284,7 @@
   }
 
   function renderLoading() {
-    renderShell("Intern Sportskongen-portal", "Laster internportal v4...");
+    renderShell("Sportskongen Admin", "Laster Admin v4…");
   }
 
   function renderError(message) {
@@ -589,32 +1356,40 @@
 
   function addUserBar(app, sb, user) {
     var bar = el("div");
-    bar.style.display = "flex";
-    bar.style.justifyContent = "space-between";
-    bar.style.alignItems = "center";
-    bar.style.gap = "16px";
-    bar.style.marginTop = "22px";
-    bar.style.padding = "14px 16px";
-    bar.style.background = "#f9fafb";
-    bar.style.border = "1px solid #e5e7eb";
-    bar.style.borderRadius = "14px";
-    bar.style.flexWrap = "wrap";
+    bar.className = "sk-userbar";
 
     var info = el("div");
-    var name = el("strong", user.name || user.email);
-    var meta = el("div", user.email + " · " + user.role);
-    meta.style.color = "#6b7280";
-    meta.style.fontSize = "14px";
-    meta.style.marginTop = "3px";
+
+    var name = el(
+      "strong",
+      user.name || user.email
+    );
+
+    name.style.fontSize = "13px";
+
+    var meta = el(
+      "div",
+      user.email +
+        " · " +
+        user.role
+    );
+
+    meta.style.color = "#64748b";
+    meta.style.fontSize = "11px";
+    meta.style.marginTop = "2px";
 
     info.appendChild(name);
     info.appendChild(meta);
 
-    var logout = createButton("Logg ut");
+    var logout =
+      createButton("Logg ut");
+
     logout.onclick = function () {
-      sb.auth.signOut().then(function () {
-        window.location.reload();
-      });
+      sb.auth.signOut().then(
+        function () {
+          window.location.reload();
+        }
+      );
     };
 
     bar.appendChild(info);
@@ -623,51 +1398,336 @@
   }
 
   function createTabs(app, tabs) {
-    var tabWrap = el("div");
-    tabWrap.className = "sk-tabs";
+    var layout = el("div");
+    layout.className =
+      "sk-v4-layout";
+
+    var sidebar = el("aside");
+    sidebar.className =
+      "sk-v4-sidebar";
+
+    var sidebarInner = el("div");
+    sidebarInner.className =
+      "sk-v4-sidebar-inner";
+
+    var search = el("input");
+    search.type = "search";
+    search.placeholder =
+      "Finn funksjon…";
+    search.className =
+      "sk-v4-nav-search";
+
+    sidebarInner.appendChild(
+      search
+    );
+
+    var navHost = el("div");
+    sidebarInner.appendChild(
+      navHost
+    );
+
+    sidebar.appendChild(
+      sidebarInner
+    );
+
+    var main = el("main");
+    main.className =
+      "sk-v4-main";
+
+    var contentHead = el("div");
+    contentHead.className =
+      "sk-v4-content-head";
+
+    var breadcrumb =
+      el(
+        "div",
+        "Admin > Oversikt"
+      );
+
+    breadcrumb.className =
+      "sk-v4-breadcrumb";
+
+    var mobileToggle =
+      createButton("☰ Meny");
+
+    mobileToggle.className =
+      "sk-v4-mobile-toggle";
+
+    contentHead.appendChild(
+      breadcrumb
+    );
+
+    contentHead.appendChild(
+      mobileToggle
+    );
 
     var content = el("div");
-    content.className = "sk-content";
+    content.className =
+      "sk-content";
+
+    main.appendChild(
+      contentHead
+    );
+
+    main.appendChild(content);
+
+    layout.appendChild(sidebar);
+    layout.appendChild(main);
+    app.appendChild(layout);
 
     var buttons = {};
 
-    function activate(key) {
-      localStorage.setItem("sk_internal_active_tab", key);
-      
-      Object.keys(tabs).forEach(function (tabKey) {
-        buttons[tabKey].style.background = "#fff";
-        buttons[tabKey].style.color = "#111827";
-        buttons[tabKey].style.borderColor = "#d1d5db";
-      });
+    var groupOrder = [
+      "Oversikt",
+      "Drift",
+      "Varer og lager",
+      "Salg og pris",
+      "Innkjøp",
+      "System"
+    ];
 
-      buttons[key].style.background = "#111827";
-      buttons[key].style.color = "#fff";
-      buttons[key].style.borderColor = "#111827";
+    function renderNavigation(
+      filterText
+    ) {
+      clear(navHost);
 
-      clear(content);
-      tabs[key].render(content);
+      var normalized =
+        String(filterText || "")
+          .trim()
+          .toLowerCase();
+
+      groupOrder.forEach(
+        function (groupName) {
+          var keys =
+            Object.keys(tabs).filter(
+              function (key) {
+                var tab = tabs[key];
+
+                if (
+                  (
+                    tab.group ||
+                    "System"
+                  ) !== groupName
+                ) {
+                  return false;
+                }
+
+                if (!normalized) {
+                  return true;
+                }
+
+                var haystack =
+                  (
+                    String(
+                      tab.label || ""
+                    ) +
+                    " " +
+                    String(
+                      tab.description ||
+                      ""
+                    )
+                  ).toLowerCase();
+
+                return (
+                  haystack.indexOf(
+                    normalized
+                  ) >= 0
+                );
+              }
+            );
+
+          if (!keys.length) {
+            return;
+          }
+
+          var groupTitle =
+            el(
+              "div",
+              groupName
+            );
+
+          groupTitle.className =
+            "sk-v4-nav-title";
+
+          navHost.appendChild(
+            groupTitle
+          );
+
+          keys.forEach(
+            function (key) {
+              var tab = tabs[key];
+
+              var button =
+                el("button");
+
+              button.type =
+                "button";
+
+              button.className =
+                "sk-v4-nav-btn";
+
+              var icon =
+                el(
+                  "span",
+                  tab.icon || "•"
+                );
+
+              icon.className =
+                "sk-v4-nav-icon";
+
+              var text =
+                el(
+                  "span",
+                  tab.label
+                );
+
+              button.appendChild(
+                icon
+              );
+
+              button.appendChild(
+                text
+              );
+
+              button.onclick =
+                function () {
+                  activate(key);
+                };
+
+              buttons[key] =
+                button;
+
+              navHost.appendChild(
+                button
+              );
+            }
+          );
+        }
+      );
     }
 
-    Object.keys(tabs).forEach(function (key) {
-      var btn = createButton(tabs[key].label);
-      btn.className = "sk-tab-btn";
-      buttons[key] = btn;
-      btn.onclick = function () {
-        activate(key);
+    function setActiveButton(key) {
+      Object.keys(buttons).forEach(
+        function (buttonKey) {
+          buttons[
+            buttonKey
+          ].classList.remove(
+            "sk-active"
+          );
+        }
+      );
+
+      if (buttons[key]) {
+        buttons[
+          key
+        ].classList.add(
+          "sk-active"
+        );
+      }
+    }
+
+    function activate(key) {
+      if (!tabs[key]) {
+        key = "overview";
+      }
+
+      localStorage.setItem(
+        "sk_internal_active_tab",
+        key
+      );
+
+      window.location.hash =
+        "admin-" + key;
+
+      setActiveButton(key);
+
+      breadcrumb.textContent =
+        "Admin > " +
+        tabs[key].label;
+
+      clear(content);
+
+      tabs[key].render(
+        content,
+        activate
+      );
+
+      if (
+        window.innerWidth <= 900
+      ) {
+        layout.classList.remove(
+          "sk-nav-open"
+        );
+      }
+
+      window.scrollTo({
+        top:
+          Math.max(
+            0,
+            root.getBoundingClientRect()
+              .top +
+              window.scrollY -
+              8
+          ),
+        behavior: "smooth"
+      });
+    }
+
+    skPortalNavigate =
+      activate;
+
+    search.addEventListener(
+      "input",
+      function () {
+        renderNavigation(
+          search.value
+        );
+
+        var active =
+          localStorage.getItem(
+            "sk_internal_active_tab"
+          ) || "overview";
+
+        setActiveButton(active);
+      }
+    );
+
+    mobileToggle.onclick =
+      function () {
+        layout.classList.toggle(
+          "sk-nav-open"
+        );
       };
-      tabWrap.appendChild(btn);
-    });
 
-    app.appendChild(tabWrap);
-    app.appendChild(content);
+    renderNavigation("");
 
-    var savedTab = localStorage.getItem("sk_internal_active_tab");
+    var hash =
+      String(
+        window.location.hash || ""
+      );
 
-if (!savedTab || !tabs[savedTab]) {
-  savedTab = "overview";
-}
+    var hashTab =
+      hash.indexOf("#admin-") === 0
+        ? hash.replace(
+            "#admin-",
+            ""
+          )
+        : null;
 
-activate(savedTab);
+    var savedTab =
+      hashTab ||
+      localStorage.getItem(
+        "sk_internal_active_tab"
+      );
+
+    if (
+      !savedTab ||
+      !tabs[savedTab]
+    ) {
+      savedTab = "overview";
+    }
+
+    activate(savedTab);
   }
 
   function addStatGrid(parent, data) {
@@ -14412,66 +15472,144 @@ var competitorSection = createCollapsibleSection(
   
   function renderPortal(sb, user, data) {
     var app = renderShell(
-      "Sportskongen internportal",
-      "Drift, tilbud, produkter, varetelling og innstillinger samlet på én ryddig internside."
+      "Sportskongen Admin",
+      "Drift, varer, lager, salg, pris og system samlet på én intern arbeidsflate."
     );
 
-    addUserBar(app, sb, user);
+    addUserBar(
+      app,
+      sb,
+      user
+    );
 
     createTabs(app, {
       overview: {
         label: "Oversikt",
+        icon: "🏠",
+        group: "Oversikt",
+        description:
+          "Dashboard og det som krever oppmerksomhet.",
         render: function (parent) {
-          renderOverviewDashboard(parent, data);
+          renderOverviewDashboard(
+            parent,
+            data
+          );
         }
       },
-      offers: {
-        label: "Tilbud",
-        render: function (parent) {
-          renderOffersHub(parent, data, sb);
-        }
-      },
-      stock: {
-        label: "Varetelling",
-        render: function (parent) {
-          renderStockCountsManager(parent, data, sb);
-        }
-      },
-            products: {
-        label: "Produkter",
-        render: function (parent) {
-          renderProductsManager(parent, data, sb);
-        }
-      },
-      productControl: {
-        label: "Produktkontroll",
-        render: function (parent) {
-          renderProductControlDashboard(parent, data);
-        }
-      },
-      priceCheck: {
-        label: "Prissjekk",
-        render: function (parent) {
-          renderPriceCheckDashboard(parent, data, sb);
-        }
-      },
-      
-      suppliers: {
-        label: "Leverandører og kostnader",
-        render: function (parent) {
-          renderSuppliersAddonsManager(parent, data, sb);
-        }
-      },
+
       booking: {
-        label: "Booking-admin",
+        label: "Booking",
+        icon: "📅",
+        group: "Drift",
+        description:
+          "Booking-admin og kommende aktiviteter.",
         render: function (parent) {
           renderBookingAdmin(parent);
         }
       },
+
+      products: {
+        label: "Produkter",
+        icon: "🛒",
+        group: "Varer og lager",
+        description:
+          "Produktdata, oppretting og synkronisering.",
+        render: function (parent) {
+          renderProductsManager(
+            parent,
+            data,
+            sb
+          );
+        }
+      },
+
+      productControl: {
+        label: "Produktkontroll",
+        icon: "🔎",
+        group: "Varer og lager",
+        description:
+          "Avvik og produkter som bør undersøkes.",
+        render: function (parent) {
+          renderProductControlDashboard(
+            parent,
+            data
+          );
+        }
+      },
+
+      stock: {
+        label: "Varetelling",
+        icon: "📦",
+        group: "Varer og lager",
+        description:
+          "Varetelling, avvik og lageroppdatering.",
+        render: function (parent) {
+          renderStockCountsManager(
+            parent,
+            data,
+            sb
+          );
+        }
+      },
+
+      offers: {
+        label: "Tilbud",
+        icon: "🧾",
+        group: "Salg og pris",
+        description:
+          "Tilbudsbygger, kundetilbud og arkiv.",
+        render: function (parent) {
+          renderOffersHub(
+            parent,
+            data,
+            sb
+          );
+        }
+      },
+
+      priceCheck: {
+        label: "Prissjekk",
+        icon: "💰",
+        group: "Salg og pris",
+        description:
+          "Konkurrentpriser, forslag og oppfølging.",
+        render: function (parent) {
+          renderPriceCheckDashboard(
+            parent,
+            data,
+            sb
+          );
+        }
+      },
+
+      suppliers: {
+        label: "Leverandører",
+        icon: "🚚",
+        group: "Innkjøp",
+        description:
+          "Leverandører, kostnader og tillegg.",
+        render: function (parent) {
+          renderSuppliersAddonsManager(
+            parent,
+            data,
+            sb
+          );
+        }
+      },
+
       settings: {
         label: "Innstillinger",
+        icon: "⚙️",
+        group: "System",
+        description:
+          "Firmainfo, standardverdier og systemoppsett.",
         render: function (parent) {
-          renderSettingsManager(parent, data, sb, user);
+          renderSettingsManager(
+            parent,
+            data,
+            sb,
+            user
+          );
         }
       }
     });
