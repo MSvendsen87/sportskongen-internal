@@ -894,6 +894,12 @@
       "#sk-internal-root .sk-market-used-badge{background:#fff7ed;color:#9a3412;}" +
       "#sk-internal-root .sk-market-newonly-badge{background:#f0fdf4;color:#166534;}" +
       "#sk-internal-root .sk-market-data-badge{background:#eff6ff;color:#1d4ed8;}" +
+      "#sk-internal-root .sk-crawl-safety-box{padding:13px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;margin:12px 0;line-height:1.55;font-size:11px;}" +
+      "#sk-internal-root .sk-crawl-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;margin:10px 0;}" +
+      "#sk-internal-root .sk-crawl-settings label{display:grid;gap:4px;font-size:11px;font-weight:800;color:#334155;}" +
+      "#sk-internal-root .sk-crawl-settings select,#sk-internal-root .sk-crawl-settings input,#sk-internal-root .sk-crawl-settings textarea{padding:8px 9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;}" +
+      "#sk-internal-root .sk-crawl-actions{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0;}" +
+      "#sk-internal-root .sk-crawl-result{padding:10px 11px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:11px;line-height:1.55;white-space:pre-wrap;}" +
       "#sk-internal-root .sk-analysis-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:6px;border-radius:12px;background:#eef2f7;border:1px solid #dbe3ec;}" +
       "#sk-internal-root .sk-analysis-tab{appearance:none;padding:8px 10px!important;border:1px solid transparent!important;border-radius:9px!important;background:transparent!important;color:#475569!important;font-size:12px!important;font-weight:800!important;}" +
       "#sk-internal-root .sk-analysis-tab.sk-active{background:#111827!important;color:#fff!important;}" +
@@ -950,6 +956,7 @@
       "  #sk-internal-root .sk-price-variant-row{grid-template-columns:28px minmax(120px,1fr) 90px;}" +
       "  #sk-internal-root .sk-price-variant-row .sk-price-variant-current{display:none;}" +
       "  #sk-internal-root .sk-market-analysis-grid{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-crawl-settings{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-rank-shipping{display:none;}" +
       "  #sk-internal-root .sk-content{padding:10px;}" +
       "  #sk-internal-root .sk-userbar{padding:9px 12px;}" +
@@ -24787,7 +24794,8 @@ function skUsedCatalogLabel(value) {
 
 function renderMarketAnalysis(
   parent,
-  data
+  data,
+  sb
 ) {
   var suggestions =
     data.priceSuggestions || [];
@@ -25957,6 +25965,1094 @@ function renderMarketAnalysis(
     overlapRows,
     "Ingen overlappdata."
   );
+
+  addDashboardSectionTitle(
+    parent,
+    "Sikker katalogmåling"
+  );
+
+  var safetyBox =
+    el("div");
+
+  safetyBox.className =
+    "sk-crawl-safety-box";
+
+  safetyBox.innerHTML =
+    "<strong>Bevisst konservativ modus.</strong> " +
+    "Denne målingen bruker bare offentlig tilgjengelige sider, kontrollerer robots.txt, stopper ved blokkering/rate-limit, bruker minst 1,5 sekunder mellom produktsider og lagrer ikke beskrivelser, bilder eller HTML. " +
+    "Maks 25 stabile produktsider måles per butikk per kjøring. Dette er en utvalgsindikator – ikke en kopi av konkurrentens katalog.";
+
+  parent.appendChild(
+    safetyBox
+  );
+
+  var crawlSettings =
+    el("div");
+
+  crawlSettings.className =
+    "sk-crawl-settings";
+
+  var crawlCompetitorWrap =
+    el("label");
+
+  crawlCompetitorWrap.appendChild(
+    el(
+      "span",
+      "Konkurrent"
+    )
+  );
+
+  var crawlCompetitor =
+    el("select");
+
+  (
+    data.priceCompetitors ||
+    []
+  )
+    .filter(
+      function (competitor) {
+        return (
+          competitor.is_active !==
+            false &&
+          competitor
+            .market_analysis_enabled !==
+            false
+        );
+      }
+    )
+    .sort(
+      function (a, b) {
+        return String(
+          a.name || ""
+        ).localeCompare(
+          String(
+            b.name || ""
+          ),
+          "nb-NO"
+        );
+      }
+    )
+    .forEach(
+      function (competitor) {
+        addOption(
+          crawlCompetitor,
+          competitor.id,
+          competitor.name
+        );
+      }
+    );
+
+  crawlCompetitorWrap.appendChild(
+    crawlCompetitor
+  );
+
+  crawlSettings.appendChild(
+    crawlCompetitorWrap
+  );
+
+  var crawlTermsWrap =
+    el("label");
+
+  crawlTermsWrap.appendChild(
+    el(
+      "span",
+      "Vilkårstatus"
+    )
+  );
+
+  var crawlTerms =
+    el("select");
+
+  [
+    [
+      "unknown",
+      "Ikke gjennomgått"
+    ],
+    [
+      "public_facts_ok",
+      "Gjennomgått – offentlig fakta OK"
+    ],
+    [
+      "do_not_crawl",
+      "Ikke crawl"
+    ]
+  ].forEach(
+    function (item) {
+      addOption(
+        crawlTerms,
+        item[0],
+        item[1]
+      );
+    }
+  );
+
+  crawlTermsWrap.appendChild(
+    crawlTerms
+  );
+
+  crawlSettings.appendChild(
+    crawlTermsWrap
+  );
+
+  var crawlLimitWrap =
+    el("label");
+
+  crawlLimitWrap.appendChild(
+    el(
+      "span",
+      "Produktsider per prøve (1–25)"
+    )
+  );
+
+  var crawlLimit =
+    el("input");
+
+  crawlLimit.type =
+    "number";
+  crawlLimit.min =
+    "1";
+  crawlLimit.max =
+    "25";
+  crawlLimit.step =
+    "1";
+
+  crawlLimitWrap.appendChild(
+    crawlLimit
+  );
+
+  crawlSettings.appendChild(
+    crawlLimitWrap
+  );
+
+  var crawlDelayWrap =
+    el("label");
+
+  crawlDelayWrap.appendChild(
+    el(
+      "span",
+      "Min. pause mellom sider (ms)"
+    )
+  );
+
+  var crawlDelay =
+    el("input");
+
+  crawlDelay.type =
+    "number";
+  crawlDelay.min =
+    "1500";
+  crawlDelay.max =
+    "10000";
+  crawlDelay.step =
+    "100";
+
+  crawlDelayWrap.appendChild(
+    crawlDelay
+  );
+
+  crawlSettings.appendChild(
+    crawlDelayWrap
+  );
+
+  var crawlEnabledWrap =
+    el("label");
+
+  crawlEnabledWrap.style.display =
+    "flex";
+  crawlEnabledWrap.style.alignItems =
+    "center";
+  crawlEnabledWrap.style.gap =
+    "8px";
+
+  var crawlEnabled =
+    el("input");
+
+  crawlEnabled.type =
+    "checkbox";
+
+  crawlEnabledWrap.appendChild(
+    crawlEnabled
+  );
+
+  crawlEnabledWrap.appendChild(
+    el(
+      "span",
+      "Aktiver sikker katalogmåling"
+    )
+  );
+
+  crawlSettings.appendChild(
+    crawlEnabledWrap
+  );
+
+  var crawlNoteWrap =
+    el("label");
+
+  crawlNoteWrap.style.gridColumn =
+    "1 / -1";
+
+  crawlNoteWrap.appendChild(
+    el(
+      "span",
+      "Internt sikkerhetsnotat"
+    )
+  );
+
+  var crawlNote =
+    el("textarea");
+
+  crawlNote.rows = 2;
+  crawlNote.placeholder =
+    "F.eks. vilkår gjennomgått 04.08.2026 – ingen eksplisitt blokkering av offentlig produktmåling funnet.";
+
+  crawlNoteWrap.appendChild(
+    crawlNote
+  );
+
+  crawlSettings.appendChild(
+    crawlNoteWrap
+  );
+
+  parent.appendChild(
+    crawlSettings
+  );
+
+  var crawlActions =
+    el("div");
+
+  crawlActions.className =
+    "sk-crawl-actions";
+
+  var saveCrawlSettings =
+    createButton(
+      "Lagre sikkerhetsinnstillinger"
+    );
+
+  var robotsButton =
+    createButton(
+      "Sjekk robots.txt"
+    );
+
+  var sampleButton =
+    createPrimaryButton(
+      "Kjør sikker prøve"
+    );
+
+  crawlActions.appendChild(
+    saveCrawlSettings
+  );
+  crawlActions.appendChild(
+    robotsButton
+  );
+  crawlActions.appendChild(
+    sampleButton
+  );
+
+  parent.appendChild(
+    crawlActions
+  );
+
+  var crawlResult =
+    el("div");
+
+  crawlResult.className =
+    "sk-crawl-result";
+
+  crawlResult.textContent =
+    "Velg en konkurrent. Robots-kontroll kan kjøres før katalogmåling aktiveres.";
+
+  parent.appendChild(
+    crawlResult
+  );
+
+  var latestHost =
+    el("div");
+
+  latestHost.style.marginTop =
+    "12px";
+
+  parent.appendChild(
+    latestHost
+  );
+
+  function selectedCrawlCompetitor() {
+    return (
+      (data.priceCompetitors ||
+      []).find(
+        function (competitor) {
+          return (
+            String(
+              competitor.id
+            ) ===
+            String(
+              crawlCompetitor.value
+            )
+          );
+        }
+      ) ||
+      null
+    );
+  }
+
+  function syncCrawlForm() {
+    var competitor =
+      selectedCrawlCompetitor();
+
+    if (!competitor) {
+      return;
+    }
+
+    crawlTerms.value =
+      competitor
+        .market_crawl_terms_status ||
+      "unknown";
+
+    crawlLimit.value =
+      String(
+        competitor
+          .market_crawl_sample_limit ||
+        20
+      );
+
+    crawlDelay.value =
+      String(
+        competitor
+          .market_crawl_min_delay_ms ||
+        1800
+      );
+
+    crawlEnabled.checked =
+      competitor
+        .market_crawl_enabled ===
+      true;
+
+    crawlNote.value =
+      competitor
+        .market_crawl_safety_note ||
+      "";
+
+    sampleButton.disabled =
+      !(
+        crawlEnabled.checked &&
+        crawlTerms.value ===
+          "public_facts_ok"
+      );
+
+    crawlResult.textContent =
+      "Robots-status: " +
+      (
+        competitor
+          .market_crawl_robots_status ||
+        "ikke kontrollert"
+      ) +
+      " · Siste kjøring: " +
+      (
+        competitor
+          .market_crawl_last_status ||
+        "ingen"
+      );
+  }
+
+  crawlCompetitor.onchange =
+    syncCrawlForm;
+
+  crawlEnabled.onchange =
+    function () {
+      if (
+        crawlEnabled.checked &&
+        crawlTerms.value !==
+          "public_facts_ok"
+      ) {
+        crawlEnabled.checked =
+          false;
+
+        alert(
+          "Sett vilkårstatus til «Gjennomgått – offentlig fakta OK» før målingen aktiveres."
+        );
+      }
+
+      sampleButton.disabled =
+        !(
+          crawlEnabled.checked &&
+          crawlTerms.value ===
+            "public_facts_ok"
+        );
+    };
+
+  crawlTerms.onchange =
+    function () {
+      if (
+        crawlTerms.value !==
+          "public_facts_ok"
+      ) {
+        crawlEnabled.checked =
+          false;
+      }
+
+      sampleButton.disabled =
+        !(
+          crawlEnabled.checked &&
+          crawlTerms.value ===
+            "public_facts_ok"
+        );
+    };
+
+  function getAdminAccessToken() {
+    return sb.auth
+      .getSession()
+      .then(
+        function (result) {
+          if (
+            result.error ||
+            !result.data ||
+            !result.data.session
+          ) {
+            throw new Error(
+              "Mangler aktiv innlogging."
+            );
+          }
+
+          return result.data
+            .session
+            .access_token;
+        }
+      );
+  }
+
+  function callMarketCrawler(
+    endpoint,
+    options
+  ) {
+    return getAdminAccessToken()
+      .then(
+        function (token) {
+          var fetchOptions =
+            Object.assign(
+              {
+                method: "GET",
+                headers: {}
+              },
+              options || {}
+            );
+
+          fetchOptions.headers =
+            Object.assign(
+              {},
+              fetchOptions.headers ||
+                {},
+              {
+                Authorization:
+                  "Bearer " +
+                  token
+              }
+            );
+
+          return fetch(
+            "https://golfkongen-market-analysis.post-cd6.workers.dev" +
+              endpoint,
+            fetchOptions
+          );
+        }
+      )
+      .then(
+        function (response) {
+          return response
+            .text()
+            .then(
+              function (text) {
+                var payload = {};
+
+                try {
+                  payload =
+                    text
+                      ? JSON.parse(
+                          text
+                        )
+                      : {};
+                } catch (_) {
+                  payload = {
+                    error:
+                      text ||
+                      "Ugyldig svar"
+                  };
+                }
+
+                if (
+                  !response.ok ||
+                  payload.ok ===
+                    false
+                ) {
+                  throw new Error(
+                    skReadableError(
+                      payload.error ||
+                      payload.message ||
+                      payload
+                    )
+                  );
+                }
+
+                return payload;
+              }
+            );
+        }
+      );
+  }
+
+  saveCrawlSettings.onclick =
+    function () {
+      var competitor =
+        selectedCrawlCompetitor();
+
+      if (!competitor) {
+        return;
+      }
+
+      var limit =
+        Number(
+          crawlLimit.value
+        );
+
+      var delay =
+        Number(
+          crawlDelay.value
+        );
+
+      if (
+        !Number.isFinite(limit) ||
+        limit < 1 ||
+        limit > 25
+      ) {
+        alert(
+          "Prøvestørrelse må være mellom 1 og 25."
+        );
+        return;
+      }
+
+      if (
+        !Number.isFinite(delay) ||
+        delay < 1500 ||
+        delay > 10000
+      ) {
+        alert(
+          "Pause må være mellom 1500 og 10000 ms."
+        );
+        return;
+      }
+
+      if (
+        crawlEnabled.checked &&
+        crawlTerms.value !==
+          "public_facts_ok"
+      ) {
+        alert(
+          "Katalogmåling kan bare aktiveres etter at vilkårstatus er gjennomgått."
+        );
+        return;
+      }
+
+      saveCrawlSettings.disabled =
+        true;
+
+      saveCrawlSettings.textContent =
+        "Lagrer…";
+
+      sb.rpc(
+        "internal_update_market_crawl_settings",
+        {
+          p_id:
+            competitor.id,
+          p_market_crawl_enabled:
+            crawlEnabled.checked,
+          p_market_crawl_terms_status:
+            crawlTerms.value,
+          p_market_crawl_sample_limit:
+            limit,
+          p_market_crawl_min_delay_ms:
+            delay,
+          p_market_crawl_safety_note:
+            crawlNote.value
+              .trim() ||
+            null
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            competitor
+              .market_crawl_enabled =
+              crawlEnabled.checked;
+
+            competitor
+              .market_crawl_terms_status =
+              crawlTerms.value;
+
+            competitor
+              .market_crawl_sample_limit =
+              limit;
+
+            competitor
+              .market_crawl_min_delay_ms =
+              delay;
+
+            competitor
+              .market_crawl_safety_note =
+              crawlNote.value
+                .trim() ||
+              null;
+
+            saveCrawlSettings.disabled =
+              false;
+
+            saveCrawlSettings.textContent =
+              "Lagret";
+
+            sampleButton.disabled =
+              !(
+                crawlEnabled.checked &&
+                crawlTerms.value ===
+                  "public_facts_ok"
+              );
+
+            crawlResult.textContent =
+              "Sikkerhetsinnstillinger lagret. Dette er en intern beslutning om offentlig fakta – ikke en juridisk godkjenning.";
+
+            setTimeout(
+              function () {
+                saveCrawlSettings.textContent =
+                  "Lagre sikkerhetsinnstillinger";
+              },
+              1800
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            saveCrawlSettings.disabled =
+              false;
+
+            saveCrawlSettings.textContent =
+              "Lagre sikkerhetsinnstillinger";
+
+            alert(
+              "Kunne ikke lagre: " +
+                skReadableError(
+                  error
+                )
+            );
+          }
+        );
+    };
+
+  robotsButton.onclick =
+    function () {
+      var competitor =
+        selectedCrawlCompetitor();
+
+      if (!competitor) {
+        return;
+      }
+
+      robotsButton.disabled =
+        true;
+
+      robotsButton.textContent =
+        "Kontrollerer…";
+
+      crawlResult.textContent =
+        "Henter kun offentlig /robots.txt…";
+
+      callMarketCrawler(
+        "/robots-check" +
+          "?competitor_id=" +
+          encodeURIComponent(
+            competitor.id
+          )
+      )
+        .then(
+          function (payload) {
+            robotsButton.disabled =
+              false;
+
+            robotsButton.textContent =
+              "Sjekk robots.txt";
+
+            competitor
+              .market_crawl_robots_status =
+              payload.robots
+                .status;
+
+            crawlResult.textContent =
+              "robots.txt: " +
+              payload.robots
+                .status +
+              "\nHTTP: " +
+              String(
+                payload.robots
+                  .http_status
+              ) +
+              "\nTillatt: " +
+              (
+                payload.robots
+                  .can_crawl
+                  ? "Ja"
+                  : "Nei"
+              ) +
+              "\n" +
+              (
+                payload.robots
+                  .message ||
+                ""
+              );
+
+            loadLatestCatalogMeasurements();
+          }
+        )
+        .catch(
+          function (error) {
+            robotsButton.disabled =
+              false;
+
+            robotsButton.textContent =
+              "Sjekk robots.txt";
+
+            crawlResult.textContent =
+              "Feil ved robots-kontroll: " +
+              skReadableError(
+                error
+              );
+
+            loadLatestCatalogMeasurements();
+          }
+        );
+    };
+
+  sampleButton.onclick =
+    function () {
+      var competitor =
+        selectedCrawlCompetitor();
+
+      if (!competitor) {
+        return;
+      }
+
+      if (
+        competitor
+          .market_crawl_enabled !==
+          true ||
+        competitor
+          .market_crawl_terms_status !==
+          "public_facts_ok"
+      ) {
+        alert(
+          "Lagre sikkerhetsinnstillingene først."
+        );
+        return;
+      }
+
+      if (
+        !window.confirm(
+          "Kjør en begrenset offentlig katalogprøve for " +
+            competitor.name +
+            "?\n\nMaks " +
+            String(
+              competitor
+                .market_crawl_sample_limit ||
+              20
+            ) +
+            " stabile produktsider. Ingen bypass, ingen innlogging og ingen beskrivelser/bilder lagres."
+        )
+      ) {
+        return;
+      }
+
+      sampleButton.disabled =
+        true;
+
+      sampleButton.textContent =
+        "Måler…";
+
+      crawlResult.textContent =
+        "Måler et lite, stabilt offentlig utvalg. Dette kan ta litt tid fordi vi bevisst legger pause mellom sidene.";
+
+      callMarketCrawler(
+        "/catalog-sample",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body:
+            JSON.stringify({
+              competitor_id:
+                competitor.id
+            })
+        }
+      )
+        .then(
+          function (payload) {
+            sampleButton.disabled =
+              false;
+
+            sampleButton.textContent =
+              "Kjør sikker prøve";
+
+            crawlResult.textContent =
+              "Ferdig: " +
+              payload.competitor
+                .name +
+              "\nStatus: " +
+              payload.status +
+              "\nKandidat-URL-er i kontrollerte sitemaps: " +
+              String(
+                payload.sitemap
+                  .candidate_product_urls
+              ) +
+              "\nMålte produktsider: " +
+              String(
+                payload.sample
+                  .measured
+              ) +
+              "\nNye: " +
+              String(
+                payload.sample.new
+              ) +
+              " · Brukte: " +
+              String(
+                payload.sample.used
+              ) +
+              "\nMerker i prøven: " +
+              String(
+                payload.sample.brands
+              ) +
+              "\nMedianpris i prøven: " +
+              (
+                payload.sample
+                  .median_price !==
+                  null
+                  ? skFormatMoney(
+                      payload.sample
+                        .median_price
+                    )
+                  : "-"
+              ) +
+              "\n\n" +
+              payload.message;
+
+            competitor
+              .market_crawl_last_status =
+              payload.status;
+
+            loadLatestCatalogMeasurements();
+          }
+        )
+        .catch(
+          function (error) {
+            sampleButton.disabled =
+              false;
+
+            sampleButton.textContent =
+              "Kjør sikker prøve";
+
+            crawlResult.textContent =
+              "Målingen ble stoppet: " +
+              skReadableError(
+                error
+              );
+
+            loadLatestCatalogMeasurements();
+          }
+        );
+    };
+
+  function loadLatestCatalogMeasurements() {
+    clear(
+      latestHost
+    );
+
+    var loading =
+      el(
+        "div",
+        "Henter siste katalogmålinger…"
+      );
+
+    loading.className =
+      "sk-note";
+
+    latestHost.appendChild(
+      loading
+    );
+
+    sb
+      .from(
+        "internal_market_catalog_latest_view"
+      )
+      .select("*")
+      .order(
+        "competitor_name",
+        {
+          ascending: true
+        }
+      )
+      .then(
+        function (result) {
+          clear(
+            latestHost
+          );
+
+          if (result.error) {
+            var errorNote =
+              el(
+                "div",
+                "Kunne ikke hente katalogmålinger: " +
+                  result.error.message
+              );
+
+            errorNote.className =
+              "sk-note";
+
+            latestHost.appendChild(
+              errorNote
+            );
+            return;
+          }
+
+          var rows =
+            result.data || [];
+
+          addDashboardSectionTitle(
+            latestHost,
+            "Siste måling per konkurrent"
+          );
+
+          skCreateAnalysisTable(
+            latestHost,
+            [
+              {
+                label:
+                  "Konkurrent",
+                key:
+                  "competitor_name"
+              },
+              {
+                label:
+                  "Status",
+                key:
+                  "status"
+              },
+              {
+                label:
+                  "Robots",
+                key:
+                  "robots_status"
+              },
+              {
+                label:
+                  "Kandidat-URL-er",
+                key:
+                  "candidate_product_urls",
+                align:
+                  "right"
+              },
+              {
+                label:
+                  "Prøve",
+                value:
+                  function (row) {
+                    return (
+                      String(
+                        row
+                          .sampled_pages ||
+                        0
+                      ) +
+                      " / " +
+                      String(
+                        row
+                          .sample_limit ||
+                        0
+                      )
+                    );
+                  },
+                align:
+                  "right"
+              },
+              {
+                label:
+                  "Nye / brukt",
+                value:
+                  function (row) {
+                    return (
+                      String(
+                        row
+                          .sampled_new ||
+                        0
+                      ) +
+                      " / " +
+                      String(
+                        row
+                          .sampled_used ||
+                        0
+                      )
+                    );
+                  },
+                align:
+                  "right"
+              },
+              {
+                label:
+                  "Merker",
+                key:
+                  "sampled_brand_count",
+                align:
+                  "right"
+              },
+              {
+                label:
+                  "Medianpris",
+                value:
+                  function (row) {
+                    return row
+                      .sampled_median_price !==
+                      null
+                      ? skFormatMoney(
+                          row
+                            .sampled_median_price
+                        )
+                      : "-";
+                  },
+                align:
+                  "right"
+              },
+              {
+                label:
+                  "Målt",
+                value:
+                  function (row) {
+                    return row
+                      .started_at
+                      ? new Date(
+                          row
+                            .started_at
+                        )
+                          .toLocaleString(
+                            "nb-NO"
+                          )
+                      : "-";
+                  }
+              }
+            ],
+            rows,
+            "Ingen katalogmålinger ennå."
+          );
+        }
+      );
+  }
+
+  syncCrawlForm();
+  loadLatestCatalogMeasurements();
 }
 
 
@@ -26095,7 +27191,8 @@ function renderPortal(sb, user, data) {
         render: function (parent) {
           renderMarketAnalysis(
             parent,
-            data
+            data,
+            sb
           );
         }
       },
