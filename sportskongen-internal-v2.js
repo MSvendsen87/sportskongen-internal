@@ -25071,14 +25071,14 @@ function renderMarketAnalysis(
   createPageHeader(
     parent,
     "Markedsanalyse",
-    "Prisnivå, markedsposisjon og målbare indikatorer mot konkurrentene. Størrelse skilles tydelig fra prisrangering, slik at produkt-overlapp ikke fremstilles som omsetning eller markedsandel.",
-    "Marked v2"
+    "En samlet oversikt over pris, sortiment og målbare konkurrentindikatorer. Data fra katalogprøver vises tydelig som utvalg – ikke som full katalog eller markedsandel.",
+    "Marked v3"
   );
 
   var marketInfo =
     el(
       "div",
-      "Standard er nye varer. Brukte discer skal ikke blandes med ordinære nypriser. WeAreDiscGolf og HyzerShop er markert som butikker med bruktmarked, men brukt er slått av i analysen som standard."
+      "Standardanalysen gjelder nye varer. Brukt holdes utenfor hovedanalysen. Katalogprøver er begrensede indikatorer og skal ikke tolkes som komplett sortiment eller faktisk markedsandel."
     );
 
   marketInfo.className =
@@ -25089,6 +25089,434 @@ function renderMarketAnalysis(
   parent.appendChild(
     marketInfo
   );
+
+  var marketV3BaselineHost =
+    el("div");
+
+  marketV3BaselineHost.style.marginBottom =
+    "14px";
+
+  var marketV3Loading =
+    el(
+      "div",
+      "Henter samlet konkurrentbilde…"
+    );
+
+  marketV3Loading.className =
+    "sk-note";
+
+  marketV3BaselineHost.appendChild(
+    marketV3Loading
+  );
+
+  parent.appendChild(
+    marketV3BaselineHost
+  );
+
+  function marketV3Key(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9æøå]+/g,
+        ""
+      );
+  }
+
+  function renderMarketV3Baseline(
+    catalogRows
+  ) {
+    clear(
+      marketV3BaselineHost
+    );
+
+    var measured =
+      (catalogRows || [])
+        .filter(
+          function (row) {
+            return (
+              row &&
+              row.status === "ok" &&
+              Number(
+                row.sampled_pages || 0
+              ) > 0
+            );
+          }
+        );
+
+    addDashboardSectionTitle(
+      marketV3BaselineHost,
+      "Konkurrentbildet nå",
+      "Prisdata + siste godkjente katalogprøve"
+    );
+
+    if (!measured.length) {
+      var noData =
+        el(
+          "div",
+          "Ingen ferdige katalogprøver er tilgjengelige i oversikten ennå."
+        );
+
+      noData.className =
+        "sk-note";
+
+      marketV3BaselineHost.appendChild(
+        noData
+      );
+
+      return;
+    }
+
+    var totalMeasured =
+      measured.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.sampled_pages || 0
+            )
+          );
+        },
+        0
+      );
+
+    var totalInStock =
+      measured.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.sampled_in_stock || 0
+            )
+          );
+        },
+        0
+      );
+
+    var totalOutOfStock =
+      measured.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.sampled_out_of_stock ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    var stockDenominator =
+      totalInStock +
+      totalOutOfStock;
+
+    var stockShare =
+      stockDenominator > 0
+        ? (
+            totalInStock /
+            stockDenominator *
+            100
+          )
+        : null;
+
+    var averageBrands =
+      measured.length
+        ? measured.reduce(
+            function (sum, row) {
+              return (
+                sum +
+                Number(
+                  row
+                    .sampled_brand_count ||
+                  0
+                )
+              );
+            },
+            0
+          ) /
+          measured.length
+        : null;
+
+    addProStatGrid(
+      marketV3BaselineHost,
+      [
+        {
+          label:
+            "Butikker med ferdig prøve",
+          value:
+            String(
+              measured.length
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Produktsider målt",
+          value:
+            totalMeasured
+              .toLocaleString(
+                "nb-NO"
+              ),
+          tone: "ok"
+        },
+        {
+          label:
+            "På lager i prøvene",
+          value:
+            stockShare === null
+              ? "-"
+              : formatPercent(
+                  stockShare
+                ),
+          tone:
+            stockShare !== null &&
+            stockShare < 60
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Gj.snitt merker i prøve",
+          value:
+            averageBrands === null
+              ? "-"
+              : averageBrands
+                  .toLocaleString(
+                    "nb-NO",
+                    {
+                      minimumFractionDigits:
+                        1,
+                      maximumFractionDigits:
+                        1
+                    }
+                  ),
+          tone: "ok"
+        }
+      ]
+    );
+
+    var priceLookup = {};
+
+    (competitorRows || [])
+      .forEach(
+        function (row) {
+          priceLookup[
+            marketV3Key(row.name)
+          ] = row;
+        }
+      );
+
+    var overviewRows =
+      measured.map(
+        function (row) {
+          var priceRow =
+            priceLookup[
+              marketV3Key(
+                row.competitor_name
+              )
+            ] ||
+            null;
+
+          var inStock =
+            Number(
+              row.sampled_in_stock ||
+              0
+            );
+
+          var outOfStock =
+            Number(
+              row
+                .sampled_out_of_stock ||
+              0
+            );
+
+          var denominator =
+            inStock + outOfStock;
+
+          return {
+            competitor_name:
+              row.competitor_name ||
+              "-",
+            overlap:
+              priceRow
+                ? Number(
+                    priceRow.overlap ||
+                    0
+                  )
+                : 0,
+            competitorIndex:
+              priceRow
+                ? priceRow
+                    .competitorIndex
+                : null,
+            candidates:
+              Number(
+                row
+                  .candidate_product_urls ||
+                0
+              ),
+            measured:
+              Number(
+                row.sampled_pages ||
+                0
+              ),
+            sampleLimit:
+              Number(
+                row.sample_limit ||
+                0
+              ),
+            brands:
+              Number(
+                row
+                  .sampled_brand_count ||
+                0
+              ),
+            stockShare:
+              denominator > 0
+                ? (
+                    inStock /
+                    denominator *
+                    100
+                  )
+                : null,
+            medianPrice:
+              row
+                .sampled_median_price,
+            startedAt:
+              row.started_at ||
+              null
+          };
+        }
+      )
+      .sort(
+        function (a, b) {
+          return (
+            b.candidates -
+            a.candidates
+          );
+        }
+      );
+
+    skCreateAnalysisTable(
+      marketV3BaselineHost,
+      [
+        {
+          label: "Butikk",
+          key:
+            "competitor_name"
+        },
+        {
+          label:
+            "Godkjente pristreff",
+          key: "overlap",
+          align: "right"
+        },
+        {
+          label:
+            "Prisindeks mot GK",
+          value:
+            function (row) {
+              return row
+                .competitorIndex ===
+                null
+                ? "-"
+                : Number(
+                    row
+                      .competitorIndex
+                  ).toLocaleString(
+                    "nb-NO",
+                    {
+                      minimumFractionDigits:
+                        1,
+                      maximumFractionDigits:
+                        1
+                    }
+                  );
+            },
+          align: "right"
+        },
+        {
+          label:
+            "Kandidat-URL-er",
+          key: "candidates",
+          align: "right"
+        },
+        {
+          label: "Prøve",
+          value:
+            function (row) {
+              return (
+                String(
+                  row.measured
+                ) +
+                (
+                  row.sampleLimit
+                    ? " / " +
+                      String(
+                        row
+                          .sampleLimit
+                      )
+                    : ""
+                )
+              );
+            },
+          align: "right"
+        },
+        {
+          label: "På lager",
+          value:
+            function (row) {
+              return row.stockShare ===
+                null
+                ? "-"
+                : formatPercent(
+                    row.stockShare
+                  );
+            },
+          align: "right"
+        },
+        {
+          label: "Merker",
+          key: "brands",
+          align: "right"
+        },
+        {
+          label:
+            "Medianpris · prøve",
+          value:
+            function (row) {
+              return row.medianPrice !==
+                null &&
+                row.medianPrice !==
+                  undefined
+                ? skFormatMoney(
+                    row.medianPrice
+                  )
+                : "-";
+            },
+          align: "right"
+        }
+      ],
+      overviewRows,
+      "Ingen målbare konkurrenter."
+    );
+
+    var baselineNote =
+      el(
+        "div",
+        "Slik leses tabellen: «Kandidat-URL-er» er et teknisk discovery-signal, ikke et verifisert produktantall. «Prøve» er maks 25 produktsider per butikk. Lagerandel, merke-bredde og medianpris er derfor samplebaserte indikatorer. Brukt er holdt utenfor hovedanalysen."
+      );
+
+    baselineNote.className =
+      "sk-note";
+
+    baselineNote.style.marginTop =
+      "10px";
+
+    marketV3BaselineHost.appendChild(
+      baselineNote
+    );
+  }
 
   var profileTableRows =
     marketCompetitors
@@ -26096,7 +26524,7 @@ function renderMarketAnalysis(
 
   var sizeNote = el(
     "div",
-    "Viktig om størrelsesrangering: dagens konkurrentdata viser pris og hvor mange av våre produkter vi har funnet et godkjent treff på hos hver butikk. Det forteller noe om sortiment-overlapp, men ikke konkurrentens totale omsetning, totale lager eller markedsandel. Derfor kaller vi ikke dette en størrelsesrangering ennå. Neste steg kan være å samle offentlige indikatorer som totalt nettbutikk-sortiment, merke-bredde, Google-anmeldelser, organisk søkesynlighet og sosiale følgere i samme side."
+    "Viktig: størrelsesindikatorene er ikke markedsandel. Godkjente pristreff, kandidat-URL-er, merke-bredde, lagerandel og katalogprøver gir sammenlignbare signaler, men forteller ikke konkurrentenes faktiske omsetning, komplette lager eller komplette sortiment."
   );
   sizeNote.className =
     "sk-note";
@@ -27104,6 +27532,24 @@ function renderMarketAnalysis(
           );
 
           if (result.error) {
+            clear(
+              marketV3BaselineHost
+            );
+
+            var baselineError =
+              el(
+                "div",
+                "Kunne ikke hente samlet konkurrentbilde: " +
+                  result.error.message
+              );
+
+            baselineError.className =
+              "sk-note";
+
+            marketV3BaselineHost.appendChild(
+              baselineError
+            );
+
             var errorNote =
               el(
                 "div",
@@ -27122,6 +27568,10 @@ function renderMarketAnalysis(
 
           var rows =
             result.data || [];
+
+          renderMarketV3Baseline(
+            rows
+          );
 
           addDashboardSectionTitle(
             latestHost,
@@ -27251,6 +27701,211 @@ function renderMarketAnalysis(
       );
   }
 
+  function activateMarketV3Tabs() {
+    var children =
+      Array.prototype.slice.call(
+        parent.children
+      );
+
+    var nav =
+      el("div");
+
+    nav.className =
+      "sk-analysis-tabs";
+
+    nav.style.marginTop =
+      "4px";
+
+    var panes = {
+      overview: el("div"),
+      price: el("div"),
+      assortment: el("div"),
+      data: el("div")
+    };
+
+    Object.keys(panes).forEach(
+      function (key) {
+        panes[key].className =
+          "sk-market-v3-pane";
+      }
+    );
+
+    var activePane =
+      "overview";
+
+    children.forEach(
+      function (child) {
+        if (
+          child === marketInfo ||
+          child.classList &&
+          child.classList.contains(
+            "sk-page-head"
+          )
+        ) {
+          return;
+        }
+
+        var titleText =
+          String(
+            child.textContent || ""
+          )
+            .trim()
+            .toLowerCase();
+
+        if (
+          child.classList &&
+          child.classList.contains(
+            "sk-v4-section-title"
+          )
+        ) {
+          if (
+            titleText.indexOf(
+              "pris mot hver konkurrent"
+            ) >= 0
+          ) {
+            activePane =
+              "price";
+          } else if (
+            titleText.indexOf(
+              "størrelse og markedsindikatorer"
+            ) >= 0
+          ) {
+            activePane =
+              "assortment";
+          } else if (
+            titleText.indexOf(
+              "sikker katalogmåling"
+            ) >= 0
+          ) {
+            activePane =
+              "data";
+          }
+        }
+
+        panes[
+          activePane
+        ].appendChild(
+          child
+        );
+      }
+    );
+
+    var labels = [
+      [
+        "overview",
+        "📊 Oversikt"
+      ],
+      [
+        "price",
+        "💰 Pris"
+      ],
+      [
+        "assortment",
+        "📦 Sortiment"
+      ],
+      [
+        "data",
+        "⚙️ Datainnsamling"
+      ]
+    ];
+
+    var tabButtons = {};
+
+    function selectTab(key) {
+      if (!panes[key]) {
+        key = "overview";
+      }
+
+      localStorage.setItem(
+        "sk_market_v3_tab",
+        key
+      );
+
+      Object.keys(panes)
+        .forEach(
+          function (paneKey) {
+            panes[
+              paneKey
+            ].style.display =
+              paneKey === key
+                ? "block"
+                : "none";
+
+            if (
+              tabButtons[
+                paneKey
+              ]
+            ) {
+              tabButtons[
+                paneKey
+              ].classList.toggle(
+                "sk-active",
+                paneKey === key
+              );
+            }
+          }
+        );
+    }
+
+    labels.forEach(
+      function (item) {
+        var button =
+          el(
+            "button",
+            item[1]
+          );
+
+        button.type =
+          "button";
+
+        button.className =
+          "sk-analysis-tab";
+
+        button.onclick =
+          function () {
+            selectTab(
+              item[0]
+            );
+          };
+
+        tabButtons[
+          item[0]
+        ] = button;
+
+        nav.appendChild(
+          button
+        );
+      }
+    );
+
+    parent.appendChild(
+      nav
+    );
+
+    labels.forEach(
+      function (item) {
+        parent.appendChild(
+          panes[
+            item[0]
+          ]
+        );
+      }
+    );
+
+    var saved =
+      localStorage.getItem(
+        "sk_market_v3_tab"
+      ) ||
+      "overview";
+
+    selectTab(
+      panes[saved]
+        ? saved
+        : "overview"
+    );
+  }
+
+  activateMarketV3Tabs();
   syncCrawlForm();
   loadLatestCatalogMeasurements();
 }
