@@ -1010,6 +1010,14 @@
       "  #sk-internal-root input,#sk-internal-root select,#sk-internal-root textarea{font-size:16px;}" +
       "}" +
       "@media(max-width:620px){" +
+      "  #sk-internal-root .sk-content,#sk-internal-root .sk-content *{min-width:0;}" +
+      "  #sk-internal-root .sk-content input:not([type='checkbox']):not([type='radio']),#sk-internal-root .sk-content select,#sk-internal-root .sk-content textarea{width:100%;max-width:100%;}" +
+      "  #sk-internal-root .sk-content button{max-width:100%;white-space:normal;}" +
+      "  #sk-internal-root .sk-content div[style*='grid-template-columns']{grid-template-columns:minmax(0,1fr)!important;}" +
+      "  #sk-internal-root .sk-analysis-toolbar{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;}" +
+      "  #sk-internal-root .sk-price-editor-toolbar{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;}" +
+      "  #sk-internal-root .sk-page-head{display:block;}" +
+      "  #sk-internal-root .sk-page-head .sk-badge{margin-top:10px;}" +
       "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-price-tabs{position:static;}" +
