@@ -964,6 +964,16 @@
       "#sk-internal-root .sk-market-monthly-strip strong{display:block;font-size:12px;color:#0f172a;}" +
       "#sk-internal-root .sk-market-monthly-strip span{display:block;margin-top:3px;font-size:10px;line-height:1.4;color:#64748b;}" +
       "#sk-internal-root .sk-market-monthly-state{display:inline-flex!important;align-items:center;padding:5px 8px;border-radius:999px;background:#fff7ed!important;color:#9a3412!important;border:1px solid #fed7aa;font-size:9px!important;font-weight:900;text-transform:uppercase;white-space:nowrap;}" +
+      "#sk-internal-root .sk-market-monthly-state.sk-saved{background:#f0fdf4!important;color:#166534!important;border-color:#bbf7d0;}" +
+      "#sk-internal-root .sk-market-monthly-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}" +
+      "#sk-internal-root .sk-market-monthly-history{margin:10px 0 14px;}" +
+      "#sk-internal-root .sk-market-monthly-trend-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:10px 0;}" +
+      "#sk-internal-root .sk-market-monthly-trend-card{padding:11px 12px;border:1px solid #e2e8f0;border-radius:11px;background:#fff;}" +
+      "#sk-internal-root .sk-market-monthly-trend-label{font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.03em;}" +
+      "#sk-internal-root .sk-market-monthly-trend-value{margin-top:4px;font-size:18px;font-weight:900;color:#0f172a;}" +
+      "#sk-internal-root .sk-market-monthly-trend-delta{margin-top:3px;font-size:10px;font-weight:800;color:#64748b;}" +
+      "#sk-internal-root .sk-market-monthly-trend-delta.sk-up{color:#166534;}" +
+      "#sk-internal-root .sk-market-monthly-trend-delta.sk-down{color:#b45309;}" +
       "#sk-internal-root .sk-market-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0;}" +
       "#sk-internal-root .sk-market-analysis-card{padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}" +
       "#sk-internal-root .sk-market-analysis-card h3{margin:0 0 7px;font-size:14px;}" +
@@ -1020,6 +1030,7 @@
       "  #sk-internal-root .sk-subtitle{font-size:12px;}" +
       "  #sk-internal-root .sk-market-radar-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-market-radar-signals{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-monthly-trend-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-v4-layout{display:block;min-height:0;}" +
       "  #sk-internal-root .sk-v4-sidebar{display:block;position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:60;border-right:1px solid #334155;border-bottom:0;padding:14px 12px;overflow-y:auto;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility .2s ease;box-shadow:18px 0 48px rgba(15,23,42,.28);}" +
       "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-sidebar{transform:translateX(0);visibility:visible;}" +
@@ -1049,6 +1060,7 @@
       "  #sk-internal-root .sk-page-head .sk-badge{margin-top:10px;}" +
       "  #sk-internal-root .sk-market-radar-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-radar-head{display:block;}" +
+      "  #sk-internal-root .sk-market-monthly-trend-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-radar-coverage{margin-top:8px;white-space:normal;}" +
       "  #sk-internal-root .sk-market-monthly-strip{display:block;}" +
       "  #sk-internal-root .sk-market-monthly-state{margin-top:9px;}" +
@@ -25106,7 +25118,7 @@ function renderMarketAnalysis(
     parent,
     "Markedsanalyse",
     "En samlet oversikt over pris, sortiment og målbare konkurrentindikatorer. Data fra katalogprøver vises tydelig som utvalg – ikke som full katalog eller markedsandel.",
-    "Marked v3.1"
+    "Marked v3.2"
   );
 
   var marketInfo =
@@ -25736,39 +25748,596 @@ function renderMarketAnalysis(
       );
     }
 
-    monthlyText.appendChild(
-      el(
-        "span",
-        "Neste tekniske steg er å lagre ett månedssnapshot av radaren og sammenligne med forrige måned." +
-          (
-            freshnessParts.length
-              ? " Nå: " +
-                freshnessParts.join(
-                  " · "
-                ) +
-                "."
-              : ""
-          )
-      )
+    var monthlyDescription = el(
+      "span",
+      "Første månedsbaseline er lagret i Supabase. Månedsbildet kan oppdateres manuelt herfra nå; automatisk månedskjøring kobles på etter at historikkvisningen er verifisert." +
+        (
+          freshnessParts.length
+            ? " Nå: " +
+              freshnessParts.join(
+                " · "
+              ) +
+              "."
+            : ""
+        )
     );
+
+    monthlyText.appendChild(
+      monthlyDescription
+    );
+
+    var monthlyActions = el("div");
+    monthlyActions.className =
+      "sk-market-monthly-actions";
 
     var monthlyState = el(
       "span",
-      "Automatikk ikke aktivert"
+      "Henter historikk…"
     );
     monthlyState.className =
       "sk-market-monthly-state";
+
+    var captureMonthButton =
+      createButton(
+        "Oppdater månedsbilde"
+      );
+
+    monthlyActions.appendChild(
+      monthlyState
+    );
+    monthlyActions.appendChild(
+      captureMonthButton
+    );
 
     monthlyStrip.appendChild(
       monthlyText
     );
     monthlyStrip.appendChild(
-      monthlyState
+      monthlyActions
     );
 
     marketV3BaselineHost.appendChild(
       monthlyStrip
     );
+
+    var monthlyHistoryHost = el("div");
+    monthlyHistoryHost.className =
+      "sk-market-monthly-history";
+
+    marketV3BaselineHost.appendChild(
+      monthlyHistoryHost
+    );
+
+    function marketMonthLabel(value) {
+      if (!value) {
+        return "-";
+      }
+
+      var date = new Date(
+        String(value) +
+        "T12:00:00"
+      );
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return String(value);
+      }
+
+      var label =
+        date.toLocaleDateString(
+          "nb-NO",
+          {
+            month: "long",
+            year: "numeric"
+          }
+        );
+
+      return label.charAt(0)
+        .toUpperCase() +
+        label.slice(1);
+    }
+
+    function marketMonthlyNumber(
+      value,
+      decimals
+    ) {
+      var number = Number(value);
+
+      if (!Number.isFinite(number)) {
+        return "-";
+      }
+
+      return number.toLocaleString(
+        "nb-NO",
+        {
+          minimumFractionDigits:
+            decimals || 0,
+          maximumFractionDigits:
+            decimals || 0
+        }
+      );
+    }
+
+    function marketMonthlyDelta(
+      current,
+      previous,
+      decimals,
+      suffix,
+      inverseTone
+    ) {
+      if (
+        current === null ||
+        current === undefined ||
+        current === "" ||
+        previous === null ||
+        previous === undefined ||
+        previous === ""
+      ) {
+        return {
+          text: "Første baseline",
+          className: ""
+        };
+      }
+
+      var currentNumber =
+        Number(current);
+      var previousNumber =
+        Number(previous);
+
+      if (
+        !Number.isFinite(
+          currentNumber
+        ) ||
+        !Number.isFinite(
+          previousNumber
+        )
+      ) {
+        return {
+          text: "Første baseline",
+          className: ""
+        };
+      }
+
+      var difference =
+        currentNumber -
+        previousNumber;
+
+      if (
+        Math.abs(difference) <
+        0.0001
+      ) {
+        return {
+          text: "→ Uendret",
+          className: ""
+        };
+      }
+
+      var positive =
+        difference > 0;
+
+      var className =
+        positive
+          ? "sk-up"
+          : "sk-down";
+
+      if (inverseTone) {
+        className =
+          positive
+            ? "sk-down"
+            : "sk-up";
+      }
+
+      return {
+        text:
+          (positive ? "↑ " : "↓ ") +
+          marketMonthlyNumber(
+            Math.abs(difference),
+            decimals
+          ) +
+          (suffix || ""),
+        className:
+          className
+      };
+    }
+
+    function addMonthlyTrendCard(
+      host,
+      label,
+      value,
+      delta
+    ) {
+      var card = el("div");
+      card.className =
+        "sk-market-monthly-trend-card";
+
+      var labelNode = el(
+        "div",
+        label
+      );
+      labelNode.className =
+        "sk-market-monthly-trend-label";
+
+      var valueNode = el(
+        "div",
+        value
+      );
+      valueNode.className =
+        "sk-market-monthly-trend-value";
+
+      var deltaNode = el(
+        "div",
+        delta.text
+      );
+      deltaNode.className =
+        "sk-market-monthly-trend-delta" +
+        (
+          delta.className
+            ? " " +
+              delta.className
+            : ""
+        );
+
+      card.appendChild(labelNode);
+      card.appendChild(valueNode);
+      card.appendChild(deltaNode);
+      host.appendChild(card);
+    }
+
+    function loadMarketMonthlyHistory() {
+      clear(monthlyHistoryHost);
+
+      var loadingHistory = el(
+        "div",
+        "Henter månedshistorikk…"
+      );
+      loadingHistory.className =
+        "sk-note";
+      monthlyHistoryHost.appendChild(
+        loadingHistory
+      );
+
+      sb
+        .from(
+          "internal_market_monthly_overview_view"
+        )
+        .select("*")
+        .order(
+          "month_start",
+          { ascending: false }
+        )
+        .limit(18)
+        .then(
+          function (result) {
+            clear(monthlyHistoryHost);
+
+            if (result.error) {
+              monthlyState.textContent =
+                "Historikkfeil";
+              monthlyState.className =
+                "sk-market-monthly-state";
+
+              var errorNote = el(
+                "div",
+                "Kunne ikke hente månedshistorikk: " +
+                  result.error.message
+              );
+              errorNote.className =
+                "sk-note";
+              monthlyHistoryHost.appendChild(
+                errorNote
+              );
+              return;
+            }
+
+            var months =
+              result.data || [];
+
+            if (!months.length) {
+              monthlyState.textContent =
+                "Ingen baseline";
+              monthlyState.className =
+                "sk-market-monthly-state";
+
+              var noHistory = el(
+                "div",
+                "Ingen månedsbilder er lagret ennå."
+              );
+              noHistory.className =
+                "sk-note";
+              monthlyHistoryHost.appendChild(
+                noHistory
+              );
+              return;
+            }
+
+            var latestMonth =
+              months[0];
+            var previousMonth =
+              months.length > 1
+                ? months[1]
+                : null;
+
+            monthlyState.textContent =
+              marketMonthLabel(
+                latestMonth.month_start
+              ) +
+              " lagret";
+            monthlyState.className =
+              "sk-market-monthly-state sk-saved";
+
+            addDashboardSectionTitle(
+              monthlyHistoryHost,
+              "Utvikling over tid",
+              months.length > 1
+                ? "Siste snapshot mot måneden før"
+                : "Første baseline – piler kommer når neste månedsbilde er lagret"
+            );
+
+            var trendGrid = el("div");
+            trendGrid.className =
+              "sk-market-monthly-trend-grid";
+
+            addMonthlyTrendCard(
+              trendGrid,
+              "Prisindeks",
+              latestMonth.price_index ===
+                null
+                ? "-"
+                : marketMonthlyNumber(
+                    latestMonth.price_index,
+                    1
+                  ),
+              marketMonthlyDelta(
+                latestMonth.price_index,
+                previousMonth &&
+                  previousMonth.price_index,
+                1,
+                "",
+                true
+              )
+            );
+
+            addMonthlyTrendCard(
+              trendGrid,
+              "GK-merker",
+              marketMonthlyNumber(
+                latestMonth
+                  .golfkongen_brand_count,
+                0
+              ),
+              marketMonthlyDelta(
+                latestMonth
+                  .golfkongen_brand_count,
+                previousMonth &&
+                  previousMonth
+                    .golfkongen_brand_count,
+                0,
+                "",
+                false
+              )
+            );
+
+            addMonthlyTrendCard(
+              trendGrid,
+              "Konkurrentlager · prøve",
+              latestMonth
+                .average_competitor_sample_stock_percent ===
+                null
+                ? "-"
+                : formatPercent(
+                    latestMonth
+                      .average_competitor_sample_stock_percent
+                  ),
+              marketMonthlyDelta(
+                latestMonth
+                  .average_competitor_sample_stock_percent,
+                previousMonth &&
+                  previousMonth
+                    .average_competitor_sample_stock_percent,
+                1,
+                " pp",
+                false
+              )
+            );
+
+            addMonthlyTrendCard(
+              trendGrid,
+              "Butikker med katalogdata",
+              marketMonthlyNumber(
+                latestMonth
+                  .catalog_store_count,
+                0
+              ),
+              marketMonthlyDelta(
+                latestMonth
+                  .catalog_store_count,
+                previousMonth &&
+                  previousMonth
+                    .catalog_store_count,
+                0,
+                "",
+                false
+              )
+            );
+
+            monthlyHistoryHost.appendChild(
+              trendGrid
+            );
+
+            skCreateAnalysisTable(
+              monthlyHistoryHost,
+              [
+                {
+                  label: "Måned",
+                  value:
+                    function (row) {
+                      return marketMonthLabel(
+                        row.month_start
+                      );
+                    }
+                },
+                {
+                  label: "Prisindeks",
+                  value:
+                    function (row) {
+                      return row.price_index ===
+                        null
+                        ? "-"
+                        : marketMonthlyNumber(
+                            row.price_index,
+                            1
+                          );
+                    },
+                  align: "right"
+                },
+                {
+                  label: "Prisprodukter",
+                  key:
+                    "price_product_count",
+                  align: "right"
+                },
+                {
+                  label: "GK-merker",
+                  key:
+                    "golfkongen_brand_count",
+                  align: "right"
+                },
+                {
+                  label:
+                    "Katalogbutikker",
+                  key:
+                    "catalog_store_count",
+                  align: "right"
+                },
+                {
+                  label:
+                    "Lager i konk.prøve",
+                  value:
+                    function (row) {
+                      return row
+                        .average_competitor_sample_stock_percent ===
+                        null
+                        ? "-"
+                        : formatPercent(
+                            row
+                              .average_competitor_sample_stock_percent
+                          );
+                    },
+                  align: "right"
+                },
+                {
+                  label:
+                    "Snitt merker · prøve",
+                  value:
+                    function (row) {
+                      return row
+                        .average_competitor_sample_brand_count ===
+                        null
+                        ? "-"
+                        : marketMonthlyNumber(
+                            row
+                              .average_competitor_sample_brand_count,
+                            1
+                          );
+                    },
+                  align: "right"
+                },
+                {
+                  label:
+                    "GK lagerverdi eks. MVA",
+                  value:
+                    function (row) {
+                      return skFormatMoney(
+                        row
+                          .stock_retail_value_ex_vat ||
+                        0
+                      );
+                    },
+                  align: "right"
+                }
+              ],
+              months,
+              "Ingen månedshistorikk."
+            );
+
+            var historyNote = el(
+              "div",
+              "Månedsbildet fryser nøkkeltallene slik de var da snapshotet ble tatt. Katalog- og merkeverdier hos konkurrentene er fortsatt samplebaserte indikatorer; de er ikke full katalog eller markedsandel."
+            );
+            historyNote.className =
+              "sk-note";
+            historyNote.style.marginTop =
+              "10px";
+            monthlyHistoryHost.appendChild(
+              historyNote
+            );
+          }
+        );
+    }
+
+    captureMonthButton.onclick =
+      function () {
+        if (
+          !window.confirm(
+            "Oppdatere månedsbildet for inneværende måned med dataene som ligger i systemet nå? Samme måned oppdateres – det lages ikke duplikat."
+          )
+        ) {
+          return;
+        }
+
+        captureMonthButton.disabled =
+          true;
+        captureMonthButton.textContent =
+          "Oppdaterer…";
+        monthlyState.textContent =
+          "Lagrer snapshot…";
+        monthlyState.className =
+          "sk-market-monthly-state";
+
+        sb
+          .rpc(
+            "internal_capture_market_month_snapshot",
+            { p_month: null }
+          )
+          .then(
+            function (result) {
+              if (result.error) {
+                throw result.error;
+              }
+
+              captureMonthButton.disabled =
+                false;
+              captureMonthButton.textContent =
+                "Oppdater månedsbilde";
+
+              loadMarketMonthlyHistory();
+            }
+          )
+          .catch(
+            function (error) {
+              captureMonthButton.disabled =
+                false;
+              captureMonthButton.textContent =
+                "Oppdater månedsbilde";
+              monthlyState.textContent =
+                "Kunne ikke lagre";
+              monthlyState.className =
+                "sk-market-monthly-state";
+
+              alert(
+                "Kunne ikke oppdatere månedsbildet: " +
+                  skReadableError(
+                    error
+                  )
+              );
+            }
+          );
+      };
+
+    loadMarketMonthlyHistory();
 
     addDashboardSectionTitle(
       marketV3BaselineHost,
