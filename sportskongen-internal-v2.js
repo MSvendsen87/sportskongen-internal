@@ -937,6 +937,33 @@
       "#sk-internal-root .sk-strategy-dashboard-status{font-weight:900;white-space:nowrap;}" +
       "#sk-internal-root .sk-strategy-ok{color:#166534;}" +
       "#sk-internal-root .sk-strategy-needs{color:#b91c1c;}" +
+      "#sk-internal-root .sk-market-radar-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin:8px 0 10px;}" +
+      "#sk-internal-root .sk-market-radar-head strong{display:block;font-size:17px;color:#0f172a;}" +
+      "#sk-internal-root .sk-market-radar-head span{display:block;margin-top:3px;font-size:11px;line-height:1.45;color:#64748b;}" +
+      "#sk-internal-root .sk-market-radar-coverage{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:999px;background:#fff;color:#334155;font-size:11px;font-weight:900;white-space:nowrap;}" +
+      "#sk-internal-root .sk-market-radar-coverage-dot{width:8px;height:8px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 3px #dbeafe;}" +
+      "#sk-internal-root .sk-market-radar-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 12px;}" +
+      "#sk-internal-root .sk-market-radar-card{min-width:0;padding:13px;border:1px solid #e2e8f0;border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(15,23,42,.035);}" +
+      "#sk-internal-root .sk-market-radar-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px;}" +
+      "#sk-internal-root .sk-market-radar-icon{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:#f1f5f9;font-size:16px;}" +
+      "#sk-internal-root .sk-market-radar-status{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;}" +
+      "#sk-internal-root .sk-market-radar-status.sk-ready{background:#dcfce7;color:#166534;}" +
+      "#sk-internal-root .sk-market-radar-status.sk-partial{background:#fef3c7;color:#92400e;}" +
+      "#sk-internal-root .sk-market-radar-status.sk-pending{background:#e2e8f0;color:#475569;}" +
+      "#sk-internal-root .sk-market-radar-label{font-size:12px;font-weight:900;color:#334155;}" +
+      "#sk-internal-root .sk-market-radar-value{margin-top:3px;font-size:23px;font-weight:900;letter-spacing:-.035em;color:#0f172a;overflow-wrap:anywhere;}" +
+      "#sk-internal-root .sk-market-radar-text{margin-top:5px;font-size:11px;line-height:1.45;color:#64748b;}" +
+      "#sk-internal-root .sk-market-radar-meta{margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:10px;line-height:1.4;color:#475569;font-weight:700;}" +
+      "#sk-internal-root .sk-market-radar-signals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:10px 0 12px;}" +
+      "#sk-internal-root .sk-market-radar-signal{padding:11px 12px;border:1px solid #e2e8f0;border-radius:11px;background:#fff;font-size:11px;line-height:1.45;color:#475569;}" +
+      "#sk-internal-root .sk-market-radar-signal strong{display:block;margin-bottom:4px;font-size:12px;color:#0f172a;}" +
+      "#sk-internal-root .sk-market-radar-signal.sk-good{border-color:#bbf7d0;background:#f0fdf4;}" +
+      "#sk-internal-root .sk-market-radar-signal.sk-watch{border-color:#fde68a;background:#fffbeb;}" +
+      "#sk-internal-root .sk-market-radar-signal.sk-info{border-color:#bfdbfe;background:#eff6ff;}" +
+      "#sk-internal-root .sk-market-monthly-strip{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 13px;margin:10px 0 14px;border:1px solid #cbd5e1;border-radius:12px;background:linear-gradient(135deg,#f8fafc,#eef2ff);}" +
+      "#sk-internal-root .sk-market-monthly-strip strong{display:block;font-size:12px;color:#0f172a;}" +
+      "#sk-internal-root .sk-market-monthly-strip span{display:block;margin-top:3px;font-size:10px;line-height:1.4;color:#64748b;}" +
+      "#sk-internal-root .sk-market-monthly-state{display:inline-flex!important;align-items:center;padding:5px 8px;border-radius:999px;background:#fff7ed!important;color:#9a3412!important;border:1px solid #fed7aa;font-size:9px!important;font-weight:900;text-transform:uppercase;white-space:nowrap;}" +
       "#sk-internal-root .sk-market-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0;}" +
       "#sk-internal-root .sk-market-analysis-card{padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}" +
       "#sk-internal-root .sk-market-analysis-card h3{margin:0 0 7px;font-size:14px;}" +
@@ -991,6 +1018,8 @@
       "  #sk-internal-root .sk-topline{padding:12px 14px;}" +
       "  #sk-internal-root .sk-title{font-size:20px;}" +
       "  #sk-internal-root .sk-subtitle{font-size:12px;}" +
+      "  #sk-internal-root .sk-market-radar-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "  #sk-internal-root .sk-market-radar-signals{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-v4-layout{display:block;min-height:0;}" +
       "  #sk-internal-root .sk-v4-sidebar{display:block;position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:60;border-right:1px solid #334155;border-bottom:0;padding:14px 12px;overflow-y:auto;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility .2s ease;box-shadow:18px 0 48px rgba(15,23,42,.28);}" +
       "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-sidebar{transform:translateX(0);visibility:visible;}" +
@@ -1018,6 +1047,11 @@
       "  #sk-internal-root .sk-price-editor-toolbar{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;}" +
       "  #sk-internal-root .sk-page-head{display:block;}" +
       "  #sk-internal-root .sk-page-head .sk-badge{margin-top:10px;}" +
+      "  #sk-internal-root .sk-market-radar-grid{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-radar-head{display:block;}" +
+      "  #sk-internal-root .sk-market-radar-coverage{margin-top:8px;white-space:normal;}" +
+      "  #sk-internal-root .sk-market-monthly-strip{display:block;}" +
+      "  #sk-internal-root .sk-market-monthly-state{margin-top:9px;}" +
       "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-price-tabs{position:static;}" +
@@ -25072,7 +25106,7 @@ function renderMarketAnalysis(
     parent,
     "Markedsanalyse",
     "En samlet oversikt over pris, sortiment og målbare konkurrentindikatorer. Data fra katalogprøver vises tydelig som utvalg – ikke som full katalog eller markedsandel.",
-    "Marked v3"
+    "Marked v3.1"
   );
 
   var marketInfo =
@@ -25145,8 +25179,8 @@ function renderMarketAnalysis(
 
     addDashboardSectionTitle(
       marketV3BaselineHost,
-      "Konkurrentbildet nå",
-      "Prisdata + siste godkjente katalogprøve"
+      "Konkurrentradar",
+      "Seks områder som etter hvert skal følges måned for måned"
     );
 
     if (!measured.length) {
@@ -25236,6 +25270,511 @@ function renderMarketAnalysis(
           ) /
           measured.length
         : null;
+
+    var ownBrandMap = {};
+    var ownInStockProducts = 0;
+
+    (inventory || []).forEach(
+      function (row) {
+        var brand = String(
+          row.brand ||
+          row.product_brand ||
+          ""
+        ).trim();
+
+        if (brand) {
+          ownBrandMap[
+            brand.toLowerCase()
+          ] = true;
+        }
+
+        if (
+          Number(
+            row.stock_quantity || 0
+          ) > 0
+        ) {
+          ownInStockProducts += 1;
+        }
+      }
+    );
+
+    var ownBrandCount =
+      Object.keys(
+        ownBrandMap
+      ).length;
+
+    var ownStockProductShare =
+      inventory.length
+        ? (
+            ownInStockProducts /
+            inventory.length *
+            100
+          )
+        : null;
+
+    var latestCatalogAt =
+      newestDate(
+        measured,
+        "started_at"
+      );
+
+    var latestPriceTimestamp =
+      (competitorRows || [])
+        .reduce(
+          function (latest, row) {
+            var value =
+              Number(
+                row.latest || 0
+              );
+
+            return value > latest
+              ? value
+              : latest;
+          },
+          0
+        );
+
+    var readyAreas =
+      (
+        indexedProducts.length
+          ? 1
+          : 0
+      ) +
+      (
+        measured.length
+          ? 1
+          : 0
+      );
+
+    var partialAreas =
+      inventory.length
+        ? 1
+        : 0;
+
+    var pendingAreas =
+      Math.max(
+        0,
+        6 -
+          readyAreas -
+          partialAreas
+      );
+
+    var radarHead = el("div");
+    radarHead.className =
+      "sk-market-radar-head";
+
+    var radarHeadText = el("div");
+    radarHeadText.appendChild(
+      el(
+        "strong",
+        "Hvordan står GolfKongen mot markedet?"
+      )
+    );
+    radarHeadText.appendChild(
+      el(
+        "span",
+        "Pris og sortiment kan sammenlignes nå. Økonomi har egne GolfKongen-tall, mens eksterne regnskap, Google-synlighet, Meta og omdømme kobles på i neste trinn."
+      )
+    );
+
+    var radarCoverage = el("div");
+    radarCoverage.className =
+      "sk-market-radar-coverage";
+
+    var coverageDot = el("span");
+    coverageDot.className =
+      "sk-market-radar-coverage-dot";
+
+    radarCoverage.appendChild(
+      coverageDot
+    );
+    radarCoverage.appendChild(
+      el(
+        "span",
+        String(readyAreas) +
+          " klare · " +
+          String(partialAreas) +
+          " delvis · " +
+          String(pendingAreas) +
+          " ikke koblet"
+      )
+    );
+
+    radarHead.appendChild(
+      radarHeadText
+    );
+    radarHead.appendChild(
+      radarCoverage
+    );
+    marketV3BaselineHost.appendChild(
+      radarHead
+    );
+
+    var radarGrid = el("div");
+    radarGrid.className =
+      "sk-market-radar-grid";
+
+    function addRadarCard(
+      icon,
+      label,
+      value,
+      status,
+      statusClass,
+      description,
+      meta
+    ) {
+      var card = el("div");
+      card.className =
+        "sk-market-radar-card";
+
+      var top = el("div");
+      top.className =
+        "sk-market-radar-card-top";
+
+      var iconNode = el(
+        "span",
+        icon
+      );
+      iconNode.className =
+        "sk-market-radar-icon";
+
+      var statusNode = el(
+        "span",
+        status
+      );
+      statusNode.className =
+        "sk-market-radar-status " +
+        statusClass;
+
+      top.appendChild(iconNode);
+      top.appendChild(statusNode);
+      card.appendChild(top);
+
+      var labelNode = el(
+        "div",
+        label
+      );
+      labelNode.className =
+        "sk-market-radar-label";
+      card.appendChild(labelNode);
+
+      var valueNode = el(
+        "div",
+        value
+      );
+      valueNode.className =
+        "sk-market-radar-value";
+      card.appendChild(valueNode);
+
+      var textNode = el(
+        "div",
+        description
+      );
+      textNode.className =
+        "sk-market-radar-text";
+      card.appendChild(textNode);
+
+      if (meta) {
+        var metaNode = el(
+          "div",
+          meta
+        );
+        metaNode.className =
+          "sk-market-radar-meta";
+        card.appendChild(metaNode);
+      }
+
+      radarGrid.appendChild(card);
+    }
+
+    var priceRadarValue =
+      generalPriceIndex === null
+        ? "-"
+        : generalPriceIndex
+            .toLocaleString(
+              "nb-NO",
+              {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+              }
+            );
+
+    var priceRadarText =
+      generalPriceIndex === null
+        ? "For lite godkjent prisdata."
+        : (
+            generalPriceIndex > 101.5
+              ? "GolfKongen ligger over markedsmidten på medianen av sammenlignbare produkter."
+              : (
+                  generalPriceIndex < 98.5
+                    ? "GolfKongen ligger under markedsmidten på medianen av sammenlignbare produkter."
+                    : "GolfKongen ligger omtrent på markedsmidten."
+                )
+          );
+
+    addRadarCard(
+      "💰",
+      "Pris",
+      priceRadarValue,
+      indexedProducts.length
+        ? "Klar"
+        : "Mangler data",
+      indexedProducts.length
+        ? "sk-ready"
+        : "sk-pending",
+      priceRadarText,
+      String(indexedProducts.length) +
+        " produkter med brukbar markedsprisdata · marked = 100"
+    );
+
+    addRadarCard(
+      "📦",
+      "Sortiment & merker",
+      ownBrandCount
+        ? String(ownBrandCount) +
+          " GK-merker"
+        : String(measured.length) +
+          " butikker målt",
+      measured.length
+        ? "Samplebasert"
+        : "Mangler data",
+      measured.length
+        ? "sk-ready"
+        : "sk-pending",
+      averageBrands === null
+        ? "Ingen ferdige konkurrentprøver."
+        : (
+            averageBrands.toLocaleString(
+              "nb-NO",
+              {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+              }
+            ) +
+            " merker i snitt i konkurrentprøvene. Full merke-matrise bygges senere."
+          ),
+      "GK på lager: " +
+        (
+          ownStockProductShare === null
+            ? "-"
+            : formatPercent(
+                ownStockProductShare
+              )
+        ) +
+        " · Konkurrentprøver: " +
+        (
+          stockShare === null
+            ? "-"
+            : formatPercent(
+                stockShare
+              )
+        )
+    );
+
+    addRadarCard(
+      "📈",
+      "Økonomi",
+      revenue365 > 0
+        ? skFormatMoney(
+            revenue365
+          )
+        : "Egne tall klare",
+      inventory.length
+        ? "Delvis"
+        : "Mangler data",
+      inventory.length
+        ? "sk-partial"
+        : "sk-pending",
+      "GolfKongen kan følges på faktiske interne tall. Konkurrentenes offentlige årsregnskap er ikke koblet inn ennå.",
+      "Viser GK vareomsetning i analysegrunnlaget siste 365 dager"
+    );
+
+    addRadarCard(
+      "🔎",
+      "Google & synlighet",
+      "Ikke koblet",
+      "Neste datakilde",
+      "sk-pending",
+      "Skal følge faste søkeord, organisk synlighet og utvikling mot konkurrentene.",
+      "Mål: månedlig synlighetsindeks uten direkte scraping av Google"
+    );
+
+    addRadarCard(
+      "📣",
+      "Meta & sosiale medier",
+      "Ikke koblet",
+      "Neste datakilde",
+      "sk-pending",
+      "Skal følge tilgjengelige følger- og aktivitetsindikatorer for Facebook og Instagram.",
+      "API der det er stabilt · ellers kontrollert månedlig registrering"
+    );
+
+    addRadarCard(
+      "⭐",
+      "Omdømme",
+      "Ikke koblet",
+      "Neste datakilde",
+      "sk-pending",
+      "Skal følge rating, antall anmeldelser og vekst i anmeldelser – ikke bare stjerner.",
+      "Google-anmeldelser blir første omdømmekilde"
+    );
+
+    marketV3BaselineHost.appendChild(
+      radarGrid
+    );
+
+    var signalGrid = el("div");
+    signalGrid.className =
+      "sk-market-radar-signals";
+
+    function addRadarSignal(
+      title,
+      textValue,
+      tone
+    ) {
+      var signal = el("div");
+      signal.className =
+        "sk-market-radar-signal " +
+        tone;
+      signal.appendChild(
+        el(
+          "strong",
+          title
+        )
+      );
+      signal.appendChild(
+        el(
+          "span",
+          textValue
+        )
+      );
+      signalGrid.appendChild(
+        signal
+      );
+    }
+
+    var priceSignalTone =
+      generalPriceIndex !== null &&
+      generalPriceIndex > 102
+        ? "sk-watch"
+        : "sk-good";
+
+    addRadarSignal(
+      "💰 Prissignal",
+      generalPriceIndex === null
+        ? "Vi trenger flere godkjente pristreff før prisbildet kan vurderes."
+        : (
+            indexLabel +
+            ". Følg samtidig margin – lavest pris er ikke et mål i seg selv."
+          ),
+      priceSignalTone
+    );
+
+    addRadarSignal(
+      "📦 Lagersignal",
+      ownStockProductShare === null ||
+      stockShare === null
+        ? "Lagerindikatoren trenger mer data."
+        : (
+            "GolfKongen har " +
+            formatPercent(
+              ownStockProductShare
+            ) +
+            " av produktene i eget analysegrunnlag på lager, mot " +
+            formatPercent(
+              stockShare
+            ) +
+            " i de samplebaserte konkurrentprøvene. Tallene er indikatorer, ikke identiske kataloggrunnlag."
+          ),
+      "sk-info"
+    );
+
+    addRadarSignal(
+      "🧭 Datadekning",
+      String(readyAreas) +
+        " av 6 områder kan sammenlignes nå. " +
+        String(partialAreas) +
+        " er delvis klart. Neste datakilder blir økonomi, synlighet, Meta og omdømme.",
+      "sk-info"
+    );
+
+    marketV3BaselineHost.appendChild(
+      signalGrid
+    );
+
+    var monthlyStrip = el("div");
+    monthlyStrip.className =
+      "sk-market-monthly-strip";
+
+    var monthlyText = el("div");
+    monthlyText.appendChild(
+      el(
+        "strong",
+        "📅 Månedlig konkurrentradar"
+      )
+    );
+
+    var freshnessParts = [];
+
+    if (latestCatalogAt) {
+      freshnessParts.push(
+        "siste katalog " +
+        formatAdminDateTime(
+          latestCatalogAt
+        )
+      );
+    }
+
+    if (latestPriceTimestamp) {
+      freshnessParts.push(
+        "siste prisdata " +
+        formatAdminDateTime(
+          new Date(
+            latestPriceTimestamp
+          ).toISOString()
+        )
+      );
+    }
+
+    monthlyText.appendChild(
+      el(
+        "span",
+        "Neste tekniske steg er å lagre ett månedssnapshot av radaren og sammenligne med forrige måned." +
+          (
+            freshnessParts.length
+              ? " Nå: " +
+                freshnessParts.join(
+                  " · "
+                ) +
+                "."
+              : ""
+          )
+      )
+    );
+
+    var monthlyState = el(
+      "span",
+      "Automatikk ikke aktivert"
+    );
+    monthlyState.className =
+      "sk-market-monthly-state";
+
+    monthlyStrip.appendChild(
+      monthlyText
+    );
+    monthlyStrip.appendChild(
+      monthlyState
+    );
+
+    marketV3BaselineHost.appendChild(
+      monthlyStrip
+    );
+
+    addDashboardSectionTitle(
+      marketV3BaselineHost,
+      "Konkurrentbildet nå",
+      "Prisdata + siste godkjente katalogprøve"
+    );
 
     addProStatGrid(
       marketV3BaselineHost,
@@ -27793,7 +28332,7 @@ function renderMarketAnalysis(
     var labels = [
       [
         "overview",
-        "📊 Oversikt"
+        "🧭 Radar"
       ],
       [
         "price",
