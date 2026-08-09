@@ -60,6 +60,7 @@
 
   var skAdminV4ResizeBound = false;
   var skAdminV4LayoutObserver = null;
+  var skAdminV4ObserverStopTimer = null;
   var skAdminV4FitTimer = null;
 
   function setImportantStyle(
@@ -578,6 +579,16 @@
   function fitAdminRootToTop() {
     if (!root) return;
 
+    /*
+     * Viktig: aldri beregn ny top-forskyvning mens brukeren har begynt
+     * å scrolle. getBoundingClientRect().top er viewport-relativ, og den
+     * gamle løsningen kunne derfor flytte hele adminroten tilbake mot
+     * toppen på første scroll og gi synlig blink/hopp.
+     */
+    if (window.scrollY > 4) {
+      return;
+    }
+
     root.style.removeProperty(
       "top"
     );
@@ -588,7 +599,8 @@
 
     /*
      * Etter at butikkheaderen er skjult kan temaet fortsatt
-     * reservere tom høyde. Flytt kun adminroten visuelt opp.
+     * reservere tom høyde. Flytt kun adminroten visuelt opp,
+     * men lås resultatet så snart brukeren begynner å scrolle.
      */
     if (top > 12) {
       setImportantStyle(
@@ -625,6 +637,20 @@
       );
   }
 
+  function stopAdminV4LayoutObserver() {
+    if (skAdminV4ObserverStopTimer) {
+      clearTimeout(
+        skAdminV4ObserverStopTimer
+      );
+      skAdminV4ObserverStopTimer = null;
+    }
+
+    if (skAdminV4LayoutObserver) {
+      skAdminV4LayoutObserver.disconnect();
+      skAdminV4LayoutObserver = null;
+    }
+  }
+
   function activateAdminV4PageMode() {
     document.documentElement.classList.add(
       "sk-admin-v4-page"
@@ -641,9 +667,10 @@
     fitAdminRootToTop();
 
     /*
-     * Quickbutik kan endre layout etter at vårt script
-     * er lastet. Vi må derfor kontrollere bredden igjen
-     * når temaet flytter eller bygger om DOM-en.
+     * Quickbutik kan justere DOM-en rett etter sideinnlasting. Noen få
+     * kontrollerte oppfriskninger er nok. Vi skal ikke observere alle
+     * class/style-endringer permanent; det gjorde hele adminflaten tung
+     * og kunne trigge layoutarbeid under scrolling og vanlig bruk.
      */
     [
       100,
@@ -669,23 +696,44 @@
     ) {
       skAdminV4LayoutObserver =
         new MutationObserver(
-          function () {
-            scheduleAdminV4Fit();
+          function (mutations) {
+            var relevant =
+              (mutations || []).some(
+                function (mutation) {
+                  return (
+                    mutation &&
+                    mutation.target &&
+                    !root.contains(
+                      mutation.target
+                    )
+                  );
+                }
+              );
+
+            if (relevant) {
+              scheduleAdminV4Fit();
+            }
           }
         );
 
+      /*
+       * Kun strukturelle endringer utenfor adminroten er interessante.
+       * Attributt-/style-observasjon på hele body skapte en feedback-loop
+       * når admin selv oppdaterte klasser og inline-stiler.
+       */
       skAdminV4LayoutObserver.observe(
         document.body,
         {
           childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: [
-            "class",
-            "style"
-          ]
+          subtree: true
         }
       );
+
+      skAdminV4ObserverStopTimer =
+        setTimeout(
+          stopAdminV4LayoutObserver,
+          2600
+        );
     }
 
     if (!skAdminV4ResizeBound) {
@@ -765,6 +813,7 @@
 
     style.textContent =
       "html.sk-admin-v4-page,body.sk-admin-v4-page{overflow-x:hidden!important;}" +
+      "html.sk-admin-v4-page{scrollbar-gutter:stable;}" +
       "body.sk-admin-v4-page{background:#f3f6fa!important;}" +
       "#sk-internal-root{box-sizing:border-box!important;background:#f3f6fa;padding:0 0 36px 0!important;}" +
       "#sk-internal-root *{box-sizing:border-box;}" +
@@ -784,7 +833,10 @@
 
       "#sk-internal-root .sk-v4-layout{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:720px;}" +
       "#sk-internal-root .sk-v4-sidebar{position:relative;background:#0f172a;color:#e2e8f0;padding:16px 12px;border-right:1px solid #1e293b;min-width:0;}" +
-      "#sk-internal-root .sk-v4-sidebar-inner{position:sticky;top:12px;}" +
+      "#sk-internal-root .sk-v4-sidebar-inner{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;overscroll-behavior:contain;padding-right:2px;}" +
+      "#sk-internal-root .sk-v4-mobile-nav-head{display:none;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:2px 1px 10px;border-bottom:1px solid #334155;}" +
+      "#sk-internal-root .sk-v4-mobile-nav-head strong{font-size:14px;color:#fff;}" +
+      "#sk-internal-root .sk-v4-mobile-close{border:1px solid #475569!important;background:#111827!important;color:#fff!important;padding:7px 10px!important;border-radius:9px!important;}" +
       "#sk-internal-root .sk-v4-nav-title{font-size:11px;font-weight:900;color:#64748b;letter-spacing:.08em;text-transform:uppercase;margin:15px 8px 7px;}" +
       "#sk-internal-root .sk-v4-nav-title:first-child{margin-top:3px;}" +
       "#sk-internal-root .sk-v4-nav-search{width:100%;padding:10px 11px;border-radius:10px;border:1px solid #334155;background:#111827;color:#fff;margin-bottom:12px;outline:none;}" +
@@ -794,9 +846,12 @@
       "#sk-internal-root .sk-v4-nav-btn.sk-active{background:#fff!important;color:#111827!important;border-color:#fff!important;box-shadow:0 6px 20px rgba(15,23,42,.18);}" +
       "#sk-internal-root .sk-v4-nav-icon{width:20px;text-align:center;font-size:16px;}" +
       "#sk-internal-root .sk-v4-main{min-width:0;background:#f8fafc;}" +
-      "#sk-internal-root .sk-v4-content-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:4;}" +
-      "#sk-internal-root .sk-v4-breadcrumb{font-size:12px;color:#64748b;font-weight:700;}" +
+      "#sk-internal-root .sk-v4-content-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 18px;background:rgba(255,255,255,.96);border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:4;backdrop-filter:blur(10px);}" +
+      "#sk-internal-root .sk-v4-context{min-width:0;}" +
+      "#sk-internal-root .sk-v4-breadcrumb{font-size:13px;color:#111827;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+      "#sk-internal-root .sk-v4-context-desc{margin-top:2px;font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:760px;}" +
       "#sk-internal-root .sk-v4-mobile-toggle{display:none;}" +
+      "#sk-internal-root .sk-v4-mobile-backdrop{display:none;}" +
       "#sk-internal-root .sk-content{margin:0;padding:20px;min-width:0;}" +
 
       "#sk-internal-root .sk-page-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px;}" +
@@ -836,7 +891,7 @@
       "#sk-internal-root .sk-price-tab.sk-active .sk-price-tab-count{background:rgba(255,255,255,.18);}" +
       "#sk-internal-root .sk-price-pane{display:none;min-width:0;}" +
       "#sk-internal-root .sk-price-pane.sk-active{display:block;}" +
-      "#sk-internal-root .sk-compact-table-wrap{width:100%;overflow:auto;border:1px solid #e5e7eb;border-radius:13px;background:#fff;}" +
+      "#sk-internal-root .sk-compact-table-wrap{width:100%;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain;touch-action:pan-x pan-y;border:1px solid #e5e7eb;border-radius:13px;background:#fff;}" +
       "#sk-internal-root .sk-compact-price-table{width:100%;border-collapse:collapse;table-layout:auto;font-size:12px;}" +
       "#sk-internal-root .sk-compact-price-table th{padding:10px 9px;background:#f8fafc;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap;}" +
       "#sk-internal-root .sk-compact-price-table td{padding:9px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}" +
@@ -905,7 +960,7 @@
       "#sk-internal-root .sk-analysis-tab.sk-active{background:#111827!important;color:#fff!important;}" +
       "#sk-internal-root .sk-analysis-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:10px 0 12px;}" +
       "#sk-internal-root .sk-analysis-toolbar input,#sk-internal-root .sk-analysis-toolbar select{padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;}" +
-      "#sk-internal-root .sk-analysis-table-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}" +
+      "#sk-internal-root .sk-analysis-table-wrap{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain;touch-action:pan-x pan-y;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}" +
       "#sk-internal-root .sk-analysis-table{width:100%;border-collapse:collapse;font-size:12px;}" +
       "#sk-internal-root .sk-analysis-table th{padding:9px;background:#f8fafc;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap;}" +
       "#sk-internal-root .sk-analysis-table td{padding:9px;border-bottom:1px solid #f1f5f9;vertical-align:top;}" +
@@ -932,18 +987,27 @@
       "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "}" +
       "@media(max-width:900px){" +
-      "  #sk-internal-root .sk-app-shell{margin-top:8px;border-radius:14px;}" +
-      "  #sk-internal-root .sk-topline{padding:14px 16px;}" +
-      "  #sk-internal-root .sk-title{font-size:21px;}" +
+      "  #sk-internal-root .sk-app-shell{margin-top:8px;border-radius:14px;overflow:visible;}" +
+      "  #sk-internal-root .sk-topline{padding:12px 14px;}" +
+      "  #sk-internal-root .sk-title{font-size:20px;}" +
+      "  #sk-internal-root .sk-subtitle{font-size:12px;}" +
       "  #sk-internal-root .sk-v4-layout{display:block;min-height:0;}" +
-      "  #sk-internal-root .sk-v4-sidebar{display:none;border-right:0;border-bottom:1px solid #1e293b;}" +
-      "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-sidebar{display:block;}" +
-      "  #sk-internal-root .sk-v4-sidebar-inner{position:static;}" +
-      "  #sk-internal-root .sk-v4-content-head{position:sticky;top:0;padding:9px 12px;}" +
-      "  #sk-internal-root .sk-v4-mobile-toggle{display:inline-flex!important;padding:7px 10px!important;font-size:12px!important;}" +
-      "  #sk-internal-root .sk-content{padding:14px;}" +
+      "  #sk-internal-root .sk-v4-sidebar{display:block;position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:60;border-right:1px solid #334155;border-bottom:0;padding:14px 12px;overflow-y:auto;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility .2s ease;box-shadow:18px 0 48px rgba(15,23,42,.28);}" +
+      "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-sidebar{transform:translateX(0);visibility:visible;}" +
+      "  #sk-internal-root .sk-v4-sidebar-inner{position:static;max-height:none;overflow:visible;padding-right:0;}" +
+      "  #sk-internal-root .sk-v4-mobile-nav-head{display:flex;}" +
+      "  #sk-internal-root .sk-v4-mobile-backdrop{display:block;position:fixed;inset:0;z-index:55;background:rgba(15,23,42,.46);opacity:0;pointer-events:none;transition:opacity .2s ease;}" +
+      "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-mobile-backdrop{opacity:1;pointer-events:auto;}" +
+      "  #sk-internal-root .sk-v4-content-head{position:sticky;top:0;padding:8px 10px;min-height:50px;}" +
+      "  #sk-internal-root .sk-v4-context-desc{display:none;}" +
+      "  #sk-internal-root .sk-v4-mobile-toggle{display:inline-flex!important;align-items:center;min-height:40px;padding:8px 11px!important;font-size:12px!important;}" +
+      "  #sk-internal-root .sk-v4-nav-btn{min-height:44px;padding:11px!important;}" +
+      "  #sk-internal-root .sk-v4-nav-search{font-size:16px;}" +
+      "  #sk-internal-root .sk-content{padding:13px;}" +
       "  #sk-internal-root .sk-two-col{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-page-head{margin-bottom:12px;}" +
       "  #sk-internal-root .sk-page-head h2{font-size:21px;}" +
+      "  #sk-internal-root input,#sk-internal-root select,#sk-internal-root textarea{font-size:16px;}" +
       "}" +
       "@media(max-width:620px){" +
       "  #sk-internal-root .sk-v4-attention-grid{grid-template-columns:1fr;}" +
@@ -960,6 +1024,13 @@
       "  #sk-internal-root .sk-market-rank-shipping{display:none;}" +
       "  #sk-internal-root .sk-content{padding:10px;}" +
       "  #sk-internal-root .sk-userbar{padding:9px 12px;}" +
+      "}" +
+      "@media(max-width:480px){" +
+      "  #sk-internal-root .sk-card-grid{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-summary{grid-template-columns:1fr 1fr;}" +
+      "  #sk-internal-root .sk-content{padding:10px 8px;}" +
+      "  #sk-internal-root .sk-page-head h2{font-size:20px;}" +
+      "  #sk-internal-root .sk-card{padding:13px;}" +
       "}";
 
     document.head.appendChild(style);
@@ -1191,7 +1262,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v4"
+      "Admin v4.8"
     );
 
     var products =
@@ -2093,6 +2164,29 @@
     sidebarInner.className =
       "sk-v4-sidebar-inner";
 
+    var mobileNavHead = el("div");
+    mobileNavHead.className =
+      "sk-v4-mobile-nav-head";
+
+    var mobileNavTitle =
+      el("strong", "Navigasjon");
+
+    var mobileClose =
+      createButton("✕ Lukk");
+    mobileClose.className =
+      "sk-v4-mobile-close";
+
+    mobileNavHead.appendChild(
+      mobileNavTitle
+    );
+    mobileNavHead.appendChild(
+      mobileClose
+    );
+
+    sidebarInner.appendChild(
+      mobileNavHead
+    );
+
     var search = el("input");
     search.type = "search";
     search.placeholder =
@@ -2121,23 +2215,46 @@
     contentHead.className =
       "sk-v4-content-head";
 
+    var context = el("div");
+    context.className =
+      "sk-v4-context";
+
     var breadcrumb =
       el(
         "div",
-        "Admin > Oversikt"
+        "Admin / Oversikt"
       );
 
     breadcrumb.className =
       "sk-v4-breadcrumb";
+
+    var contextDesc =
+      el(
+        "div",
+        "Dashboard og det som krever oppmerksomhet."
+      );
+    contextDesc.className =
+      "sk-v4-context-desc";
+
+    context.appendChild(
+      breadcrumb
+    );
+    context.appendChild(
+      contextDesc
+    );
 
     var mobileToggle =
       createButton("☰ Meny");
 
     mobileToggle.className =
       "sk-v4-mobile-toggle";
+    mobileToggle.setAttribute(
+      "aria-expanded",
+      "false"
+    );
 
     contentHead.appendChild(
-      breadcrumb
+      context
     );
 
     contentHead.appendChild(
@@ -2154,7 +2271,14 @@
 
     main.appendChild(content);
 
+    var mobileBackdrop = el("div");
+    mobileBackdrop.className =
+      "sk-v4-mobile-backdrop";
+
     layout.appendChild(sidebar);
+    layout.appendChild(
+      mobileBackdrop
+    );
     layout.appendChild(main);
     app.appendChild(layout);
 
@@ -2248,6 +2372,10 @@
 
               button.className =
                 "sk-v4-nav-btn";
+              button.title =
+                tab.description ||
+                tab.label ||
+                "";
 
               var icon =
                 el(
@@ -2274,7 +2402,7 @@
 
               button.onclick =
                 function () {
-                  activate(key);
+                  activate(key, true);
                 };
 
               buttons[key] =
@@ -2309,7 +2437,20 @@
       }
     }
 
-    function activate(key) {
+    function closeMobileNavigation() {
+      layout.classList.remove(
+        "sk-nav-open"
+      );
+      mobileToggle.setAttribute(
+        "aria-expanded",
+        "false"
+      );
+    }
+
+    function activate(
+      key,
+      shouldScroll
+    ) {
       if (!tabs[key]) {
         key = "overview";
       }
@@ -2325,8 +2466,12 @@
       setActiveButton(key);
 
       breadcrumb.textContent =
-        "Admin > " +
+        "Admin / " +
         tabs[key].label;
+
+      contextDesc.textContent =
+        tabs[key].description ||
+        "";
 
       clear(content);
 
@@ -2335,29 +2480,42 @@
         activate
       );
 
-      if (
-        window.innerWidth <= 900
-      ) {
-        layout.classList.remove(
-          "sk-nav-open"
-        );
-      }
+      closeMobileNavigation();
 
-      window.scrollTo({
-        top:
+      /*
+       * Ikke glatt-scroll ved første rendering. Den gamle løsningen
+       * kombinerte smooth scroll med dynamisk root-forskyvning og kunne
+       * oppleves som blink/hopp. Ved brukerinitiert modulbytte flyttes vi
+       * kun til toppen hvis brukeren faktisk er et stykke nede på siden.
+       */
+      if (shouldScroll === true) {
+        var targetTop =
           Math.max(
             0,
             root.getBoundingClientRect()
               .top +
               window.scrollY -
               8
-          ),
-        behavior: "smooth"
-      });
+          );
+
+        if (
+          Math.abs(
+            window.scrollY -
+              targetTop
+          ) > 80
+        ) {
+          window.scrollTo({
+            top: targetTop,
+            behavior: "auto"
+          });
+        }
+      }
     }
 
     skPortalNavigate =
-      activate;
+      function (key) {
+        activate(key, true);
+      };
 
     search.addEventListener(
       "input",
@@ -2377,10 +2535,44 @@
 
     mobileToggle.onclick =
       function () {
-        layout.classList.toggle(
-          "sk-nav-open"
+        var isOpen =
+          layout.classList.toggle(
+            "sk-nav-open"
+          );
+
+        mobileToggle.setAttribute(
+          "aria-expanded",
+          isOpen ? "true" : "false"
         );
+
+        if (isOpen) {
+          setTimeout(
+            function () {
+              search.focus();
+            },
+            60
+          );
+        }
       };
+
+    mobileClose.onclick =
+      closeMobileNavigation;
+    mobileBackdrop.onclick =
+      closeMobileNavigation;
+
+    document.addEventListener(
+      "keydown",
+      function (event) {
+        if (
+          event.key === "Escape" &&
+          layout.classList.contains(
+            "sk-nav-open"
+          )
+        ) {
+          closeMobileNavigation();
+        }
+      }
+    );
 
     renderNavigation("");
 
@@ -2410,7 +2602,7 @@
       savedTab = "overview";
     }
 
-    activate(savedTab);
+    activate(savedTab, false);
   }
 
   function addStatGrid(parent, data) {
@@ -27068,6 +27260,101 @@ function renderPortal(sb, user, data) {
       user
     );
 
+    function renderLazyModule(
+      parent,
+      key,
+      label,
+      loader,
+      renderer
+    ) {
+      data.__lazyLoaded =
+        data.__lazyLoaded || {};
+      data.__lazyLoading =
+        data.__lazyLoading || {};
+
+      if (data.__lazyLoaded[key]) {
+        renderer();
+        return;
+      }
+
+      clear(parent);
+
+      var loading = el("div");
+      loading.className = "sk-card";
+      loading.style.maxWidth = "620px";
+      loading.innerHTML =
+        "<strong>" +
+        String(label || "Laster") +
+        "</strong><div style='margin-top:6px;color:#64748b;font-size:12px'>Henter bare dataene denne modulen trenger…</div>";
+      parent.appendChild(loading);
+
+      if (data.__lazyLoading[key]) {
+        return;
+      }
+
+      data.__lazyLoading[key] = true;
+
+      var activeHashAtStart =
+        String(
+          window.location.hash ||
+          ""
+        );
+
+      Promise.resolve()
+        .then(loader)
+        .then(function (result) {
+          data.__lazyLoading[key] = false;
+
+          if (result && result.error) {
+            throw result.error;
+          }
+
+          data[key] =
+            result && result.data
+              ? result.data
+              : [];
+          data.__lazyLoaded[key] =
+            true;
+
+          /*
+           * Hvis brukeren har gått til en annen modul mens dataene
+           * ble hentet, skal en sen respons aldri overskrive siden
+           * som nå er aktiv. Dataene caches og vises neste gang
+           * modulen åpnes.
+           */
+          if (
+            String(
+              window.location.hash ||
+              ""
+            ) !==
+            activeHashAtStart
+          ) {
+            return;
+          }
+
+          clear(parent);
+          renderer();
+        })
+        .catch(function (error) {
+          data.__lazyLoading[key] = false;
+          clear(parent);
+
+          var box = el(
+            "div",
+            "Kunne ikke hente " +
+              String(label || "moduldata") +
+              ": " +
+              skReadableError(
+                error && error.message
+                  ? error.message
+                  : error
+              )
+          );
+          box.className = "sk-warning";
+          parent.appendChild(box);
+        });
+    }
+
     createTabs(app, {
       overview: {
         label: "Oversikt",
@@ -27131,9 +27418,24 @@ function renderPortal(sb, user, data) {
         description:
           "Avvik og produkter som bør undersøkes.",
         render: function (parent) {
-          renderProductControlDashboard(
+          renderLazyModule(
             parent,
-            data
+            "productQualityIssues",
+            "produktkvalitet",
+            function () {
+              return fetchAllRows(
+                sb,
+                "internal_product_quality_view",
+                "product_name",
+                true
+              );
+            },
+            function () {
+              renderProductControlDashboard(
+                parent,
+                data
+              );
+            }
           );
         }
       },
@@ -27145,10 +27447,25 @@ function renderPortal(sb, user, data) {
         description:
           "Varetelling, avvik og lageroppdatering.",
         render: function (parent) {
-          renderStockCountsManager(
+          renderLazyModule(
             parent,
-            data,
-            sb
+            "stockCountItems",
+            "varetellingslinjer",
+            function () {
+              return fetchAllRows(
+                sb,
+                "internal_stock_count_items_view",
+                "name",
+                true
+              );
+            },
+            function () {
+              renderStockCountsManager(
+                parent,
+                data,
+                sb
+              );
+            }
           );
         }
       },
@@ -27160,10 +27477,28 @@ function renderPortal(sb, user, data) {
         description:
           "Tilbudsbygger, kundetilbud og arkiv.",
         render: function (parent) {
-          renderOffersHub(
+          renderLazyModule(
             parent,
-            data,
-            sb
+            "customerQuoteItems",
+            "tilbudslinjer",
+            function () {
+              return sb
+                .from(
+                  "internal_customer_quote_items_view"
+                )
+                .select("*")
+                .order(
+                  "name",
+                  { ascending: true }
+                );
+            },
+            function () {
+              renderOffersHub(
+                parent,
+                data,
+                sb
+              );
+            }
           );
         }
       },
@@ -27264,9 +27599,28 @@ function renderPortal(sb, user, data) {
         description:
           "Hvem eller hva som endret interne data.",
         render: function (parent) {
-          renderAuditLog(
+          renderLazyModule(
             parent,
-            data
+            "auditLog",
+            "endringslogg",
+            function () {
+              return sb
+                .from(
+                  "internal_audit_log_view"
+                )
+                .select("*")
+                .order(
+                  "changed_at",
+                  { ascending: false }
+                )
+                .limit(500);
+            },
+            function () {
+              renderAuditLog(
+                parent,
+                data
+              );
+            }
           );
         }
       },
@@ -27349,13 +27703,13 @@ function renderPortal(sb, user, data) {
     sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
     sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
     sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
-    sb.from("internal_customer_quote_items_view").select("*").order("name", { ascending: true }),
+    Promise.resolve({ data: [], error: null }),
     sb.from("internal_settings_view").select("*"),
     sb.from("internal_suppliers_view").select("*").order("name", { ascending: true }),
     sb.from("internal_customers_view").select("*").order("last_quote_at", { ascending: false }),
     sb.from("internal_stock_counts_view").select("*").order("created_at", { ascending: false }),
     sb.from("internal_product_control_view").select("*").order("severity", { ascending: true }).order("issue_label", { ascending: true }).order("product_name", { ascending: true }),
-    fetchAllRows(sb, "internal_stock_count_items_view", "name", true),
+    Promise.resolve({ data: [], error: null }),
     sb
       .from("internal_price_comparison_view")
       .select("*")
@@ -27417,12 +27771,7 @@ function renderPortal(sb, user, data) {
       true
     ),
 
-    fetchAllRows(
-      sb,
-      "internal_product_quality_view",
-      "product_name",
-      true
-    ),
+    Promise.resolve({ data: [], error: null }),
 
     sb
       .from("internal_tasks")
@@ -27438,13 +27787,7 @@ function renderPortal(sb, user, data) {
         ascending: false
       }),
 
-    sb
-      .from("internal_audit_log_view")
-      .select("*")
-      .order("changed_at", {
-        ascending: false
-      })
-      .limit(500),
+    Promise.resolve({ data: [], error: null }),
 
     sb
       .from("internal_inventory_value_summary_view")
@@ -27642,7 +27985,14 @@ function renderPortal(sb, user, data) {
       auditLog:
         results[23].data || [],
       inventoryValueSummary:
-        results[24].data || []
+        results[24].data || [],
+      __lazyLoaded: {
+        customerQuoteItems: false,
+        stockCountItems: false,
+        productQualityIssues: false,
+        auditLog: false
+      },
+      __lazyLoading: {}
     });
   });
 }
@@ -27695,11 +28045,3 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
-
-
-
-
-
-
-
-
