@@ -974,6 +974,31 @@
       "#sk-internal-root .sk-market-monthly-trend-delta{margin-top:3px;font-size:10px;font-weight:800;color:#64748b;}" +
       "#sk-internal-root .sk-market-monthly-trend-delta.sk-up{color:#166534;}" +
       "#sk-internal-root .sk-market-monthly-trend-delta.sk-down{color:#b45309;}" +
+      "#sk-internal-root .sk-market-economy-section{margin:14px 0;padding:14px;border:1px solid #dbe3ef;border-radius:14px;background:linear-gradient(180deg,#ffffff,#f8fafc);}" +
+      "#sk-internal-root .sk-market-economy-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;}" +
+      "#sk-internal-root .sk-market-economy-head strong{display:block;font-size:15px;color:#0f172a;}" +
+      "#sk-internal-root .sk-market-economy-head span{display:block;margin-top:3px;font-size:10px;line-height:1.45;color:#64748b;}" +
+      "#sk-internal-root .sk-market-economy-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}" +
+      "#sk-internal-root .sk-market-economy-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:10px 0 12px;}" +
+      "#sk-internal-root .sk-market-economy-kpi{padding:11px 12px;border:1px solid #e2e8f0;border-radius:11px;background:#fff;}" +
+      "#sk-internal-root .sk-market-economy-kpi.sk-gk{border-color:#fdba74;background:#fff7ed;}" +
+      "#sk-internal-root .sk-market-economy-kpi-label{font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.035em;}" +
+      "#sk-internal-root .sk-market-economy-kpi-value{margin-top:4px;font-size:18px;font-weight:900;color:#0f172a;overflow-wrap:anywhere;}" +
+      "#sk-internal-root .sk-market-economy-kpi-meta{margin-top:3px;font-size:9px;line-height:1.4;color:#64748b;font-weight:700;}" +
+      "#sk-internal-root .sk-market-economy-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0 12px;}" +
+      "#sk-internal-root .sk-market-economy-chart{min-width:0;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;}" +
+      "#sk-internal-root .sk-market-economy-chart h4{margin:0;font-size:12px;color:#0f172a;}" +
+      "#sk-internal-root .sk-market-economy-chart-sub{margin:3px 0 9px;font-size:9px;line-height:1.4;color:#64748b;}" +
+      "#sk-internal-root .sk-market-economy-bar-row{margin:8px 0;}" +
+      "#sk-internal-root .sk-market-economy-bar-top{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-bottom:4px;font-size:10px;}" +
+      "#sk-internal-root .sk-market-economy-bar-name{min-width:0;font-weight:850;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
+      "#sk-internal-root .sk-market-economy-bar-name.sk-gk{color:#9a3412;font-weight:950;}" +
+      "#sk-internal-root .sk-market-economy-bar-value{flex:0 0 auto;font-weight:900;color:#0f172a;white-space:nowrap;}" +
+      "#sk-internal-root .sk-market-economy-bar-track{height:9px;border-radius:999px;background:#eef2f7;overflow:hidden;}" +
+      "#sk-internal-root .sk-market-economy-bar-fill{height:100%;min-width:2px;border-radius:999px;background:linear-gradient(90deg,#60a5fa,#2563eb);}" +
+      "#sk-internal-root .sk-market-economy-bar-fill.sk-gk{background:linear-gradient(90deg,#fb923c,#f97316);}" +
+      "#sk-internal-root .sk-market-economy-bar-fill.sk-negative{background:linear-gradient(90deg,#fca5a5,#dc2626);}" +
+      "#sk-internal-root .sk-market-economy-table-note{margin-top:9px;font-size:10px;line-height:1.5;color:#64748b;}" +
       "#sk-internal-root .sk-market-analysis-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0;}" +
       "#sk-internal-root .sk-market-analysis-card{padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}" +
       "#sk-internal-root .sk-market-analysis-card h3{margin:0 0 7px;font-size:14px;}" +
@@ -1031,6 +1056,8 @@
       "  #sk-internal-root .sk-market-radar-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-market-radar-signals{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-monthly-trend-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "  #sk-internal-root .sk-market-economy-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "  #sk-internal-root .sk-market-economy-chart-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-v4-layout{display:block;min-height:0;}" +
       "  #sk-internal-root .sk-v4-sidebar{display:block;position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:60;border-right:1px solid #334155;border-bottom:0;padding:14px 12px;overflow-y:auto;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility .2s ease;box-shadow:18px 0 48px rgba(15,23,42,.28);}" +
       "  #sk-internal-root .sk-v4-layout.sk-nav-open .sk-v4-sidebar{transform:translateX(0);visibility:visible;}" +
@@ -1061,6 +1088,10 @@
       "  #sk-internal-root .sk-market-radar-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-market-radar-head{display:block;}" +
       "  #sk-internal-root .sk-market-monthly-trend-grid{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-economy-kpis{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-market-economy-head{display:block;}" +
+      "  #sk-internal-root .sk-market-economy-actions{margin-top:9px;}" +
+      "  #sk-internal-root .sk-market-economy-bar-name{white-space:normal;}" +
       "  #sk-internal-root .sk-market-radar-coverage{margin-top:8px;white-space:normal;}" +
       "  #sk-internal-root .sk-market-monthly-strip{display:block;}" +
       "  #sk-internal-root .sk-market-monthly-state{margin-top:9px;}" +
@@ -25118,7 +25149,7 @@ function renderMarketAnalysis(
     parent,
     "Markedsanalyse",
     "En samlet oversikt over pris, sortiment og målbare konkurrentindikatorer. Data fra katalogprøver vises tydelig som utvalg – ikke som full katalog eller markedsandel.",
-    "Marked v3.2"
+    "Marked v3.3"
   );
 
   var marketInfo =
@@ -25169,7 +25200,8 @@ function renderMarketAnalysis(
   }
 
   function renderMarketV3Baseline(
-    catalogRows
+    catalogRows,
+    economyData
   ) {
     clear(
       marketV3BaselineHost
@@ -25210,6 +25242,184 @@ function renderMarketAnalysis(
       );
 
       return;
+    }
+
+    var economyPayload =
+      economyData || {};
+
+    var economyRows =
+      Array.isArray(
+        economyPayload.latest
+      )
+        ? economyPayload.latest
+        : [];
+
+    var economyBars =
+      Array.isArray(
+        economyPayload.bars
+      )
+        ? economyPayload.bars
+        : [];
+
+    var economySummary =
+      economyPayload.summary ||
+      {};
+
+    var economyErrors =
+      Array.isArray(
+        economyPayload.errors
+      )
+        ? economyPayload.errors
+        : [];
+
+    var economyAvailableRows =
+      economyRows.filter(
+        function (row) {
+          return (
+            row &&
+            row.accounting_status ===
+              "available"
+          );
+        }
+      );
+
+    var economyUnavailableRows =
+      economyRows.filter(
+        function (row) {
+          return (
+            row &&
+            row.accounting_status ===
+              "not_available"
+          );
+        }
+      );
+
+    var gkEconomy =
+      economyRows.find(
+        function (row) {
+          return (
+            row &&
+            row.is_golfkongen ===
+              true
+          );
+        }
+      ) ||
+      null;
+
+    var economyReady =
+      economyAvailableRows.length > 0 &&
+      Boolean(gkEconomy);
+
+    var economyUnmappedCompetitors =
+      marketCompetitors.filter(
+        function (competitor) {
+          return !String(
+            competitor
+              .economy_organization_number ||
+            ""
+          ).trim();
+        }
+      );
+
+    function marketEconomyNumber(
+      value,
+      decimals
+    ) {
+      var number =
+        Number(value);
+
+      if (
+        !Number.isFinite(
+          number
+        )
+      ) {
+        return "-";
+      }
+
+      return number.toLocaleString(
+        "nb-NO",
+        {
+          minimumFractionDigits:
+            decimals || 0,
+          maximumFractionDigits:
+            decimals || 0
+        }
+      );
+    }
+
+    function marketEconomyMoney(
+      value
+    ) {
+      var number =
+        Number(value);
+
+      if (
+        !Number.isFinite(
+          number
+        )
+      ) {
+        return "-";
+      }
+
+      return skFormatMoney(
+        number
+      );
+    }
+
+    function marketEconomyCompactMoney(
+      value
+    ) {
+      var number =
+        Number(value);
+
+      if (
+        !Number.isFinite(
+          number
+        )
+      ) {
+        return "-";
+      }
+
+      var abs =
+        Math.abs(number);
+
+      if (abs >= 1000000) {
+        return (
+          (number / 1000000)
+            .toLocaleString(
+              "nb-NO",
+              {
+                minimumFractionDigits:
+                  abs >= 10000000
+                    ? 1
+                    : 2,
+                maximumFractionDigits:
+                  abs >= 10000000
+                    ? 1
+                    : 2
+              }
+            ) +
+          " mill. kr"
+        );
+      }
+
+      if (abs >= 1000) {
+        return (
+          (number / 1000)
+            .toLocaleString(
+              "nb-NO",
+              {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+              }
+            ) +
+          " 000 kr"
+        );
+      }
+
+      return skFormatMoney(
+        number
+      );
     }
 
     var totalMeasured =
@@ -25356,9 +25566,15 @@ function renderMarketAnalysis(
         measured.length
           ? 1
           : 0
+      ) +
+      (
+        economyReady
+          ? 1
+          : 0
       );
 
     var partialAreas =
+      !economyReady &&
       inventory.length
         ? 1
         : 0;
@@ -25385,7 +25601,9 @@ function renderMarketAnalysis(
     radarHeadText.appendChild(
       el(
         "span",
-        "Pris og sortiment kan sammenlignes nå. Økonomi har egne GolfKongen-tall, mens eksterne regnskap, Google-synlighet, Meta og omdømme kobles på i neste trinn."
+        economyReady
+          ? "Pris, sortiment og offentlig økonomi kan sammenlignes nå. Google-synlighet, Meta og omdømme står fortsatt uten gratis/offisiell datakilde som passer reglene våre."
+          : "Pris og sortiment kan sammenlignes nå. Økonomi viser egne GolfKongen-tall inntil offentlige regnskapsdata er tilgjengelige."
       )
     );
 
@@ -25586,19 +25804,54 @@ function renderMarketAnalysis(
     addRadarCard(
       "📈",
       "Økonomi",
-      revenue365 > 0
-        ? skFormatMoney(
-            revenue365
+      economyReady &&
+      gkEconomy &&
+      gkEconomy
+        .operating_revenue !==
+        null &&
+      gkEconomy
+        .operating_revenue !==
+        undefined
+        ? marketEconomyCompactMoney(
+            gkEconomy
+              .operating_revenue
           )
-        : "Egne tall klare",
-      inventory.length
-        ? "Delvis"
-        : "Mangler data",
-      inventory.length
-        ? "sk-partial"
-        : "sk-pending",
-      "GolfKongen kan følges på faktiske interne tall. Konkurrentenes offentlige årsregnskap er ikke koblet inn ennå.",
-      "Viser GK vareomsetning i analysegrunnlaget siste 365 dager"
+        : (
+            revenue365 > 0
+              ? skFormatMoney(
+                  revenue365
+                )
+              : "Egne tall klare"
+          ),
+      economyReady
+        ? "Klar"
+        : (
+            inventory.length
+              ? "Delvis"
+              : "Mangler data"
+          ),
+      economyReady
+        ? "Offentlige årsregnskap fra Brønnøysund er koblet inn og kan sammenlignes mot GolfKongen."
+        : "GolfKongen kan følges på egne interne tall, men offentlig konkurrentøkonomi mangler.",
+      economyReady
+        ? (
+            String(
+              economyAvailableRows.length
+            ) +
+            " selskaper med offentlig regnskap" +
+            (
+              gkEconomy &&
+              gkEconomy
+                .accounting_year
+                ? " · GK regnskapsår " +
+                  String(
+                    gkEconomy
+                      .accounting_year
+                  )
+                : ""
+            )
+          )
+        : "Viser GK vareomsetning i analysegrunnlaget siste 365 dager"
     );
 
     addRadarCard(
@@ -25607,8 +25860,8 @@ function renderMarketAnalysis(
       "Ikke koblet",
       "Neste datakilde",
       "sk-pending",
-      "Skal følge faste søkeord, organisk synlighet og utvikling mot konkurrentene.",
-      "Mål: månedlig synlighetsindeks uten direkte scraping av Google"
+      "Ikke koblet. Vi bruker ikke løsninger som krever betalt API, egen tredjepartskonto eller tvilsom scraping.",
+      "Kobles bare dersom vi finner en gratis, offentlig og lovlig kilde"
     );
 
     addRadarCard(
@@ -25617,8 +25870,8 @@ function renderMarketAnalysis(
       "Ikke koblet",
       "Neste datakilde",
       "sk-pending",
-      "Skal følge tilgjengelige følger- og aktivitetsindikatorer for Facebook og Instagram.",
-      "API der det er stabilt · ellers kontrollert månedlig registrering"
+      "Ikke koblet. Vi holder dette ute til vi har en gratis og ryddig offentlig datakilde.",
+      "Ingen konto eller betalt API skal være nødvendig"
     );
 
     addRadarCard(
@@ -25627,12 +25880,897 @@ function renderMarketAnalysis(
       "Ikke koblet",
       "Neste datakilde",
       "sk-pending",
-      "Skal følge rating, antall anmeldelser og vekst i anmeldelser – ikke bare stjerner.",
-      "Google-anmeldelser blir første omdømmekilde"
+      "Google- og Trustpilot-data er foreløpig droppet fordi vi ikke vil bygge dette på betalte API-er eller scraping på grensen.",
+      "Kan kobles senere dersom en gratis/offisiell kilde blir tilgjengelig"
     );
 
     marketV3BaselineHost.appendChild(
       radarGrid
+    );
+
+    var economySection =
+      el("div");
+
+    economySection.className =
+      "sk-market-economy-section";
+
+    var economyHead =
+      el("div");
+
+    economyHead.className =
+      "sk-market-economy-head";
+
+    var economyHeadText =
+      el("div");
+
+    economyHeadText.appendChild(
+      el(
+        "strong",
+        "📈 Økonomi · offentlige årsregnskap"
+      )
+    );
+
+    economyHeadText.appendChild(
+      el(
+        "span",
+        economyReady
+          ? (
+              String(
+                economyAvailableRows.length
+              ) +
+              " av " +
+              String(
+                economyRows.length
+              ) +
+              " økonomienheter har offentlig årsregnskap i siste månedsbilde. Tallene er årsregnskap – ikke månedlig omsetning."
+            )
+          : (
+              economyErrors.length
+                ? "Kunne ikke hente økonomivisningen akkurat nå: " +
+                  economyErrors.join(
+                    " · "
+                  )
+                : "Ingen offentlige regnskapstall er tilgjengelige i radaren ennå."
+            )
+      )
+    );
+
+    economyHead.appendChild(
+      economyHeadText
+    );
+
+    var economyActions =
+      el("div");
+
+    economyActions.className =
+      "sk-market-economy-actions";
+
+    var economyRefreshState =
+      el(
+        "span",
+        economyReady
+          ? "Brønnøysund-data lastet"
+          : "Ikke oppdatert"
+      );
+
+    economyRefreshState.className =
+      "sk-market-monthly-state" +
+      (
+        economyReady
+          ? " sk-saved"
+          : ""
+      );
+
+    var economyRefreshButton =
+      createButton(
+        "Oppdater økonomitall"
+      );
+
+    economyRefreshButton.onclick =
+      function () {
+        economyRefreshButton.disabled =
+          true;
+        economyRefreshButton.textContent =
+          "Henter…";
+        economyRefreshState.className =
+          "sk-market-monthly-state";
+        economyRefreshState.textContent =
+          "Henter fra Brønnøysund…";
+
+        callMarketCrawler(
+          "/economy-refresh",
+          {
+            method: "POST"
+          }
+        )
+          .then(
+            function (result) {
+              economyRefreshState.className =
+                "sk-market-monthly-state sk-saved";
+              economyRefreshState.textContent =
+                result &&
+                result.status ===
+                  "partial"
+                  ? "Oppdatert delvis"
+                  : "Økonomi oppdatert";
+
+              economyRefreshButton.textContent =
+                "Oppdatert";
+
+              setTimeout(
+                function () {
+                  window.location.reload();
+                },
+                700
+              );
+            }
+          )
+          .catch(
+            function (error) {
+              economyRefreshButton.disabled =
+                false;
+              economyRefreshButton.textContent =
+                "Prøv igjen";
+              economyRefreshState.className =
+                "sk-market-monthly-state";
+              economyRefreshState.textContent =
+                "Feil: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                );
+            }
+          );
+      };
+
+    economyActions.appendChild(
+      economyRefreshState
+    );
+
+    economyActions.appendChild(
+      economyRefreshButton
+    );
+
+    economyHead.appendChild(
+      economyActions
+    );
+
+    economySection.appendChild(
+      economyHead
+    );
+
+    if (economyReady) {
+      var revenueRankBySubject =
+        {};
+
+      economyBars
+        .filter(
+          function (row) {
+            return (
+              row.chart_key ===
+              "operating_revenue"
+            );
+          }
+        )
+        .forEach(
+          function (row) {
+            revenueRankBySubject[
+              String(
+                row.subject_key
+              )
+            ] =
+              Number(
+                row.rank_position
+              );
+          }
+        );
+
+      var totalRanked =
+        economyAvailableRows
+          .filter(
+            function (row) {
+              return (
+                row.is_golfkongen ===
+                  true ||
+                row
+                  .economy_include_in_ranking !==
+                  false
+              );
+            }
+          )
+          .length;
+
+      function addEconomyKpi(
+        label,
+        value,
+        meta
+      ) {
+        var card =
+          el("div");
+
+        card.className =
+          "sk-market-economy-kpi sk-gk";
+
+        var labelNode =
+          el(
+            "div",
+            label
+          );
+
+        labelNode.className =
+          "sk-market-economy-kpi-label";
+
+        var valueNode =
+          el(
+            "div",
+            value
+          );
+
+        valueNode.className =
+          "sk-market-economy-kpi-value";
+
+        var metaNode =
+          el(
+            "div",
+            meta
+          );
+
+        metaNode.className =
+          "sk-market-economy-kpi-meta";
+
+        card.appendChild(
+          labelNode
+        );
+        card.appendChild(
+          valueNode
+        );
+        card.appendChild(
+          metaNode
+        );
+
+        economyKpis.appendChild(
+          card
+        );
+      }
+
+      var economyKpis =
+        el("div");
+
+      economyKpis.className =
+        "sk-market-economy-kpis";
+
+      var gkRevenueRank =
+        revenueRankBySubject[
+          "golfkongen"
+        ] ||
+        economySummary
+          .golfkongen_operating_revenue_rank ||
+        null;
+
+      addEconomyKpi(
+        "GK driftsinntekter",
+        marketEconomyMoney(
+          gkEconomy
+            .operating_revenue
+        ),
+        (
+          gkEconomy.accounting_year
+            ? "Regnskap " +
+              String(
+                gkEconomy
+                  .accounting_year
+              )
+            : "Siste offentlige regnskap"
+        ) +
+        (
+          gkRevenueRank
+            ? " · plass " +
+              String(
+                gkRevenueRank
+              ) +
+              " av " +
+              String(
+                totalRanked
+              )
+            : ""
+        )
+      );
+
+      addEconomyKpi(
+        "GK driftsresultat",
+        marketEconomyMoney(
+          gkEconomy
+            .operating_profit
+        ),
+        gkEconomy
+          .operating_margin_percent !==
+          null &&
+        gkEconomy
+          .operating_margin_percent !==
+          undefined
+          ? "Driftsmargin " +
+            marketEconomyNumber(
+              gkEconomy
+                .operating_margin_percent,
+              1
+            ) +
+            "%"
+          : "Driftsmargin ikke tilgjengelig"
+      );
+
+      addEconomyKpi(
+        "GK årsresultat",
+        marketEconomyMoney(
+          gkEconomy
+            .annual_result
+        ),
+        "Offentlig årsregnskap · ikke intern månedsrapport"
+      );
+
+      addEconomyKpi(
+        "GK egenkapitalandel",
+        gkEconomy
+          .equity_ratio_percent !==
+          null &&
+        gkEconomy
+          .equity_ratio_percent !==
+          undefined
+          ? marketEconomyNumber(
+              gkEconomy
+                .equity_ratio_percent,
+              1
+            ) +
+            "%"
+          : "-",
+        "Egenkapital / totale eiendeler"
+      );
+
+      economySection.appendChild(
+        economyKpis
+      );
+
+      var economyChartGrid =
+        el("div");
+
+      economyChartGrid.className =
+        "sk-market-economy-chart-grid";
+
+      function renderEconomyChart(
+        chartKey,
+        title,
+        subtitle
+      ) {
+        var chart =
+          el("div");
+
+        chart.className =
+          "sk-market-economy-chart";
+
+        chart.appendChild(
+          el(
+            "h4",
+            title
+          )
+        );
+
+        var chartSub =
+          el(
+            "div",
+            subtitle
+          );
+
+        chartSub.className =
+          "sk-market-economy-chart-sub";
+
+        chart.appendChild(
+          chartSub
+        );
+
+        var rows =
+          economyBars
+            .filter(
+              function (row) {
+                return (
+                  row.chart_key ===
+                  chartKey
+                );
+              }
+            )
+            .slice()
+            .sort(
+              function (a, b) {
+                return (
+                  Number(
+                    a.rank_position ||
+                    999
+                  ) -
+                  Number(
+                    b.rank_position ||
+                    999
+                  )
+                );
+              }
+            );
+
+        if (!rows.length) {
+          var empty =
+            el(
+              "div",
+              "Ingen data for denne målingen."
+            );
+
+          empty.className =
+            "sk-note";
+
+          chart.appendChild(
+            empty
+          );
+
+          return chart;
+        }
+
+        var maxAbs =
+          rows.reduce(
+            function (maxValue, row) {
+              var value =
+                Math.abs(
+                  Number(
+                    row.metric_value ||
+                    0
+                  )
+                );
+
+              return value >
+                maxValue
+                ? value
+                : maxValue;
+            },
+            0
+          );
+
+        rows.forEach(
+          function (row) {
+            var value =
+              Number(
+                row.metric_value ||
+                0
+              );
+
+            var rowNode =
+              el("div");
+
+            rowNode.className =
+              "sk-market-economy-bar-row";
+
+            var top =
+              el("div");
+
+            top.className =
+              "sk-market-economy-bar-top";
+
+            var name =
+              el(
+                "span",
+                String(
+                  row.rank_position ||
+                  "-"
+                ) +
+                ". " +
+                (
+                  row.store_name ||
+                  row.legal_entity_name ||
+                  "-"
+                )
+              );
+
+            name.className =
+              "sk-market-economy-bar-name" +
+              (
+                row.is_golfkongen ===
+                  true
+                  ? " sk-gk"
+                  : ""
+              );
+
+            var valueText =
+              row.unit === "%"
+                ? (
+                    marketEconomyNumber(
+                      value,
+                      1
+                    ) +
+                    "%"
+                  )
+                : marketEconomyMoney(
+                    value
+                  );
+
+            var valueNode =
+              el(
+                "span",
+                valueText
+              );
+
+            valueNode.className =
+              "sk-market-economy-bar-value";
+
+            top.appendChild(
+              name
+            );
+            top.appendChild(
+              valueNode
+            );
+
+            var track =
+              el("div");
+
+            track.className =
+              "sk-market-economy-bar-track";
+
+            var fill =
+              el("div");
+
+            fill.className =
+              "sk-market-economy-bar-fill" +
+              (
+                row.is_golfkongen ===
+                  true
+                  ? " sk-gk"
+                  : ""
+              ) +
+              (
+                value < 0
+                  ? " sk-negative"
+                  : ""
+              );
+
+            fill.style.width =
+              maxAbs > 0
+                ? Math.max(
+                    2,
+                    Math.abs(
+                      value
+                    ) /
+                    maxAbs *
+                    100
+                  ) +
+                  "%"
+                : "2%";
+
+            track.appendChild(
+              fill
+            );
+
+            rowNode.appendChild(
+              top
+            );
+            rowNode.appendChild(
+              track
+            );
+
+            chart.appendChild(
+              rowNode
+            );
+          }
+        );
+
+        return chart;
+      }
+
+      economyChartGrid.appendChild(
+        renderEconomyChart(
+          "operating_revenue",
+          "Driftsinntekter",
+          "Siste offentlige årsregnskap · høyest øverst"
+        )
+      );
+
+      economyChartGrid.appendChild(
+        renderEconomyChart(
+          "operating_profit",
+          "Driftsresultat",
+          "Negative resultater vises rødt"
+        )
+      );
+
+      economyChartGrid.appendChild(
+        renderEconomyChart(
+          "annual_result",
+          "Årsresultat",
+          "Resultat etter skatt / årsresultat"
+        )
+      );
+
+      economyChartGrid.appendChild(
+        renderEconomyChart(
+          "equity_ratio_percent",
+          "Egenkapitalandel",
+          "Egenkapital som andel av totale eiendeler"
+        )
+      );
+
+      economySection.appendChild(
+        economyChartGrid
+      );
+
+      var economyTableRows =
+        economyRows
+          .slice()
+          .sort(
+            function (a, b) {
+              if (
+                a.accounting_status !==
+                  "available" &&
+                b.accounting_status ===
+                  "available"
+              ) {
+                return 1;
+              }
+
+              if (
+                a.accounting_status ===
+                  "available" &&
+                b.accounting_status !==
+                  "available"
+              ) {
+                return -1;
+              }
+
+              return (
+                Number(
+                  b.operating_revenue ||
+                  -999999999999
+                ) -
+                Number(
+                  a.operating_revenue ||
+                  -999999999999
+                )
+              );
+            }
+          );
+
+      skCreateAnalysisTable(
+        economySection,
+        [
+          {
+            label: "Plass",
+            value:
+              function (row) {
+                if (
+                  row.accounting_status !==
+                  "available"
+                ) {
+                  return "-";
+                }
+
+                return revenueRankBySubject[
+                  String(
+                    row.subject_key
+                  )
+                ] || "-";
+              },
+            align: "right"
+          },
+          {
+            label: "Butikk / selskap",
+            render:
+              function (td, row) {
+                var strong =
+                  el(
+                    "strong",
+                    row.store_name ||
+                    row.legal_entity_name ||
+                    "-"
+                  );
+
+                if (
+                  row.is_golfkongen ===
+                  true
+                ) {
+                  strong.style.color =
+                    "#9a3412";
+                }
+
+                td.appendChild(
+                  strong
+                );
+
+                if (
+                  row.legal_entity_name &&
+                  row.legal_entity_name !==
+                    row.store_name
+                ) {
+                  var legal =
+                    el(
+                      "div",
+                      row.legal_entity_name
+                    );
+
+                  legal.style.fontSize =
+                    "9px";
+                  legal.style.color =
+                    "#64748b";
+
+                  td.appendChild(
+                    legal
+                  );
+                }
+              }
+          },
+          {
+            label: "År",
+            value:
+              function (row) {
+                return row.accounting_year ||
+                  "-";
+              },
+            align: "right"
+          },
+          {
+            label: "Driftsinntekter",
+            value:
+              function (row) {
+                return marketEconomyMoney(
+                  row.operating_revenue
+                );
+              },
+            align: "right"
+          },
+          {
+            label: "Driftsresultat",
+            value:
+              function (row) {
+                return marketEconomyMoney(
+                  row.operating_profit
+                );
+              },
+            align: "right"
+          },
+          {
+            label: "Årsresultat",
+            value:
+              function (row) {
+                return marketEconomyMoney(
+                  row.annual_result
+                );
+              },
+            align: "right"
+          },
+          {
+            label: "Driftsmargin",
+            value:
+              function (row) {
+                return row
+                  .operating_margin_percent !==
+                  null &&
+                  row
+                    .operating_margin_percent !==
+                    undefined
+                  ? marketEconomyNumber(
+                      row
+                        .operating_margin_percent,
+                      1
+                    ) +
+                    "%"
+                  : "-";
+              },
+            align: "right"
+          },
+          {
+            label: "EK-andel",
+            value:
+              function (row) {
+                return row
+                  .equity_ratio_percent !==
+                  null &&
+                  row
+                    .equity_ratio_percent !==
+                    undefined
+                  ? marketEconomyNumber(
+                      row
+                        .equity_ratio_percent,
+                      1
+                    ) +
+                    "%"
+                  : "-";
+              },
+            align: "right"
+          },
+          {
+            label: "Status",
+            value:
+              function (row) {
+                return row.accounting_status ===
+                  "available"
+                  ? "Offentlig regnskap"
+                  : "Ikke offentlig tilgjengelig";
+              }
+          }
+        ],
+        economyTableRows,
+        "Ingen økonomidata."
+      );
+
+      var economyNotes = [];
+
+      if (
+        economyUnavailableRows.length
+      ) {
+        economyNotes.push(
+          economyUnavailableRows
+            .map(
+              function (row) {
+                return row.store_name ||
+                  row.legal_entity_name ||
+                  "Ukjent";
+              }
+            )
+            .join(
+              ", "
+            ) +
+          " har ikke offentlig årsregnskap i Regnskapsregisterets åpne data."
+        );
+      }
+
+      if (
+        economyUnmappedCompetitors.length
+      ) {
+        economyNotes.push(
+          economyUnmappedCompetitors
+            .map(
+              function (row) {
+                return row.name;
+              }
+            )
+            .join(
+              ", "
+            ) +
+          " er ikke koblet til verifisert organisasjonsnummer ennå og er derfor ikke med i økonomisammenligningen."
+        );
+      }
+
+      economyNotes.push(
+        "Søylene sammenligner siste tilgjengelige årsregnskap. Regnskapsår kan variere mellom selskapene, og dette skal ikke tolkes som månedlig markedsandel."
+      );
+
+      var economyNote =
+        el(
+          "div",
+          economyNotes.join(
+            " "
+          )
+        );
+
+      economyNote.className =
+        "sk-market-economy-table-note";
+
+      economySection.appendChild(
+        economyNote
+      );
+    } else {
+      var economyEmpty =
+        el(
+          "div",
+          economyErrors.length
+            ? "Økonomidata kunne ikke leses: " +
+              economyErrors.join(
+                " · "
+              )
+            : "Ingen offentlig økonomidata i siste månedsbilde."
+        );
+
+      economyEmpty.className =
+        "sk-note";
+
+      economySection.appendChild(
+        economyEmpty
+      );
+    }
+
+    marketV3BaselineHost.appendChild(
+      economySection
     );
 
     var signalGrid = el("div");
@@ -25706,7 +26844,12 @@ function renderMarketAnalysis(
       String(readyAreas) +
         " av 6 områder kan sammenlignes nå. " +
         String(partialAreas) +
-        " er delvis klart. Neste datakilder blir økonomi, synlighet, Meta og omdømme.",
+        " er delvis klart. " +
+        (
+          economyReady
+            ? "Økonomi er nå koblet på. Gjenstår: synlighet, Meta og omdømme."
+            : "Gjenstår: økonomi, synlighet, Meta og omdømme."
+        ),
       "sk-info"
     );
 
@@ -25750,7 +26893,7 @@ function renderMarketAnalysis(
 
     var monthlyDescription = el(
       "span",
-      "Første månedsbaseline er lagret i Supabase. Månedsbildet kan oppdateres manuelt herfra nå; automatisk månedskjøring kobles på etter at historikkvisningen er verifisert." +
+      "Månedsbildet lagres i Supabase og kan oppdateres manuelt herfra. Økonomidata ligger som offentlige årsregnskapssignaler i samme månedsbilde; automatisk månedskjøring aktiveres først når alle valgte datakilder er ferdige." +
         (
           freshnessParts.length
             ? " Nå: " +
@@ -28622,19 +29765,83 @@ function renderMarketAnalysis(
       loading
     );
 
-    sb
-      .from(
-        "internal_market_catalog_latest_view"
-      )
-      .select("*")
-      .order(
-        "competitor_name",
-        {
-          ascending: true
-        }
-      )
+    Promise.all(
+      [
+        sb
+          .from(
+            "internal_market_catalog_latest_view"
+          )
+          .select("*")
+          .order(
+            "competitor_name",
+            {
+              ascending: true
+            }
+          ),
+
+        sb
+          .from(
+            "internal_market_monthly_economy_latest_view"
+          )
+          .select("*")
+          .order(
+            "store_name",
+            {
+              ascending: true
+            }
+          ),
+
+        sb
+          .from(
+            "internal_market_monthly_economy_bar_chart_view"
+          )
+          .select("*")
+          .order(
+            "chart_key",
+            {
+              ascending: true
+            }
+          )
+          .order(
+            "rank_position",
+            {
+              ascending: true
+            }
+          ),
+
+        sb
+          .from(
+            "internal_market_monthly_economy_summary_view"
+          )
+          .select("*")
+          .limit(1)
+      ]
+    )
       .then(
-        function (result) {
+        function (results) {
+          var result =
+            results[0] || {
+              data: [],
+              error: null
+            };
+
+          var economyLatestResult =
+            results[1] || {
+              data: [],
+              error: null
+            };
+
+          var economyBarsResult =
+            results[2] || {
+              data: [],
+              error: null
+            };
+
+          var economySummaryResult =
+            results[3] || {
+              data: [],
+              error: null
+            };
           clear(
             latestHost
           );
@@ -28677,8 +29884,59 @@ function renderMarketAnalysis(
           var rows =
             result.data || [];
 
+          var economyErrors = [];
+
+          [
+            economyLatestResult,
+            economyBarsResult,
+            economySummaryResult
+          ].forEach(
+            function (economyResult) {
+              if (
+                economyResult &&
+                economyResult.error
+              ) {
+                economyErrors.push(
+                  economyResult
+                    .error
+                    .message ||
+                  String(
+                    economyResult.error
+                  )
+                );
+              }
+            }
+          );
+
           renderMarketV3Baseline(
-            rows
+            rows,
+            {
+              latest:
+                economyLatestResult.error
+                  ? []
+                  : (
+                      economyLatestResult.data ||
+                      []
+                    ),
+              bars:
+                economyBarsResult.error
+                  ? []
+                  : (
+                      economyBarsResult.data ||
+                      []
+                    ),
+              summary:
+                economySummaryResult.error
+                  ? {}
+                  : (
+                      economySummaryResult.data &&
+                      economySummaryResult.data[0]
+                        ? economySummaryResult.data[0]
+                        : {}
+                    ),
+              errors:
+                economyErrors
+            }
           );
 
           addDashboardSectionTitle(
