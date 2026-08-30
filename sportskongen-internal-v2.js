@@ -1430,7 +1430,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.2 · PDF-import Sune"
+      "Admin v5.2.1 · PDF-import Sune"
     );
 
     var products =
@@ -6433,7 +6433,7 @@ parent.appendChild(productListSection.wrap);
             page.lines || []
           ).forEach(
             function (line) {
-              fullLines.push(
+              var clean =
                 String(
                   line || ""
                 )
@@ -6445,8 +6445,13 @@ parent.appendChild(productListSection.wrap);
                     /\s+/g,
                     " "
                   )
-                  .trim()
-              );
+                  .trim();
+
+              if (clean) {
+                fullLines.push(
+                  clean
+                );
+              }
             }
           );
         }
@@ -6463,201 +6468,345 @@ parent.appendChild(productListSection.wrap);
         return null;
       }
 
-      if (
-        !/Fakturanr\.\s*:\s*\d+/i.test(
-          fullText
-        ) &&
-        !/Fakturanr\.\s*:\s*\n?\s*\d+/i.test(
-          fullText
-        )
-      ) {
-        return null;
-      }
-
       var invoiceNoMatch =
         fullText.match(
-          /Fakturanr\.\s*:\s*(?:\n\s*)?([0-9]+)/i
+          /Fakturanr\.\s*:?\s*(?:\n\s*)?([0-9]+)/i
         );
 
       var invoiceDateMatch =
         fullText.match(
-          /Fakturadato\s*:\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})/i
+          /Fakturadato\s*:?\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})/i
         );
+
+      if (
+        !invoiceNoMatch ||
+        !invoiceDateMatch
+      ) {
+        return null;
+      }
 
       function toIsoDate(
         value
       ) {
-        if (!value) {
-          return "";
-        }
-
         var match =
-          String(value)
+          String(
+            value || ""
+          )
             .trim()
             .match(
               /^(\d{2})\.(\d{2})\.(\d{4})$/
             );
 
-        if (!match) {
-          return "";
-        }
-
-        return (
-          match[3] +
-          "-" +
-          match[2] +
-          "-" +
-          match[1]
-        );
+        return match
+          ? (
+              match[3] +
+              "-" +
+              match[2] +
+              "-" +
+              match[1]
+            )
+          : "";
       }
 
-      var rows = [];
+      /*
+       * Sune Sport-PDF-en legger ofte tabellcellene i separate PDF-tekst-
+       * elementer. Derfor kan vi ikke kreve at en hel varelinje ligger på
+       * én visuell tekstlinje.
+       *
+       * Vi lager i stedet en tokenstrøm og leser strukturen:
+       *
+       * SKU -> beskrivelse -> antall -> STK -> pris -> MVA -> rabatt -> total
+       */
+      var tokens = [];
 
-      (pages || []).forEach(
-        function (page) {
-          var currentRow =
-            null;
-          var afterHeader =
-            false;
-
-          (
-            page.lines || []
-          ).forEach(
-            function (rawLine) {
-              var line =
-                String(
-                  rawLine || ""
-                )
-                  .replace(
-                    /\u00a0/g,
-                    " "
-                  )
-                  .replace(
-                    /\s+/g,
-                    " "
-                  )
-                  .trim();
-
-              if (!line) {
-                return;
+      fullLines.forEach(
+        function (line) {
+          String(line)
+            .split(/\s+/)
+            .forEach(
+              function (token) {
+                if (token) {
+                  tokens.push(
+                    token
+                  );
+                }
               }
-
-              if (
-                /Varenr\./i.test(line) &&
-                /Beskrivelse/i.test(line) &&
-                /Totalt/i.test(line)
-              ) {
-                afterHeader = true;
-                currentRow = null;
-                return;
-              }
-
-              if (!afterHeader) {
-                return;
-              }
-
-              if (
-                /^MVA spesifisering\b/i.test(
-                  line
-                ) ||
-                /^Beløp ekskl\. MVA\b/i.test(
-                  line
-                ) ||
-                /^Totalt MVA beløp\b/i.test(
-                  line
-                ) ||
-                /^Å betale\b/i.test(
-                  line
-                ) ||
-                /^KID nr\./i.test(
-                  line
-                )
-              ) {
-                afterHeader = false;
-                currentRow = null;
-                return;
-              }
-
-              var match =
-                line.match(
-                  /^([A-Z0-9-]+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s+STK\s+([\d,]+\.\d{2})\s+25%\s+0%\s+([\d,]+\.\d{2})$/i
-                );
-
-              if (match) {
-                currentRow = {
-                  line_number:
-                    rows.length + 1,
-                  supplier_sku:
-                    match[1],
-                  ean:
-                    null,
-                  description:
-                    match[2]
-                      .replace(
-                        /\s+/g,
-                        " "
-                      )
-                      .trim(),
-                  quantity:
-                    parseEnglishNumber(
-                      match[3]
-                    ),
-                  unit_price:
-                    parseEnglishNumber(
-                      match[4]
-                    ),
-                  line_total:
-                    parseEnglishNumber(
-                      match[5]
-                    )
-                };
-
-                rows.push(
-                  currentRow
-                );
-                return;
-              }
-
-              if (
-                currentRow &&
-                !/^(Side:|Sune Sport AS|Østre Aker vei|0975|Norge$|Tlf:|E-post:|FAKTURA$|Fakturanr\.|Fakturadato:)/i.test(
-                  line
-                )
-              ) {
-                currentRow.description =
-                  (
-                    currentRow.description +
-                    " " +
-                    line
-                  )
-                    .replace(
-                      /\s+/g,
-                      " "
-                    )
-                    .replace(
-                      /\s*-\s+/g,
-                      "-"
-                    )
-                    .trim();
-              }
-            }
-          );
+            );
         }
       );
 
+      function isSku(
+        token
+      ) {
+        return (
+          /^\d{8}$/.test(
+            token
+          ) ||
+          /^(?:FI|FD)\d-[A-Z0-9-]+$/i.test(
+            token
+          )
+        );
+      }
+
+      function isQty(
+        token
+      ) {
+        return /^\d+\.\d{2}$/.test(
+          token
+        );
+      }
+
+      function isMoney(
+        token
+      ) {
+        return /^[\d,]+\.\d{2}$/.test(
+          token
+        );
+      }
+
+      var startIndex = -1;
+      var stopIndex =
+        tokens.length;
+
+      for (
+        var si = 0;
+        si < tokens.length;
+        si += 1
+      ) {
+        if (
+          /^Varenr\.?$/i.test(
+            tokens[si]
+          )
+        ) {
+          startIndex =
+            si + 1;
+          break;
+        }
+      }
+
+      if (startIndex < 0) {
+        startIndex = 0;
+      }
+
+      for (
+        var ei =
+          startIndex;
+        ei < tokens.length;
+        ei += 1
+      ) {
+        if (
+          /^MVA$/i.test(
+            tokens[ei]
+          ) &&
+          /^spesifisering$/i.test(
+            tokens[
+              ei + 1
+            ] || ""
+          )
+        ) {
+          stopIndex = ei;
+          break;
+        }
+      }
+
+      var rows = [];
+      var i = startIndex;
+
+      while (i < stopIndex) {
+        if (!isSku(tokens[i])) {
+          i += 1;
+          continue;
+        }
+
+        var sku =
+          tokens[i];
+        i += 1;
+
+        var descriptionTokens = [];
+
+        /*
+         * Beskrivelsen varer frem til første tall med to desimaler som
+         * umiddelbart etterfølges av STK.
+         */
+        while (
+          i < stopIndex &&
+          !(
+            isQty(
+              tokens[i]
+            ) &&
+            /^STK$/i.test(
+              tokens[
+                i + 1
+              ] || ""
+            )
+          )
+        ) {
+          /*
+           * Hvis vi møter en ny SKU før antall/STK, var forrige kandidat
+           * ikke en gyldig varelinje.
+           */
+          if (
+            isSku(
+              tokens[i]
+            )
+          ) {
+            break;
+          }
+
+          descriptionTokens.push(
+            tokens[i]
+          );
+          i += 1;
+        }
+
+        if (
+          i >= stopIndex ||
+          !isQty(tokens[i]) ||
+          !/^STK$/i.test(
+            tokens[
+              i + 1
+            ] || ""
+          )
+        ) {
+          continue;
+        }
+
+        var quantity =
+          parseEnglishNumber(
+            tokens[i]
+          );
+
+        i += 2;
+
+        if (
+          i >= stopIndex ||
+          !isMoney(
+            tokens[i]
+          )
+        ) {
+          continue;
+        }
+
+        var unitPrice =
+          parseEnglishNumber(
+            tokens[i]
+          );
+
+        i += 1;
+
+        /*
+         * Sune kan levere "25 %" som to tokens eller "25%" som ett.
+         */
+        if (
+          /^25$/i.test(
+            tokens[i] || ""
+          ) &&
+          /^%$/i.test(
+            tokens[
+              i + 1
+            ] || ""
+          )
+        ) {
+          i += 2;
+        } else if (
+          /^25%$/i.test(
+            tokens[i] || ""
+          )
+        ) {
+          i += 1;
+        }
+
+        /*
+         * Rabattfeltet er 0% på testfakturaen.
+         */
+        if (
+          /^0%$/i.test(
+            tokens[i] || ""
+          )
+        ) {
+          i += 1;
+        } else if (
+          /^0$/i.test(
+            tokens[i] || ""
+          ) &&
+          /^%$/i.test(
+            tokens[
+              i + 1
+            ] || ""
+          )
+        ) {
+          i += 2;
+        }
+
+        if (
+          i >= stopIndex ||
+          !isMoney(
+            tokens[i]
+          )
+        ) {
+          continue;
+        }
+
+        var lineTotal =
+          parseEnglishNumber(
+            tokens[i]
+          );
+
+        i += 1;
+
+        var description =
+          descriptionTokens
+            .join(" ")
+            .replace(
+              /\s*-\s+/g,
+              "-"
+            )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        if (
+          !description ||
+          quantity === null ||
+          unitPrice === null ||
+          lineTotal === null
+        ) {
+          continue;
+        }
+
+        rows.push({
+          line_number:
+            rows.length + 1,
+          supplier_sku:
+            sku,
+          ean:
+            null,
+          description:
+            description,
+          quantity:
+            quantity,
+          unit_price:
+            unitPrice,
+          line_total:
+            lineTotal
+        });
+      }
+
       var exVatMatch =
         fullText.match(
-          /Beløp ekskl\.\s*MVA\s+([\d,]+\.\d{2})/i
+          /Beløp ekskl\.\s*MVA\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
       var vatMatch =
         fullText.match(
-          /Totalt MVA beløp\s+([\d,]+\.\d{2})/i
+          /Totalt MVA beløp\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
       var grossMatch =
         fullText.match(
-          /Å betale\s+([A-Z]{3})\s+([\d,]+\.\d{2})/i
+          /Å betale\s+([A-Z]{3})\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
       var goodsTotal =
@@ -6714,21 +6863,17 @@ parent.appendChild(productListSection.wrap);
 
       return {
         parser:
-          "sune-sport-v1",
+          "sune-sport-v2",
         parser_label:
           "Sune Sport AS",
         supplier_hint:
           "Sune Sport AS",
         invoice_number:
-          invoiceNoMatch
-            ? invoiceNoMatch[1]
-            : "",
+          invoiceNoMatch[1],
         invoice_date:
-          invoiceDateMatch
-            ? toIsoDate(
-                invoiceDateMatch[1]
-              )
-            : "",
+          toIsoDate(
+            invoiceDateMatch[1]
+          ),
         due_date:
           "",
         currency:
@@ -6757,7 +6902,6 @@ parent.appendChild(productListSection.wrap);
           fullText
       };
     }
-
 
     function parseSupplierPdf(
       pages
