@@ -1430,7 +1430,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.1 · PDF-import"
+      "Admin v5.2 · PDF-import Sune"
     );
 
     var products =
@@ -5760,6 +5760,46 @@ parent.appendChild(productListSection.wrap);
         : null;
     }
 
+
+    function parseEnglishNumber(
+      value
+    ) {
+      if (
+        value === null ||
+        value === undefined
+      ) {
+        return null;
+      }
+
+      var cleaned =
+        String(value)
+          .replace(
+            /\u00a0/g,
+            " "
+          )
+          .replace(
+            /\s+/g,
+            ""
+          )
+          .replace(
+            /,/g,
+            ""
+          )
+          .trim();
+
+      if (!cleaned) {
+        return null;
+      }
+
+      var parsed =
+        Number(cleaned);
+
+      return Number.isFinite(parsed)
+        ? parsed
+        : null;
+    }
+
+
     function loadPdfJs() {
       if (
         window.pdfjsLib &&
@@ -6381,11 +6421,358 @@ parent.appendChild(productListSection.wrap);
       };
     }
 
+
+    function parseSuneSportPdf(
+      pages
+    ) {
+      var fullLines = [];
+
+      (pages || []).forEach(
+        function (page) {
+          (
+            page.lines || []
+          ).forEach(
+            function (line) {
+              fullLines.push(
+                String(
+                  line || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim()
+              );
+            }
+          );
+        }
+      );
+
+      var fullText =
+        fullLines.join("\n");
+
+      if (
+        !/Sune\s+Sport\s+AS/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      if (
+        !/Fakturanr\.\s*:\s*\d+/i.test(
+          fullText
+        ) &&
+        !/Fakturanr\.\s*:\s*\n?\s*\d+/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      var invoiceNoMatch =
+        fullText.match(
+          /Fakturanr\.\s*:\s*(?:\n\s*)?([0-9]+)/i
+        );
+
+      var invoiceDateMatch =
+        fullText.match(
+          /Fakturadato\s*:\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})/i
+        );
+
+      function toIsoDate(
+        value
+      ) {
+        if (!value) {
+          return "";
+        }
+
+        var match =
+          String(value)
+            .trim()
+            .match(
+              /^(\d{2})\.(\d{2})\.(\d{4})$/
+            );
+
+        if (!match) {
+          return "";
+        }
+
+        return (
+          match[3] +
+          "-" +
+          match[2] +
+          "-" +
+          match[1]
+        );
+      }
+
+      var rows = [];
+
+      (pages || []).forEach(
+        function (page) {
+          var currentRow =
+            null;
+          var afterHeader =
+            false;
+
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var line =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (!line) {
+                return;
+              }
+
+              if (
+                /Varenr\./i.test(line) &&
+                /Beskrivelse/i.test(line) &&
+                /Totalt/i.test(line)
+              ) {
+                afterHeader = true;
+                currentRow = null;
+                return;
+              }
+
+              if (!afterHeader) {
+                return;
+              }
+
+              if (
+                /^MVA spesifisering\b/i.test(
+                  line
+                ) ||
+                /^Beløp ekskl\. MVA\b/i.test(
+                  line
+                ) ||
+                /^Totalt MVA beløp\b/i.test(
+                  line
+                ) ||
+                /^Å betale\b/i.test(
+                  line
+                ) ||
+                /^KID nr\./i.test(
+                  line
+                )
+              ) {
+                afterHeader = false;
+                currentRow = null;
+                return;
+              }
+
+              var match =
+                line.match(
+                  /^([A-Z0-9-]+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s+STK\s+([\d,]+\.\d{2})\s+25%\s+0%\s+([\d,]+\.\d{2})$/i
+                );
+
+              if (match) {
+                currentRow = {
+                  line_number:
+                    rows.length + 1,
+                  supplier_sku:
+                    match[1],
+                  ean:
+                    null,
+                  description:
+                    match[2]
+                      .replace(
+                        /\s+/g,
+                        " "
+                      )
+                      .trim(),
+                  quantity:
+                    parseEnglishNumber(
+                      match[3]
+                    ),
+                  unit_price:
+                    parseEnglishNumber(
+                      match[4]
+                    ),
+                  line_total:
+                    parseEnglishNumber(
+                      match[5]
+                    )
+                };
+
+                rows.push(
+                  currentRow
+                );
+                return;
+              }
+
+              if (
+                currentRow &&
+                !/^(Side:|Sune Sport AS|Østre Aker vei|0975|Norge$|Tlf:|E-post:|FAKTURA$|Fakturanr\.|Fakturadato:)/i.test(
+                  line
+                )
+              ) {
+                currentRow.description =
+                  (
+                    currentRow.description +
+                    " " +
+                    line
+                  )
+                    .replace(
+                      /\s+/g,
+                      " "
+                    )
+                    .replace(
+                      /\s*-\s+/g,
+                      "-"
+                    )
+                    .trim();
+              }
+            }
+          );
+        }
+      );
+
+      var exVatMatch =
+        fullText.match(
+          /Beløp ekskl\.\s*MVA\s+([\d,]+\.\d{2})/i
+        );
+
+      var vatMatch =
+        fullText.match(
+          /Totalt MVA beløp\s+([\d,]+\.\d{2})/i
+        );
+
+      var grossMatch =
+        fullText.match(
+          /Å betale\s+([A-Z]{3})\s+([\d,]+\.\d{2})/i
+        );
+
+      var goodsTotal =
+        rows.reduce(
+          function (
+            sum,
+            row
+          ) {
+            return (
+              sum +
+              num(
+                row.line_total
+              )
+            );
+          },
+          0
+        );
+
+      var exVatTotal =
+        exVatMatch
+          ? parseEnglishNumber(
+              exVatMatch[1]
+            )
+          : null;
+
+      var vatTotal =
+        vatMatch
+          ? parseEnglishNumber(
+              vatMatch[1]
+            )
+          : null;
+
+      var grossTotal =
+        grossMatch
+          ? parseEnglishNumber(
+              grossMatch[2]
+            )
+          : null;
+
+      var currency =
+        grossMatch
+          ? String(
+              grossMatch[1]
+            ).toUpperCase()
+          : "NOK";
+
+      var difference =
+        exVatTotal === null
+          ? null
+          : Math.abs(
+              goodsTotal -
+              exVatTotal
+            );
+
+      return {
+        parser:
+          "sune-sport-v1",
+        parser_label:
+          "Sune Sport AS",
+        supplier_hint:
+          "Sune Sport AS",
+        invoice_number:
+          invoiceNoMatch
+            ? invoiceNoMatch[1]
+            : "",
+        invoice_date:
+          invoiceDateMatch
+            ? toIsoDate(
+                invoiceDateMatch[1]
+              )
+            : "",
+        due_date:
+          "",
+        currency:
+          currency,
+        rows:
+          rows,
+        costs:
+          [],
+        goods_total:
+          goodsTotal,
+        shipping_total:
+          0,
+        invoice_total:
+          exVatTotal,
+        total_label:
+          "Beløp ekskl. MVA",
+        vat_total:
+          vatTotal,
+        gross_total:
+          grossTotal,
+        computed_total:
+          goodsTotal,
+        difference:
+          difference,
+        raw_text:
+          fullText
+      };
+    }
+
+
     function parseSupplierPdf(
       pages
     ) {
       var parsed =
         parseLatitude64Pdf(
+          pages
+        );
+
+      if (parsed) {
+        return parsed;
+      }
+
+      parsed =
+        parseSuneSportPdf(
           pages
         );
 
@@ -6588,7 +6975,7 @@ parent.appendChild(productListSection.wrap);
       var intro =
         el(
           "div",
-          "PDF-en er lest lokalt i nettleseren. I denne versjonen lagres fakturadata og filnavn, men selve PDF-filen arkiveres ikke ennå."
+          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs og Sune Sport støttes nå. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
         );
 
       intro.className =
@@ -6980,7 +7367,8 @@ parent.appendChild(productListSection.wrap);
 
       addSummaryCard(
         summaryCards,
-        "Fakturatotal",
+        parsed.total_label ||
+          "Fakturatotal",
         fmtCurrency(
           parsed.invoice_total,
           parsed.currency
@@ -7009,7 +7397,7 @@ parent.appendChild(productListSection.wrap);
                 String(
                   parsed.rows.length
                 ) +
-                " varelinjer. Beregnet varer + tillegg = " +
+                " varelinjer. Beregnet kostgrunnlag = " +
                 fmtCurrency(
                   parsed.computed_total,
                   parsed.currency
@@ -7017,7 +7405,12 @@ parent.appendChild(productListSection.wrap);
                 (
                   parsed.invoice_total !==
                   null
-                    ? ", som matcher fakturatotalen."
+                    ? ", som matcher " +
+                      String(
+                        parsed.total_label ||
+                        "fakturatotalen"
+                      ).toLowerCase() +
+                      "."
                     : "."
                 )
               )
@@ -7042,6 +7435,45 @@ parent.appendChild(productListSection.wrap);
       section.appendChild(
         validation
       );
+
+      if (
+        parsed.vat_total !==
+          undefined &&
+        parsed.vat_total !== null
+      ) {
+        var vatNote =
+          el(
+            "div",
+            "MVA holdes utenfor reell innkjøpskost. Fakturaen viser " +
+              fmtCurrency(
+                parsed.vat_total,
+                parsed.currency
+              ) +
+              " i MVA" +
+              (
+                parsed.gross_total !==
+                  undefined &&
+                parsed.gross_total !==
+                  null
+                  ? " og " +
+                    fmtCurrency(
+                      parsed.gross_total,
+                      parsed.currency
+                    ) +
+                    " å betale."
+                  : "."
+              )
+          );
+
+        vatNote.className =
+          "sk-invoice-small";
+        vatNote.style.marginTop =
+          "7px";
+
+        section.appendChild(
+          vatNote
+        );
+      }
 
       var rowSection =
         createCollapsibleSection(
@@ -7681,7 +8113,7 @@ parent.appendChild(productListSection.wrap);
       var uploadInfo =
         el(
           "div",
-          "Last opp PDF. Latitude 64 / House of Discs-formatet er støttet automatisk nå. Ukjente formater stoppes før import."
+          "Last opp PDF. Latitude 64 / House of Discs og Sune Sport-formatet støttes automatisk. Ukjente formater stoppes før import."
         );
 
       uploadInfo.className =
