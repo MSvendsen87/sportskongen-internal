@@ -1430,7 +1430,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.2.1 · PDF-import Sune"
+      "Admin v5.2.2 · PDF-import Sune"
     );
 
     var products =
@@ -7274,13 +7274,21 @@ parent.appendChild(productListSection.wrap);
               item.name
             );
 
+          var supplierId =
+            item.supplier_id ||
+            item.id ||
+            "";
+
           option.value =
-            item.id;
+            supplierId;
 
           if (
             supplier &&
-            supplier.id ===
-              item.id
+            (
+              supplier.supplier_id ||
+              supplier.id
+            ) ===
+              supplierId
           ) {
             option.selected =
               true;
