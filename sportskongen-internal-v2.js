@@ -1108,6 +1108,13 @@
       "#sk-internal-root .sk-invoice-import-status{padding:9px 10px;border-radius:10px;font-size:10px;line-height:1.5;margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;}" +
       "#sk-internal-root .sk-invoice-import-status.sk-ok{background:#f0fdf4;border-color:#86efac;color:#166534;}" +
       "#sk-internal-root .sk-invoice-import-status.sk-bad{background:#fef2f2;border-color:#fca5a5;color:#991b1b;}" +
+      "#sk-internal-root .sk-shipment-box{margin-top:10px;padding:12px;border:1px solid #bfdbfe;border-radius:12px;background:#f8fbff;display:grid;gap:8px;}" +
+      "#sk-internal-root .sk-shipment-title{font-size:11px;font-weight:900;color:#0f172a;}" +
+      "#sk-internal-root .sk-shipment-option{display:flex;gap:8px;align-items:flex-start;padding:9px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;}" +
+      "#sk-internal-root .sk-shipment-option input{margin-top:2px;}" +
+      "#sk-internal-root .sk-shipment-candidates{display:grid;gap:6px;margin:2px 0 0 25px;}" +
+      "#sk-internal-root .sk-shipment-candidate{display:flex;gap:7px;align-items:flex-start;font-size:10px;color:#334155;}" +
+      "#sk-internal-root .sk-shipment-hint{font-size:10px;color:#1d4ed8;line-height:1.45;}" +
       "#sk-internal-root .sk-note{padding:13px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-warning{padding:13px 14px;border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-danger-zone{padding:14px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:14px;}" +
@@ -1430,7 +1437,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.2.2 · PDF-import Sune"
+      "Admin v5.3 · Felles forsendelse"
     );
 
     var products =
@@ -6809,6 +6816,23 @@ parent.appendChild(productListSection.wrap);
           /Å betale\s+([A-Z]{3})\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
+      /*
+       * Sune Sport kan legge frakt som egen linje, f.eks.
+       * "Freight 423.00". Dette er en direkte innkjøpskost og skal derfor
+       * tas med i kostgrunnlaget, men IKKE som varelinje.
+       */
+      var freightMatch =
+        fullText.match(
+          /(?:^|\n)\s*(?:Freight|Frakt)\s+([\d,]+\.\d{2})(?:\s|$)/i
+        );
+
+      var shippingTotal =
+        freightMatch
+          ? parseEnglishNumber(
+              freightMatch[1]
+            )
+          : 0;
+
       var goodsTotal =
         rows.reduce(
           function (
@@ -6853,17 +6877,21 @@ parent.appendChild(productListSection.wrap);
             ).toUpperCase()
           : "NOK";
 
+      var computedTotal =
+        goodsTotal +
+        shippingTotal;
+
       var difference =
         exVatTotal === null
           ? null
           : Math.abs(
-              goodsTotal -
+              computedTotal -
               exVatTotal
             );
 
       return {
         parser:
-          "sune-sport-v2",
+          "sune-sport-v3",
         parser_label:
           "Sune Sport AS",
         supplier_hint:
@@ -6881,11 +6909,24 @@ parent.appendChild(productListSection.wrap);
         rows:
           rows,
         costs:
-          [],
+          shippingTotal > 0
+            ? [
+                {
+                  cost_type:
+                    "shipping",
+                  description:
+                    "Freight",
+                  amount:
+                    shippingTotal,
+                  allocation_method:
+                    "by_value"
+                }
+              ]
+            : [],
         goods_total:
           goodsTotal,
         shipping_total:
-          0,
+          shippingTotal,
         invoice_total:
           exVatTotal,
         total_label:
@@ -6895,7 +6936,7 @@ parent.appendChild(productListSection.wrap);
         gross_total:
           grossTotal,
         computed_total:
-          goodsTotal,
+          computedTotal,
         difference:
           difference,
         raw_text:
@@ -7097,6 +7138,373 @@ parent.appendChild(productListSection.wrap);
         );
     }
 
+    function shipmentDateDistanceDays(
+      a,
+      b
+    ) {
+      if (!a || !b) {
+        return 9999;
+      }
+
+      var aMs =
+        new Date(
+          a + "T12:00:00"
+        ).getTime();
+
+      var bMs =
+        new Date(
+          b + "T12:00:00"
+        ).getTime();
+
+      if (
+        !Number.isFinite(aMs) ||
+        !Number.isFinite(bMs)
+      ) {
+        return 9999;
+      }
+
+      return Math.abs(
+        Math.round(
+          (aMs - bMs) /
+          86400000
+        )
+      );
+    }
+
+    function shipmentCandidatesForImport(
+      supplierName,
+      invoiceDateValue,
+      invoiceNumberValue
+    ) {
+      var normalizedSupplier =
+        normalizeSupplierName(
+          supplierName
+        );
+
+      return (
+        state.summaries || []
+      )
+        .filter(
+          function (summary) {
+            if (
+              normalizeSupplierName(
+                summary.supplier_name
+              ) !==
+              normalizedSupplier
+            ) {
+              return false;
+            }
+
+            if (
+              String(
+                summary.invoice_number ||
+                ""
+              ).trim() ===
+              String(
+                invoiceNumberValue ||
+                ""
+              ).trim()
+            ) {
+              return false;
+            }
+
+            return (
+              shipmentDateDistanceDays(
+                summary.invoice_date,
+                invoiceDateValue
+              ) <= 7
+            );
+          }
+        )
+        .sort(
+          function (a, b) {
+            var aDiff =
+              shipmentDateDistanceDays(
+                a.invoice_date,
+                invoiceDateValue
+              );
+
+            var bDiff =
+              shipmentDateDistanceDays(
+                b.invoice_date,
+                invoiceDateValue
+              );
+
+            if (aDiff !== bDiff) {
+              return aDiff - bDiff;
+            }
+
+            return String(
+              b.invoice_date || ""
+            ).localeCompare(
+              String(
+                a.invoice_date || ""
+              )
+            );
+          }
+        );
+    }
+
+    function createSharedShipmentAfterImport(
+      options
+    ) {
+      var invoiceIds =
+        (
+          options.existingInvoiceIds ||
+          []
+        ).slice();
+
+      var invoiceNumbers =
+        (
+          options.existingInvoiceNumbers ||
+          []
+        ).slice();
+
+      var referenceParts =
+        [
+          options.currentInvoiceNumber
+        ].concat(
+          invoiceNumbers
+        );
+
+      var shipmentReference =
+        (
+          options.supplierName +
+          " · " +
+          options.invoiceDate +
+          " · " +
+          referenceParts.join(" + ")
+        ).slice(
+          0,
+          240
+        );
+
+      return sb.rpc(
+        "internal_supplier_shipment_create",
+        {
+          p_supplier_id:
+            options.supplierId,
+          p_reference:
+            shipmentReference,
+          p_shipment_date:
+            options.invoiceDate,
+          p_notes:
+            "Felles forsendelse opprettet fra PDF-import. Frakt/tillegg stod på faktura " +
+            options.currentInvoiceNumber +
+            "."
+        }
+      )
+        .then(
+          function (createResult) {
+            if (createResult.error) {
+              throw createResult.error;
+            }
+
+            var shipment =
+              createResult.data &&
+              createResult.data[0]
+                ? createResult.data[0]
+                : null;
+
+            if (
+              !shipment ||
+              !shipment.shipment_id
+            ) {
+              throw new Error(
+                "Forsendelsen ble ikke opprettet."
+              );
+            }
+
+            var shipmentId =
+              shipment.shipment_id;
+
+            var links =
+              [
+                options.currentInvoiceId
+              ].concat(
+                invoiceIds
+              );
+
+            return Promise.all(
+              links.map(
+                function (invoiceId) {
+                  return sb.rpc(
+                    "internal_supplier_shipment_link_invoice",
+                    {
+                      p_shipment_id:
+                        shipmentId,
+                      p_invoice_id:
+                        invoiceId
+                    }
+                  ).then(
+                    function (result) {
+                      if (result.error) {
+                        throw result.error;
+                      }
+
+                      return result.data;
+                    }
+                  );
+                }
+              )
+            ).then(
+              function () {
+                var costs =
+                  options.costs || [];
+
+                return Promise.all(
+                  costs.map(
+                    function (cost) {
+                      return sb.rpc(
+                        "internal_supplier_shipment_add_cost",
+                        {
+                          p_shipment_id:
+                            shipmentId,
+                          p_source_invoice_id:
+                            options.currentInvoiceId,
+                          p_cost_type:
+                            cost.cost_type ||
+                            "shipping",
+                          p_description:
+                            cost.description ||
+                            "Frakt",
+                          p_amount_ex_vat_currency:
+                            cost.amount,
+                          p_currency:
+                            options.currency,
+                          p_exchange_rate_to_nok:
+                            options.currency ===
+                            "NOK"
+                              ? 1
+                              : options.rate,
+                          p_exchange_rate_date:
+                            options.rateDate ||
+                            options.invoiceDate,
+                          p_exchange_rate_source:
+                            options.rateSource ||
+                            (
+                              options.currency ===
+                              "NOK"
+                                ? "NOK"
+                                : "Manuell ved PDF-import"
+                            ),
+                          p_exchange_rate_reference:
+                            null,
+                          p_allocation_method:
+                            cost.allocation_method ||
+                            "by_value"
+                        }
+                      ).then(
+                        function (result) {
+                          if (result.error) {
+                            throw result.error;
+                          }
+
+                          return result.data;
+                        }
+                      );
+                    }
+                  )
+                ).then(
+                  function () {
+                    return {
+                      shipment_id:
+                        shipmentId,
+                      shipment_reference:
+                        shipment.shipment_reference,
+                      linked_invoice_count:
+                        links.length
+                    };
+                  }
+                );
+              }
+            );
+          }
+        );
+    }
+
+    function refreshSharedShipmentForInvoice(
+      invoiceId
+    ) {
+      return sb
+        .from(
+          "internal_supplier_shipment_invoices"
+        )
+        .select(
+          "shipment_id"
+        )
+        .eq(
+          "invoice_id",
+          invoiceId
+        )
+        .limit(1)
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            var link =
+              result.data &&
+              result.data[0]
+                ? result.data[0]
+                : null;
+
+            if (
+              !link ||
+              !link.shipment_id
+            ) {
+              return {
+                linked: false,
+                refreshed_invoices: 0,
+                skipped_invoices: 0
+              };
+            }
+
+            return sb.rpc(
+              "internal_supplier_shipment_refresh_costed",
+              {
+                p_shipment_id:
+                  link.shipment_id
+              }
+            ).then(
+              function (
+                refreshResult
+              ) {
+                if (
+                  refreshResult.error
+                ) {
+                  throw refreshResult.error;
+                }
+
+                var row =
+                  refreshResult.data &&
+                  refreshResult.data[0]
+                    ? refreshResult.data[0]
+                    : {};
+
+                return {
+                  linked: true,
+                  shipment_id:
+                    link.shipment_id,
+                  refreshed_invoices:
+                    Number(
+                      row.refreshed_invoices ||
+                      0
+                    ),
+                  skipped_invoices:
+                    Number(
+                      row.skipped_invoices ||
+                      0
+                    )
+                };
+              }
+            );
+          }
+        );
+    }
+
+
     function renderPdfImport(
       file,
       parsed
@@ -7119,7 +7527,7 @@ parent.appendChild(productListSection.wrap);
       var intro =
         el(
           "div",
-          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs og Sune Sport støttes nå. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
+          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs og Sune Sport støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
         );
 
       intro.className =
@@ -7627,6 +8035,357 @@ parent.appendChild(productListSection.wrap);
         );
       }
 
+      var shipmentDecision = {
+        mode: "local",
+        selectedInvoiceIds: {},
+        selectedInvoiceNumbers: {}
+      };
+
+      var shipmentBox =
+        el("div");
+
+      function selectedSupplierName() {
+        var option =
+          supplierSelect.options[
+            supplierSelect.selectedIndex
+          ];
+
+        return option
+          ? String(
+              option.textContent ||
+              ""
+            ).trim()
+          : "";
+      }
+
+      function renderShipmentChoice() {
+        clear(
+          shipmentBox
+        );
+
+        if (
+          !parsed.costs ||
+          !parsed.costs.length ||
+          num(
+            parsed.shipping_total
+          ) <= 0
+        ) {
+          shipmentBox.style.display =
+            "none";
+          return;
+        }
+
+        shipmentBox.style.display =
+          "grid";
+        shipmentBox.className =
+          "sk-shipment-box";
+
+        shipmentBox.appendChild(
+          el(
+            "div",
+            "🚚 Frakt / felles forsendelse"
+          )
+        ).className =
+          "sk-shipment-title";
+
+        shipmentBox.appendChild(
+          el(
+            "div",
+            "PDF-en har " +
+              fmtCurrency(
+                parsed.shipping_total,
+                parsed.currency
+              ) +
+              " i frakt/tillegg. Velg om kostnaden gjelder bare denne fakturaen eller flere fakturaer som ble sendt samlet."
+          )
+        ).className =
+          "sk-invoice-small";
+
+        var candidates =
+          shipmentCandidatesForImport(
+            selectedSupplierName(),
+            invoiceDate.value,
+            invoiceNo.value
+          );
+
+        var localLabel =
+          el("label");
+        localLabel.className =
+          "sk-shipment-option";
+
+        var localRadio =
+          el("input");
+        localRadio.type =
+          "radio";
+        localRadio.name =
+          "sk-freight-mode";
+        localRadio.value =
+          "local";
+        localRadio.checked =
+          shipmentDecision.mode ===
+          "local";
+
+        var localText =
+          el("div");
+
+        localText.appendChild(
+          el(
+            "div",
+            "Kun denne fakturaen"
+          )
+        ).style.fontWeight =
+          "900";
+
+        localText.appendChild(
+          el(
+            "div",
+            "Hele frakten fordeles bare på varelinjene i faktura " +
+              (
+                invoiceNo.value ||
+                "denne fakturaen"
+              ) +
+              "."
+          )
+        ).className =
+          "sk-invoice-small";
+
+        localLabel.appendChild(
+          localRadio
+        );
+        localLabel.appendChild(
+          localText
+        );
+
+        shipmentBox.appendChild(
+          localLabel
+        );
+
+        var sharedLabel =
+          el("label");
+        sharedLabel.className =
+          "sk-shipment-option";
+
+        var sharedRadio =
+          el("input");
+        sharedRadio.type =
+          "radio";
+        sharedRadio.name =
+          "sk-freight-mode";
+        sharedRadio.value =
+          "shared";
+        sharedRadio.checked =
+          shipmentDecision.mode ===
+          "shared";
+
+        var sharedText =
+          el("div");
+
+        sharedText.appendChild(
+          el(
+            "div",
+            "Felles forsendelse"
+          )
+        ).style.fontWeight =
+          "900";
+
+        sharedText.appendChild(
+          el(
+            "div",
+            "Frakten fordeles etter vareverdi på alle valgte fakturaer i samme fysiske levering."
+          )
+        ).className =
+          "sk-invoice-small";
+
+        sharedLabel.appendChild(
+          sharedRadio
+        );
+        sharedLabel.appendChild(
+          sharedText
+        );
+
+        shipmentBox.appendChild(
+          sharedLabel
+        );
+
+        var candidatesWrap =
+          el("div");
+        candidatesWrap.className =
+          "sk-shipment-candidates";
+
+        if (candidates.length) {
+          var sameDay =
+            candidates.filter(
+              function (
+                candidate
+              ) {
+                return (
+                  shipmentDateDistanceDays(
+                    candidate.invoice_date,
+                    invoiceDate.value
+                  ) === 0
+                );
+              }
+            );
+
+          var hint =
+            el(
+              "div",
+              sameDay.length
+                ? (
+                    "Mulig felles levering funnet samme dato: " +
+                    sameDay
+                      .map(
+                        function (
+                          candidate
+                        ) {
+                          return candidate.invoice_number;
+                        }
+                      )
+                      .join(", ")
+                  )
+                : "Velg fakturaene som faktisk kom i samme levering."
+            );
+
+          hint.className =
+            "sk-shipment-hint";
+          candidatesWrap.appendChild(
+            hint
+          );
+
+          candidates.forEach(
+            function (
+              candidate
+            ) {
+              var candidateLabel =
+                el("label");
+              candidateLabel.className =
+                "sk-shipment-candidate";
+
+              var checkbox =
+                el("input");
+              checkbox.type =
+                "checkbox";
+              checkbox.checked =
+                !!shipmentDecision
+                  .selectedInvoiceIds[
+                    candidate.invoice_id
+                  ];
+
+              checkbox.disabled =
+                shipmentDecision.mode !==
+                "shared";
+
+              checkbox.onchange =
+                function () {
+                  if (
+                    checkbox.checked
+                  ) {
+                    shipmentDecision
+                      .selectedInvoiceIds[
+                        candidate.invoice_id
+                      ] = true;
+
+                    shipmentDecision
+                      .selectedInvoiceNumbers[
+                        candidate.invoice_id
+                      ] =
+                        candidate.invoice_number;
+                  } else {
+                    delete shipmentDecision
+                      .selectedInvoiceIds[
+                        candidate.invoice_id
+                      ];
+
+                    delete shipmentDecision
+                      .selectedInvoiceNumbers[
+                        candidate.invoice_id
+                      ];
+                  }
+                };
+
+              var candidateText =
+                el(
+                  "span",
+                  String(
+                    candidate.invoice_number
+                  ) +
+                    " · " +
+                    fmtDate(
+                      candidate.invoice_date
+                    ) +
+                    " · " +
+                    (
+                      candidate.status ===
+                      "costed"
+                        ? "kostpris lagret"
+                        : "til kontroll"
+                    )
+                );
+
+              candidateLabel.appendChild(
+                checkbox
+              );
+              candidateLabel.appendChild(
+                candidateText
+              );
+
+              candidatesWrap.appendChild(
+                candidateLabel
+              );
+            }
+          );
+        } else {
+          candidatesWrap.appendChild(
+            el(
+              "div",
+              "Ingen tidligere faktura fra samme leverandør de siste 7 dagene er tilgjengelig å koble til."
+            )
+          ).className =
+            "sk-invoice-small";
+        }
+
+        shipmentBox.appendChild(
+          candidatesWrap
+        );
+
+        localRadio.onchange =
+          function () {
+            shipmentDecision.mode =
+              "local";
+
+            renderShipmentChoice();
+          };
+
+        sharedRadio.onchange =
+          function () {
+            shipmentDecision.mode =
+              "shared";
+
+            renderShipmentChoice();
+          };
+      }
+
+      renderShipmentChoice();
+
+      supplierSelect.addEventListener(
+        "change",
+        renderShipmentChoice
+      );
+
+      invoiceDate.addEventListener(
+        "change",
+        renderShipmentChoice
+      );
+
+      invoiceNo.addEventListener(
+        "input",
+        renderShipmentChoice
+      );
+
+      section.appendChild(
+        shipmentBox
+      );
+
       var rowSection =
         createCollapsibleSection(
           "Varelinjer · " +
@@ -7823,6 +8582,77 @@ parent.appendChild(productListSection.wrap);
             return;
           }
 
+          var sharedInvoiceIds =
+            Object.keys(
+              shipmentDecision
+                .selectedInvoiceIds
+            ).filter(
+              function (
+                invoiceId
+              ) {
+                return !!shipmentDecision
+                  .selectedInvoiceIds[
+                    invoiceId
+                  ];
+              }
+            );
+
+          var sharedInvoiceNumbers =
+            sharedInvoiceIds.map(
+              function (
+                invoiceId
+              ) {
+                return shipmentDecision
+                  .selectedInvoiceNumbers[
+                    invoiceId
+                  ];
+              }
+            );
+
+          if (
+            shipmentDecision.mode ===
+              "shared" &&
+            parsed.costs &&
+            parsed.costs.length &&
+            sharedInvoiceIds.length === 0
+          ) {
+            alert(
+              "Velg minst én annen faktura som tilhører samme fysiske forsendelse."
+            );
+            return;
+          }
+
+          var freightMessage =
+            parsed.costs &&
+            parsed.costs.length
+              ? (
+                  shipmentDecision.mode ===
+                  "shared"
+                    ? (
+                        " Frakt/tillegg " +
+                        fmtCurrency(
+                          parsed.shipping_total,
+                          code
+                        ) +
+                        " blir fordelt over faktura " +
+                        invoiceNo.value.trim() +
+                        " + " +
+                        sharedInvoiceNumbers.join(
+                          ", "
+                        ) +
+                        "."
+                      )
+                    : (
+                        " Frakt/tillegg " +
+                        fmtCurrency(
+                          parsed.shipping_total,
+                          code
+                        ) +
+                        " blir fordelt kun på denne fakturaen."
+                      )
+                )
+              : "";
+
           if (
             !window.confirm(
               "Importere faktura " +
@@ -7831,7 +8661,9 @@ parent.appendChild(productListSection.wrap);
                 String(
                   parsed.rows.length
                 ) +
-                " varelinjer? Dette oppretter bare fakturaen til kontroll og endrer ikke lagerantall."
+                " varelinjer?" +
+                freightMessage +
+                " Lagerantall endres ikke."
             )
           ) {
             return;
@@ -7843,37 +8675,40 @@ parent.appendChild(productListSection.wrap);
             "Importerer…";
 
           var costRows =
-            parsed.costs.map(
-              function (cost) {
-                return {
-                  cost_type:
-                    cost.cost_type,
-                  description:
-                    cost.description,
-                  amount:
-                    cost.amount,
-                  currency:
-                    code,
-                  exchange_rate_to_nok:
-                    code === "NOK"
-                      ? 1
-                      : rate,
-                  exchange_rate_date:
-                    fxMeta.rate_date ||
-                    invoiceDate.value,
-                  exchange_rate_source:
-                    fxMeta.source ||
-                    (
-                      code === "NOK"
-                        ? "NOK"
-                        : "Manuell ved PDF-import"
-                    ),
-                  allocation_method:
-                    cost.allocation_method ||
-                    "by_value"
-                };
-              }
-            );
+            shipmentDecision.mode ===
+              "shared"
+              ? []
+              : parsed.costs.map(
+                  function (cost) {
+                    return {
+                      cost_type:
+                        cost.cost_type,
+                      description:
+                        cost.description,
+                      amount:
+                        cost.amount,
+                      currency:
+                        code,
+                      exchange_rate_to_nok:
+                        code === "NOK"
+                          ? 1
+                          : rate,
+                      exchange_rate_date:
+                        fxMeta.rate_date ||
+                        invoiceDate.value,
+                      exchange_rate_source:
+                        fxMeta.source ||
+                        (
+                          code === "NOK"
+                            ? "NOK"
+                            : "Manuell ved PDF-import"
+                        ),
+                      allocation_method:
+                        cost.allocation_method ||
+                        "by_value"
+                    };
+                  }
+                );
 
           sb.rpc(
             "internal_supplier_invoice_import_create",
@@ -7911,7 +8746,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.1 · " +
+                "PDF-import via Admin v5.3 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -7937,30 +8772,132 @@ parent.appendChild(productListSection.wrap);
                   );
                 }
 
-                alert(
-                  "Faktura importert. " +
-                    String(
-                      row.auto_confirmed_lines ||
-                      0
-                    ) +
-                    " linjer ble automatisk bekreftet fra tidligere SKU/EAN-læring, " +
-                    String(
-                      row.suggested_lines ||
-                      0
-                    ) +
-                    " fikk produktforslag og " +
-                    String(
-                      row.unmatched_lines ||
-                      0
-                    ) +
-                    " må kontrolleres manuelt. Lagerantall er ikke endret."
-                );
+                var finishImport =
+                  function (
+                    shipmentInfo
+                  ) {
+                    var shipmentText =
+                      shipmentInfo
+                        ? (
+                            " Felles forsendelse er opprettet med " +
+                            String(
+                              shipmentInfo
+                                .linked_invoice_count ||
+                              0
+                            ) +
+                            " fakturaer. Frakten beregnes over hele forsendelsen når kostpris ferdigstilles."
+                          )
+                        : "";
 
-                state.pdfImport =
-                  null;
+                    alert(
+                      "Faktura importert. " +
+                        String(
+                          row.auto_confirmed_lines ||
+                          0
+                        ) +
+                        " linjer ble automatisk bekreftet fra tidligere SKU/EAN-læring, " +
+                        String(
+                          row.suggested_lines ||
+                          0
+                        ) +
+                        " fikk produktforslag og " +
+                        String(
+                          row.unmatched_lines ||
+                          0
+                        ) +
+                        " må kontrolleres manuelt." +
+                        shipmentText +
+                        " Lagerantall er ikke endret."
+                    );
 
-                refreshAll(
-                  row.invoice_id
+                    state.pdfImport =
+                      null;
+
+                    refreshAll(
+                      row.invoice_id
+                    );
+                  };
+
+                if (
+                  shipmentDecision.mode ===
+                    "shared" &&
+                  parsed.costs &&
+                  parsed.costs.length
+                ) {
+                  createSharedShipmentAfterImport(
+                    {
+                      supplierId:
+                        supplierId,
+                      supplierName:
+                        selectedSupplierName(),
+                      currentInvoiceId:
+                        row.invoice_id,
+                      currentInvoiceNumber:
+                        invoiceNo.value.trim(),
+                      invoiceDate:
+                        invoiceDate.value,
+                      existingInvoiceIds:
+                        sharedInvoiceIds,
+                      existingInvoiceNumbers:
+                        sharedInvoiceNumbers,
+                      costs:
+                        parsed.costs,
+                      currency:
+                        code,
+                      rate:
+                        code === "NOK"
+                          ? 1
+                          : rate,
+                      rateDate:
+                        fxMeta.rate_date ||
+                        invoiceDate.value,
+                      rateSource:
+                        fxMeta.source ||
+                        (
+                          code === "NOK"
+                            ? "NOK"
+                            : "Manuell ved PDF-import"
+                        )
+                    }
+                  )
+                    .then(
+                      function (
+                        shipmentInfo
+                      ) {
+                        finishImport(
+                          shipmentInfo
+                        );
+                      }
+                    )
+                    .catch(
+                      function (
+                        shipmentError
+                      ) {
+                        alert(
+                          "Fakturaen ble importert, men felles forsendelse kunne ikke opprettes: " +
+                            skReadableError(
+                              shipmentError &&
+                              shipmentError.message
+                                ? shipmentError.message
+                                : shipmentError
+                            ) +
+                            ". Ikke ferdigstill kostpris før dette er rettet."
+                        );
+
+                        state.pdfImport =
+                          null;
+
+                        refreshAll(
+                          row.invoice_id
+                        );
+                      }
+                    );
+
+                  return;
+                }
+
+                finishImport(
+                  null
                 );
               }
             )
@@ -9229,7 +10166,7 @@ parent.appendChild(productListSection.wrap);
                       ? result.data[0]
                       : null;
 
-                  alert(
+                  var baseMessage =
                     row
                       ? (
                           "Kostpris lagret fra " +
@@ -9250,18 +10187,77 @@ parent.appendChild(productListSection.wrap);
                                 " utelatt"
                               : ""
                           ) +
-                          ". Total dokumentert kost: " +
+                          ". Total dokumentert kost på denne fakturaen: " +
                           fmtMoneyNok(
                             row.total_real_cost_nok
                           ) +
-                          ". Lagerantall er ikke endret."
+                          "."
                         )
-                      : "Kosthistorikken ble lagret. Lagerantall er ikke endret."
-                  );
+                      : "Kosthistorikken ble lagret.";
 
-                  refreshAll(
+                  refreshSharedShipmentForInvoice(
                     summary.invoice_id
-                  );
+                  )
+                    .then(
+                      function (
+                        shipmentResult
+                      ) {
+                        var sharedMessage =
+                          shipmentResult.linked
+                            ? (
+                                " Felles forsendelse ble beregnet på nytt: " +
+                                String(
+                                  shipmentResult
+                                    .refreshed_invoices
+                                ) +
+                                " ferdigstilte fakturaer oppdatert" +
+                                (
+                                  shipmentResult
+                                    .skipped_invoices > 0
+                                    ? " · " +
+                                      String(
+                                        shipmentResult
+                                          .skipped_invoices
+                                      ) +
+                                      " faktura(er) venter fortsatt på ferdigstilling"
+                                    : ""
+                                ) +
+                                "."
+                              )
+                            : "";
+
+                        alert(
+                          baseMessage +
+                            sharedMessage +
+                            " Lagerantall er ikke endret."
+                        );
+
+                        refreshAll(
+                          summary.invoice_id
+                        );
+                      }
+                    )
+                    .catch(
+                      function (
+                        shipmentError
+                      ) {
+                        alert(
+                          baseMessage +
+                            " Kostprisen på denne fakturaen er lagret, men felles forsendelse kunne ikke oppdateres: " +
+                            skReadableError(
+                              shipmentError &&
+                              shipmentError.message
+                                ? shipmentError.message
+                                : shipmentError
+                            ) +
+                            ". Lagerantall er ikke endret."
+                        );
+
+                        refreshAll(
+                          summary.invoice_id
+                        );
+                      }
+                    );
                 }
               )
               .catch(
