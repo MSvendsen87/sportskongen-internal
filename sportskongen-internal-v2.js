@@ -1052,6 +1052,53 @@
       "#sk-internal-root .sk-status-dot.sk-error{background:#dc2626;}" +
       "#sk-internal-root .sk-status-dot.sk-warning{background:#d97706;}" +
 
+      "#sk-internal-root .sk-invoice-layout{display:grid;grid-template-columns:minmax(240px,.55fr) minmax(0,1.45fr);gap:14px;align-items:start;}" +
+      "#sk-internal-root .sk-invoice-list{display:grid;gap:8px;position:sticky;top:62px;}" +
+      "#sk-internal-root .sk-invoice-card{appearance:none;width:100%;text-align:left;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;cursor:pointer;}" +
+      "#sk-internal-root .sk-invoice-card:hover{border-color:#94a3b8;box-shadow:0 5px 16px rgba(15,23,42,.06);}" +
+      "#sk-internal-root .sk-invoice-card.sk-active{border-color:#2563eb;box-shadow:inset 3px 0 0 #2563eb;background:#eff6ff;}" +
+      "#sk-internal-root .sk-invoice-card-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;}" +
+      "#sk-internal-root .sk-invoice-card strong{font-size:13px;}" +
+      "#sk-internal-root .sk-invoice-small{font-size:10px;color:#64748b;line-height:1.45;margin-top:4px;}" +
+      "#sk-internal-root .sk-invoice-badge{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:900;white-space:nowrap;background:#f1f5f9;color:#475569;}" +
+      "#sk-internal-root .sk-invoice-badge.sk-green{background:#dcfce7;color:#166534;}" +
+      "#sk-internal-root .sk-invoice-badge.sk-yellow{background:#fef3c7;color:#92400e;}" +
+      "#sk-internal-root .sk-invoice-badge.sk-red{background:#fee2e2;color:#991b1b;}" +
+      "#sk-internal-root .sk-invoice-badge.sk-blue{background:#dbeafe;color:#1d4ed8;}" +
+      "#sk-internal-root .sk-invoice-progress{height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:8px;}" +
+      "#sk-internal-root .sk-invoice-progress span{display:block;height:100%;border-radius:999px;background:#16a34a;}" +
+      "#sk-internal-root .sk-invoice-detail{min-width:0;}" +
+      "#sk-internal-root .sk-invoice-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:10px 0 14px;}" +
+      "#sk-internal-root .sk-invoice-summary-card{padding:10px;border:1px solid #e2e8f0;border-radius:11px;background:#fff;}" +
+      "#sk-internal-root .sk-invoice-summary-card span{display:block;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.03em;}" +
+      "#sk-internal-root .sk-invoice-summary-card strong{display:block;font-size:20px;margin-top:4px;color:#0f172a;}" +
+      "#sk-internal-root .sk-invoice-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 14px;}" +
+      "#sk-internal-root .sk-invoice-review-list{display:grid;gap:9px;margin-top:10px;}" +
+      "#sk-internal-root .sk-invoice-review-row{padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;}" +
+      "#sk-internal-root .sk-invoice-review-row.sk-manual{border-color:#fbbf24;background:#fffbeb;}" +
+      "#sk-internal-root .sk-invoice-review-row.sk-unmatched{border-color:#fca5a5;background:#fef2f2;}" +
+      "#sk-internal-root .sk-invoice-review-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}" +
+      "#sk-internal-root .sk-invoice-review-title{font-size:12px;font-weight:900;color:#0f172a;line-height:1.45;}" +
+      "#sk-internal-root .sk-invoice-review-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:#64748b;}" +
+      "#sk-internal-root .sk-invoice-match-box{margin-top:9px;padding:9px;border:1px solid #e2e8f0;border-radius:9px;background:rgba(255,255,255,.8);font-size:11px;line-height:1.5;}" +
+      "#sk-internal-root .sk-invoice-editor{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin-top:9px;}" +
+      "#sk-internal-root .sk-invoice-editor-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}" +
+      "#sk-internal-root .sk-invoice-editor label{display:grid;gap:4px;font-size:10px;font-weight:900;color:#475569;}" +
+      "#sk-internal-root .sk-invoice-editor select,#sk-internal-root .sk-invoice-editor input{width:100%;padding:8px 9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-size:11px;}" +
+      "#sk-internal-root .sk-invoice-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;}" +
+      "#sk-internal-root .sk-invoice-safe-table{width:100%;border-collapse:collapse;font-size:10px;}" +
+      "#sk-internal-root .sk-invoice-safe-table th{padding:7px;background:#f8fafc;text-align:left;border-bottom:1px solid #e2e8f0;white-space:nowrap;}" +
+      "#sk-internal-root .sk-invoice-safe-table td{padding:7px;border-bottom:1px solid #f1f5f9;vertical-align:top;}" +
+      "#sk-internal-root .sk-invoice-preview-wrap{overflow-x:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;margin-top:10px;}" +
+      "#sk-internal-root .sk-invoice-preview-table{width:100%;border-collapse:collapse;font-size:10px;}" +
+      "#sk-internal-root .sk-invoice-preview-table th{padding:8px;background:#f8fafc;border-bottom:1px solid #e2e8f0;text-align:left;white-space:nowrap;}" +
+      "#sk-internal-root .sk-invoice-preview-table td{padding:8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}" +
+      "#sk-internal-root .sk-invoice-preview-table td.sk-num{text-align:right;white-space:nowrap;}" +
+      "#sk-internal-root .sk-invoice-preview-cost{font-weight:900;color:#0f172a;}" +
+      "#sk-internal-root .sk-invoice-preview-new{font-weight:900;color:#166534;}" +
+      "#sk-internal-root .sk-invoice-section{margin-top:14px;padding:13px;border:1px solid #e2e8f0;border-radius:13px;background:#fff;}" +
+      "#sk-internal-root .sk-invoice-section h3{margin:0 0 5px;font-size:14px;}" +
+      "#sk-internal-root .sk-invoice-section-sub{font-size:10px;color:#64748b;line-height:1.5;}" +
       "#sk-internal-root .sk-note{padding:13px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-warning{padding:13px 14px;border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-danger-zone{padding:14px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:14px;}" +
@@ -1112,6 +1159,11 @@
       "  #sk-internal-root .sk-market-economy-history-toolbar{display:block;}" +
       "  #sk-internal-root .sk-market-economy-history-select{width:100%;margin-top:6px;}" +
       "  #sk-internal-root .sk-market-economy-history-status{margin-top:7px;}" +
+      "  #sk-internal-root .sk-invoice-layout{display:block;}" +
+      "  #sk-internal-root .sk-invoice-list{position:static;margin-bottom:12px;}" +
+      "  #sk-internal-root .sk-invoice-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
+      "  #sk-internal-root .sk-invoice-editor{display:block;}" +
+      "  #sk-internal-root .sk-invoice-editor-fields{grid-template-columns:1fr;margin-bottom:8px;}" +
       "  #sk-internal-root .sk-market-radar-coverage{margin-top:8px;white-space:normal;}" +
       "  #sk-internal-root .sk-market-monthly-strip{display:block;}" +
       "  #sk-internal-root .sk-market-monthly-state{margin-top:9px;}" +
@@ -1367,7 +1419,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v4.8"
+      "Admin v4.9 · Faktura"
     );
 
     var products =
@@ -2200,7 +2252,9 @@
       sb.auth.signInWithOtp({
         email: email,
         options: {
-          emailRedirectTo: window.location.href
+          emailRedirectTo:
+            window.location.origin +
+            window.location.pathname
         }
       }).then(function (result) {
         if (result.error) {
@@ -5340,6 +5394,2815 @@ parent.appendChild(productListSection.wrap);
 
   parent.appendChild(section.wrap);
 }
+
+
+  function renderSupplierInvoicesManager(
+    parent,
+    data,
+    sb
+  ) {
+    createPageHeader(
+      parent,
+      "Leverandørfakturaer",
+      "Kontroller leverandørfakturaer, produkt- og variantkoblinger og se reell kostpris før noe får lov til å påvirke lager eller innkjøpspris.",
+      "Innkjøp · kostkontroll"
+    );
+
+    var info = el(
+      "div",
+      "Denne siden er foreløpig kontroll- og previewsteget. Godkjenning av fakturalinjer lærer varenummer/EAN til neste faktura, men lager og kostpris blir ikke oppdatert her."
+    );
+    info.className = "sk-note";
+    parent.appendChild(info);
+
+    var layout = el("div");
+    layout.className =
+      "sk-invoice-layout";
+    layout.style.marginTop = "14px";
+
+    var left = el("div");
+    var right = el("div");
+    right.className =
+      "sk-invoice-detail";
+
+    layout.appendChild(left);
+    layout.appendChild(right);
+    parent.appendChild(layout);
+
+    var state = {
+      selectedInvoiceId: null,
+      summaries: [],
+      invoiceMeta: [],
+      importSummaries: [],
+      reviewRows: [],
+      previewRows: [],
+      variantsByProduct: {}
+    };
+
+    function num(value) {
+      var parsed = Number(value);
+
+      return Number.isFinite(parsed)
+        ? parsed
+        : 0;
+    }
+
+    function maybeNum(value) {
+      if (
+        value === null ||
+        value === undefined ||
+        value === ""
+      ) {
+        return null;
+      }
+
+      var parsed = Number(value);
+
+      return Number.isFinite(parsed)
+        ? parsed
+        : null;
+    }
+
+    function fmtNumber(
+      value,
+      digits
+    ) {
+      var parsed = maybeNum(value);
+
+      if (parsed === null) {
+        return "–";
+      }
+
+      return parsed.toLocaleString(
+        "no-NO",
+        {
+          minimumFractionDigits:
+            digits || 0,
+          maximumFractionDigits:
+            digits || 0
+        }
+      );
+    }
+
+    function fmtMoneyNok(value) {
+      var parsed = maybeNum(value);
+
+      if (parsed === null) {
+        return "–";
+      }
+
+      return parsed.toLocaleString(
+        "no-NO",
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }
+      ) + " kr";
+    }
+
+    function fmtCurrency(
+      value,
+      currency
+    ) {
+      var parsed = maybeNum(value);
+
+      if (parsed === null) {
+        return "–";
+      }
+
+      return parsed.toLocaleString(
+        "no-NO",
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }
+      ) +
+        " " +
+        String(currency || "");
+    }
+
+    function fmtDate(value) {
+      if (!value) {
+        return "–";
+      }
+
+      var parts =
+        String(value).split("-");
+
+      if (parts.length !== 3) {
+        return String(value);
+      }
+
+      return (
+        parts[2] +
+        "." +
+        parts[1] +
+        "." +
+        parts[0]
+      );
+    }
+
+    function statusBadge(
+      text,
+      tone
+    ) {
+      var badge = el(
+        "span",
+        text
+      );
+
+      badge.className =
+        "sk-invoice-badge" +
+        (
+          tone
+            ? " sk-" + tone
+            : ""
+        );
+
+      return badge;
+    }
+
+    function invoiceStatusLabel(
+      status
+    ) {
+      if (status === "ready") {
+        return {
+          label: "Kost-preview klar",
+          tone: "blue"
+        };
+      }
+
+      if (status === "posted") {
+        return {
+          label: "Bokført",
+          tone: "green"
+        };
+      }
+
+      if (status === "cancelled") {
+        return {
+          label: "Kansellert",
+          tone: "red"
+        };
+      }
+
+      return {
+        label: "Til kontroll",
+        tone: "yellow"
+      };
+    }
+
+    function resultData(
+      result,
+      label
+    ) {
+      if (
+        result &&
+        result.error
+      ) {
+        throw new Error(
+          String(label || "Henting") +
+          ": " +
+          result.error.message
+        );
+      }
+
+      return (
+        result &&
+        Array.isArray(result.data)
+          ? result.data
+          : []
+      );
+    }
+
+    function findSummary(
+      invoiceId
+    ) {
+      return (
+        state.summaries.find(
+          function (row) {
+            return (
+              row.invoice_id ===
+              invoiceId
+            );
+          }
+        ) || null
+      );
+    }
+
+    function findMeta(
+      invoiceId
+    ) {
+      return (
+        state.invoiceMeta.find(
+          function (row) {
+            return (
+              row.id === invoiceId
+            );
+          }
+        ) || null
+      );
+    }
+
+    function findImportSummary(
+      invoiceId
+    ) {
+      return (
+        state.importSummaries.find(
+          function (row) {
+            return (
+              row.invoice_id ===
+              invoiceId
+            );
+          }
+        ) || null
+      );
+    }
+
+    function setLoading(
+      host,
+      text
+    ) {
+      clear(host);
+
+      var box = el(
+        "div",
+        text || "Laster…"
+      );
+
+      box.className =
+        "sk-note";
+
+      host.appendChild(box);
+    }
+
+    function refreshAll(
+      keepInvoiceId
+    ) {
+      setLoading(
+        left,
+        "Laster fakturaer…"
+      );
+
+      setLoading(
+        right,
+        "Laster fakturakontroll…"
+      );
+
+      Promise.all([
+        sb
+          .from(
+            "internal_supplier_invoice_review_summary_view"
+          )
+          .select("*")
+          .order(
+            "invoice_date",
+            { ascending: false }
+          ),
+
+        sb
+          .from(
+            "internal_supplier_invoices_view"
+          )
+          .select("*")
+          .order(
+            "invoice_date",
+            { ascending: false }
+          ),
+
+        sb
+          .from(
+            "internal_supplier_invoice_import_summary_view"
+          )
+          .select("*")
+          .order(
+            "invoice_date",
+            { ascending: false }
+          )
+      ])
+        .then(
+          function (results) {
+            state.summaries =
+              resultData(
+                results[0],
+                "Fakturaoversikt"
+              );
+
+            state.invoiceMeta =
+              resultData(
+                results[1],
+                "Fakturadetaljer"
+              );
+
+            state.importSummaries =
+              resultData(
+                results[2],
+                "Fakturatotaler"
+              );
+
+            var preferred =
+              keepInvoiceId ||
+              state.selectedInvoiceId;
+
+            if (
+              preferred &&
+              state.summaries.some(
+                function (row) {
+                  return (
+                    row.invoice_id ===
+                    preferred
+                  );
+                }
+              )
+            ) {
+              state.selectedInvoiceId =
+                preferred;
+            } else {
+              state.selectedInvoiceId =
+                state.summaries.length
+                  ? state.summaries[0]
+                      .invoice_id
+                  : null;
+            }
+
+            renderInvoiceList();
+
+            if (
+              state.selectedInvoiceId
+            ) {
+              loadInvoiceDetails(
+                state.selectedInvoiceId
+              );
+            } else {
+              clear(right);
+
+              var empty = el(
+                "div",
+                "Det ligger ingen leverandørfakturaer i systemet ennå."
+              );
+
+              empty.className =
+                "sk-note";
+
+              right.appendChild(
+                empty
+              );
+            }
+          }
+        )
+        .catch(
+          function (error) {
+            clear(left);
+            clear(right);
+
+            var box = el(
+              "div",
+              "Kunne ikke laste leverandørfakturaer: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                )
+            );
+
+            box.className =
+              "sk-warning";
+
+            right.appendChild(box);
+          }
+        );
+    }
+
+    function renderInvoiceList() {
+      clear(left);
+
+      var heading =
+        el(
+          "div",
+          "Fakturaer"
+        );
+
+      heading.style.fontWeight =
+        "900";
+      heading.style.fontSize =
+        "13px";
+      heading.style.marginBottom =
+        "8px";
+
+      left.appendChild(heading);
+
+      var list = el("div");
+      list.className =
+        "sk-invoice-list";
+
+      if (!state.summaries.length) {
+        var empty = el(
+          "div",
+          "Ingen fakturaer."
+        );
+
+        empty.className =
+          "sk-warning";
+
+        list.appendChild(empty);
+      }
+
+      state.summaries.forEach(
+        function (summary) {
+          var card =
+            el("button");
+
+          card.type = "button";
+          card.className =
+            "sk-invoice-card" +
+            (
+              summary.invoice_id ===
+              state.selectedInvoiceId
+                ? " sk-active"
+                : ""
+            );
+
+          var top =
+            el("div");
+
+          top.className =
+            "sk-invoice-card-top";
+
+          var name =
+            el(
+              "strong",
+              (
+                summary.supplier_name ||
+                "Leverandør"
+              ) +
+                " · " +
+                (
+                  summary.invoice_number ||
+                  "uten nr."
+                )
+            );
+
+          var statusInfo =
+            invoiceStatusLabel(
+              summary.status
+            );
+
+          top.appendChild(name);
+          top.appendChild(
+            statusBadge(
+              statusInfo.label,
+              statusInfo.tone
+            )
+          );
+
+          card.appendChild(top);
+
+          var meta =
+            el(
+              "div",
+              fmtDate(
+                summary.invoice_date
+              ) +
+                " · " +
+                String(
+                  summary.currency ||
+                  ""
+                ) +
+                " · " +
+                String(
+                  summary.confirmed_lines ||
+                  0
+                ) +
+                "/" +
+                String(
+                  summary.total_lines ||
+                  0
+                ) +
+                " godkjent"
+            );
+
+          meta.className =
+            "sk-invoice-small";
+
+          card.appendChild(meta);
+
+          var total =
+            Number(
+              summary.total_lines ||
+              0
+            );
+
+          var confirmed =
+            Number(
+              summary.confirmed_lines ||
+              0
+            );
+
+          var progress =
+            el("div");
+
+          progress.className =
+            "sk-invoice-progress";
+
+          var fill =
+            el("span");
+
+          fill.style.width =
+            (
+              total > 0
+                ? Math.min(
+                    100,
+                    confirmed /
+                      total *
+                      100
+                  )
+                : 0
+            ) +
+            "%";
+
+          progress.appendChild(
+            fill
+          );
+
+          card.appendChild(
+            progress
+          );
+
+          card.onclick =
+            function () {
+              state.selectedInvoiceId =
+                summary.invoice_id;
+
+              renderInvoiceList();
+
+              loadInvoiceDetails(
+                summary.invoice_id
+              );
+            };
+
+          list.appendChild(card);
+        }
+      );
+
+      left.appendChild(list);
+    }
+
+    function loadVariantsForProducts(
+      productIds
+    ) {
+      state.variantsByProduct =
+        {};
+
+      var unique = [];
+
+      (productIds || []).forEach(
+        function (id) {
+          if (
+            id &&
+            unique.indexOf(id) === -1
+          ) {
+            unique.push(id);
+          }
+        }
+      );
+
+      if (!unique.length) {
+        return Promise.resolve();
+      }
+
+      return sb
+        .from(
+          "internal_product_variants_view"
+        )
+        .select(
+          "id,product_id,product_name,quickbutik_variant_sku,variant_name,stock_quantity,purchase_price_ex_vat,is_active"
+        )
+        .in(
+          "product_id",
+          unique
+        )
+        .eq(
+          "is_active",
+          true
+        )
+        .order(
+          "quickbutik_variant_sku",
+          { ascending: true }
+        )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            (
+              result.data || []
+            ).forEach(
+              function (variant) {
+                if (
+                  !state
+                    .variantsByProduct[
+                      variant.product_id
+                    ]
+                ) {
+                  state
+                    .variantsByProduct[
+                      variant.product_id
+                    ] = [];
+                }
+
+                state
+                  .variantsByProduct[
+                    variant.product_id
+                  ]
+                  .push(
+                    variant
+                  );
+              }
+            );
+          }
+        );
+    }
+
+    function loadInvoiceDetails(
+      invoiceId
+    ) {
+      setLoading(
+        right,
+        "Laster faktura " +
+          String(
+            (
+              findSummary(invoiceId) ||
+              {}
+            ).invoice_number ||
+            ""
+          ) +
+          "…"
+      );
+
+      Promise.all([
+        sb
+          .from(
+            "internal_supplier_invoice_variant_review_view"
+          )
+          .select("*")
+          .eq(
+            "invoice_id",
+            invoiceId
+          )
+          .order(
+            "line_number",
+            { ascending: true }
+          ),
+
+        sb
+          .from(
+            "internal_supplier_invoice_cost_preview_view"
+          )
+          .select("*")
+          .eq(
+            "invoice_id",
+            invoiceId
+          )
+      ])
+        .then(
+          function (results) {
+            state.reviewRows =
+              resultData(
+                results[0],
+                "Fakturalinjer"
+              );
+
+            state.previewRows =
+              resultData(
+                results[1],
+                "Kost-preview"
+              );
+
+            var manualProductIds =
+              state.reviewRows
+                .filter(
+                  function (row) {
+                    return (
+                      row.match_status !==
+                        "confirmed" &&
+                      row.variant_review_status ===
+                        "manual_variant_review" &&
+                      row.resolved_product_id
+                    );
+                  }
+                )
+                .map(
+                  function (row) {
+                    return row.resolved_product_id;
+                  }
+                );
+
+            return loadVariantsForProducts(
+              manualProductIds
+            );
+          }
+        )
+        .then(
+          function () {
+            renderInvoiceDetails(
+              invoiceId
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            clear(right);
+
+            var box = el(
+              "div",
+              "Kunne ikke laste fakturaen: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                )
+            );
+
+            box.className =
+              "sk-warning";
+
+            right.appendChild(box);
+          }
+        );
+    }
+
+    function addSummaryCard(
+      grid,
+      label,
+      value
+    ) {
+      var card = el("div");
+      card.className =
+        "sk-invoice-summary-card";
+
+      card.appendChild(
+        el("span", label)
+      );
+
+      card.appendChild(
+        el(
+          "strong",
+          String(value)
+        )
+      );
+
+      grid.appendChild(card);
+    }
+
+    function renderInvoiceDetails(
+      invoiceId
+    ) {
+      clear(right);
+
+      var summary =
+        findSummary(invoiceId) ||
+        {};
+
+      var meta =
+        findMeta(invoiceId) ||
+        {};
+
+      var importSummary =
+        findImportSummary(
+          invoiceId
+        ) || {};
+
+      var head = el("div");
+      head.className =
+        "sk-page-head";
+      head.style.marginBottom =
+        "8px";
+
+      var headText = el("div");
+
+      var title =
+        el(
+          "h2",
+          (
+            summary.supplier_name ||
+            "Leverandør"
+          ) +
+            " · faktura " +
+            (
+              summary.invoice_number ||
+              "uten nr."
+            )
+        );
+
+      title.style.fontSize =
+        "20px";
+
+      headText.appendChild(title);
+
+      var sub =
+        el(
+          "p",
+          fmtDate(
+            summary.invoice_date
+          ) +
+            " · " +
+            String(
+              summary.currency ||
+              ""
+            ) +
+            " · kurs " +
+            fmtNumber(
+              summary.exchange_rate_to_nok,
+              4
+            ) +
+            " NOK per " +
+            String(
+              summary.currency ||
+              "valuta"
+            )
+        );
+
+      headText.appendChild(sub);
+      head.appendChild(headText);
+
+      var statusInfo =
+        invoiceStatusLabel(
+          summary.status
+        );
+
+      head.appendChild(
+        statusBadge(
+          statusInfo.label,
+          statusInfo.tone
+        )
+      );
+
+      right.appendChild(head);
+
+      var finance =
+        el("div");
+
+      finance.className =
+        "sk-invoice-small";
+      finance.style.marginBottom =
+        "8px";
+
+      var foreignTotal =
+        maybeNum(
+          importSummary
+            .calculated_invoice_total_currency
+        );
+
+      var fx =
+        maybeNum(
+          summary.exchange_rate_to_nok
+        );
+
+      var nokTotal =
+        foreignTotal !== null &&
+        fx !== null
+          ? foreignTotal * fx
+          : null;
+
+      finance.textContent =
+        "Varer " +
+        fmtCurrency(
+          importSummary
+            .goods_total_currency,
+          summary.currency
+        ) +
+        " · tillegg/frakt " +
+        fmtCurrency(
+          importSummary
+            .extra_cost_total_currency,
+          summary.currency
+        ) +
+        " · fakturatotal " +
+        fmtCurrency(
+          foreignTotal,
+          summary.currency
+        ) +
+        " · ca. " +
+        fmtMoneyNok(
+          nokTotal
+        );
+
+      right.appendChild(
+        finance
+      );
+
+      if (
+        meta.source_file_name
+      ) {
+        var source =
+          el(
+            "div",
+            "Kilde: " +
+              meta.source_file_name
+          );
+
+        source.className =
+          "sk-invoice-small";
+
+        right.appendChild(
+          source
+        );
+      }
+
+      var grid = el("div");
+      grid.className =
+        "sk-invoice-summary-grid";
+
+      addSummaryCard(
+        grid,
+        "Totalt",
+        summary.total_lines || 0
+      );
+
+      addSummaryCard(
+        grid,
+        "Godkjent",
+        summary.confirmed_lines || 0
+      );
+
+      addSummaryCard(
+        grid,
+        "Trygge forslag",
+        summary.safe_suggestion_lines ||
+          0
+      );
+
+      addSummaryCard(
+        grid,
+        "Manuell variant",
+        summary.manual_variant_lines ||
+          0
+      );
+
+      addSummaryCard(
+        grid,
+        "Produkt mangler",
+        summary.unmatched_product_lines ||
+          0
+      );
+
+      right.appendChild(grid);
+
+      renderInvoiceActions(
+        right,
+        summary
+      );
+
+      renderOutstandingReview(
+        right,
+        summary
+      );
+
+      renderSafeSuggestions(
+        right,
+        summary
+      );
+
+      renderConfirmedRows(
+        right,
+        summary
+      );
+
+      renderCostPreview(
+        right,
+        summary,
+        importSummary
+      );
+    }
+
+    function renderInvoiceActions(
+      host,
+      summary
+    ) {
+      var actions =
+        el("div");
+
+      actions.className =
+        "sk-invoice-actions";
+
+      var safeCount =
+        Number(
+          summary.safe_suggestion_lines ||
+          0
+        );
+
+      if (safeCount > 0) {
+        var accept =
+          createPrimaryButton(
+            "Godkjenn " +
+              String(safeCount) +
+              " trygge forslag"
+          );
+
+        accept.onclick =
+          function () {
+            if (
+              !window.confirm(
+                "Godkjenne " +
+                  String(safeCount) +
+                  " entydige produkt-/variantforslag? Lager og kostpris blir fortsatt ikke endret."
+              )
+            ) {
+              return;
+            }
+
+            accept.disabled =
+              true;
+            accept.textContent =
+              "Godkjenner…";
+
+            sb.rpc(
+              "internal_supplier_invoice_accept_safe_suggestions",
+              {
+                p_invoice_id:
+                  summary.invoice_id
+              }
+            )
+              .then(
+                function (result) {
+                  if (result.error) {
+                    throw result.error;
+                  }
+
+                  var row =
+                    result.data &&
+                    result.data[0]
+                      ? result.data[0]
+                      : null;
+
+                  alert(
+                    row
+                      ? (
+                          String(
+                            row.confirmed_now ||
+                            0
+                          ) +
+                          " linjer ble godkjent. " +
+                          String(
+                            row.still_requires_review ||
+                            0
+                          ) +
+                          " står igjen til kontroll."
+                        )
+                      : "Trygge forslag ble godkjent."
+                  );
+
+                  refreshAll(
+                    summary.invoice_id
+                  );
+                }
+              )
+              .catch(
+                function (error) {
+                  accept.disabled =
+                    false;
+                  accept.textContent =
+                    "Godkjenn " +
+                    String(safeCount) +
+                    " trygge forslag";
+
+                  alert(
+                    "Kunne ikke godkjenne forslagene: " +
+                      skReadableError(
+                        error &&
+                        error.message
+                          ? error.message
+                          : error
+                      )
+                  );
+                }
+              );
+          };
+
+        actions.appendChild(
+          accept
+        );
+      }
+
+      if (
+        Number(
+          summary.remaining_review_lines ||
+          0
+        ) === 0
+      ) {
+        var prepare =
+          createPrimaryButton(
+            summary.status === "ready"
+              ? "Oppdater kost-preview"
+              : "Beregn reell kostpris"
+          );
+
+        prepare.onclick =
+          function () {
+            if (
+              !window.confirm(
+                "Klargjøre fakturaen for kostberegning? Dette lager bare preview og endrer ikke lager eller innkjøpspris."
+              )
+            ) {
+              return;
+            }
+
+            prepare.disabled =
+              true;
+            prepare.textContent =
+              "Beregner…";
+
+            sb.rpc(
+              "internal_supplier_invoice_prepare_cost_preview",
+              {
+                p_invoice_id:
+                  summary.invoice_id
+              }
+            )
+              .then(
+                function (result) {
+                  if (result.error) {
+                    throw result.error;
+                  }
+
+                  var row =
+                    result.data &&
+                    result.data[0]
+                      ? result.data[0]
+                      : null;
+
+                  alert(
+                    row
+                      ? (
+                          "Kost-preview er klart for " +
+                          String(
+                            row.prepared_lines ||
+                            0
+                          ) +
+                          " linjer. Beregnet kost: " +
+                          fmtMoneyNok(
+                            row.total_landed_cost_nok
+                          )
+                        )
+                      : "Kost-preview er klart."
+                  );
+
+                  refreshAll(
+                    summary.invoice_id
+                  );
+                }
+              )
+              .catch(
+                function (error) {
+                  prepare.disabled =
+                    false;
+                  prepare.textContent =
+                    summary.status ===
+                    "ready"
+                      ? "Oppdater kost-preview"
+                      : "Beregn reell kostpris";
+
+                  alert(
+                    "Kunne ikke beregne kost-preview: " +
+                      skReadableError(
+                        error &&
+                        error.message
+                          ? error.message
+                          : error
+                      )
+                  );
+                }
+              );
+          };
+
+        actions.appendChild(
+          prepare
+        );
+      }
+
+      var refresh =
+        createButton("Oppdater");
+
+      refresh.onclick =
+        function () {
+          refreshAll(
+            summary.invoice_id
+          );
+        };
+
+      actions.appendChild(
+        refresh
+      );
+
+      host.appendChild(actions);
+    }
+
+    function variantsForProduct(
+      productId
+    ) {
+      return (
+        state.variantsByProduct[
+          productId
+        ] || []
+      );
+    }
+
+    function variantOptionLabel(
+      variant
+    ) {
+      var parts = [
+        variant.quickbutik_variant_sku ||
+          variant.variant_name ||
+          "Variant"
+      ];
+
+      parts.push(
+        "lager " +
+          fmtNumber(
+            variant.stock_quantity,
+            0
+          )
+      );
+
+      parts.push(
+        "kost " +
+          fmtMoneyNok(
+            variant.purchase_price_ex_vat
+          )
+      );
+
+      return parts.join(" · ");
+    }
+
+    function confirmRow(
+      row,
+      productId,
+      variantId,
+      button
+    ) {
+      if (!productId) {
+        alert(
+          "Velg produkt først."
+        );
+        return;
+      }
+
+      button.disabled = true;
+      var oldText =
+        button.textContent;
+      button.textContent =
+        "Godkjenner…";
+
+      sb.rpc(
+        "internal_supplier_invoice_confirm_row",
+        {
+          p_import_row_id:
+            row.import_row_id,
+          p_product_id:
+            productId,
+          p_variant_id:
+            variantId || null
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            refreshAll(
+              row.invoice_id
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            button.disabled =
+              false;
+            button.textContent =
+              oldText;
+
+            alert(
+              "Kunne ikke godkjenne linjen: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                )
+            );
+          }
+        );
+    }
+
+    function renderOutstandingReview(
+      host,
+      summary
+    ) {
+      var rows =
+        state.reviewRows.filter(
+          function (row) {
+            return (
+              row.match_status !==
+                "confirmed" &&
+              (
+                row.variant_review_status ===
+                  "manual_variant_review" ||
+                row.variant_review_status ===
+                  "product_unmatched"
+              )
+            );
+          }
+        );
+
+      if (!rows.length) {
+        return;
+      }
+
+      var section =
+        el("div");
+
+      section.className =
+        "sk-invoice-section";
+
+      section.appendChild(
+        el(
+          "h3",
+          "⚠️ Må kontrolleres manuelt · " +
+            String(rows.length)
+        )
+      );
+
+      var desc =
+        el(
+          "div",
+          "Her godkjenner du kun linjene hvor systemet ikke kunne velge entydig. Fakturateksten, leverandørens varenummer og dagens lager/kost vises som hjelp."
+        );
+
+      desc.className =
+        "sk-invoice-section-sub";
+
+      section.appendChild(desc);
+
+      var list = el("div");
+      list.className =
+        "sk-invoice-review-list";
+
+      rows.forEach(
+        function (row) {
+          if (
+            row.variant_review_status ===
+            "product_unmatched"
+          ) {
+            renderUnmatchedProductRow(
+              list,
+              row
+            );
+          } else {
+            renderManualVariantRow(
+              list,
+              row
+            );
+          }
+        }
+      );
+
+      section.appendChild(list);
+      host.appendChild(section);
+    }
+
+    function renderManualVariantRow(
+      list,
+      row
+    ) {
+      var wrap = el("div");
+      wrap.className =
+        "sk-invoice-review-row sk-manual";
+
+      var head = el("div");
+      head.className =
+        "sk-invoice-review-head";
+
+      var title =
+        el(
+          "div",
+          "#" +
+            String(
+              row.line_number
+            ) +
+            " · " +
+            row.supplier_description
+        );
+
+      title.className =
+        "sk-invoice-review-title";
+
+      head.appendChild(title);
+      head.appendChild(
+        statusBadge(
+          "Velg variant",
+          "yellow"
+        )
+      );
+
+      wrap.appendChild(head);
+
+      var meta = el("div");
+      meta.className =
+        "sk-invoice-review-meta";
+
+      meta.appendChild(
+        el(
+          "span",
+          "Varenr. " +
+            (
+              row.supplier_sku ||
+              "–"
+            )
+        )
+      );
+
+      meta.appendChild(
+        el(
+          "span",
+          "EAN " +
+            (
+              row.ean ||
+              "–"
+            )
+        )
+      );
+
+      meta.appendChild(
+        el(
+          "span",
+          fmtNumber(
+            row.quantity,
+            0
+          ) +
+            " stk"
+        )
+      );
+
+      meta.appendChild(
+        el(
+          "span",
+          fmtCurrency(
+            row.unit_price_ex_vat_currency,
+            row.currency
+          ) +
+            "/stk"
+        )
+      );
+
+      wrap.appendChild(meta);
+
+      var match = el("div");
+      match.className =
+        "sk-invoice-match-box";
+
+      match.appendChild(
+        el(
+          "strong",
+          "Produkt: " +
+            (
+              row.resolved_product_name ||
+              "–"
+            )
+        )
+      );
+
+      var help =
+        el(
+          "div",
+          "Leverandørens primærfarge: " +
+            (
+              row.supplier_primary_color ||
+              "ukjent"
+            ) +
+            ". Velg hvilken Quickbutik-variant denne leveransen faktisk tilhører."
+        );
+
+      help.className =
+        "sk-invoice-small";
+
+      match.appendChild(help);
+      wrap.appendChild(match);
+
+      var editor = el("div");
+      editor.className =
+        "sk-invoice-editor";
+
+      var fields = el("div");
+      fields.className =
+        "sk-invoice-editor-fields";
+
+      var label = el("label");
+      label.appendChild(
+        document.createTextNode(
+          "Variant"
+        )
+      );
+
+      var select = el("select");
+      addOption(
+        select,
+        "",
+        "Velg variant"
+      );
+
+      var variants =
+        variantsForProduct(
+          row.resolved_product_id
+        );
+
+      variants.forEach(
+        function (variant) {
+          addOption(
+            select,
+            variant.id,
+            variantOptionLabel(
+              variant
+            )
+          );
+        }
+      );
+
+      label.appendChild(select);
+      fields.appendChild(label);
+
+      var productLabel =
+        el("label");
+
+      productLabel.appendChild(
+        document.createTextNode(
+          "Matchet produkt"
+        )
+      );
+
+      var productInput =
+        el("input");
+
+      productInput.value =
+        row.resolved_product_name ||
+        "";
+      productInput.disabled =
+        true;
+
+      productLabel.appendChild(
+        productInput
+      );
+
+      fields.appendChild(
+        productLabel
+      );
+
+      var confirm =
+        createPrimaryButton(
+          "Godkjenn linje"
+        );
+
+      confirm.onclick =
+        function () {
+          if (!select.value) {
+            alert(
+              "Velg riktig variant."
+            );
+            return;
+          }
+
+          confirmRow(
+            row,
+            row.resolved_product_id,
+            select.value,
+            confirm
+          );
+        };
+
+      editor.appendChild(fields);
+      editor.appendChild(confirm);
+      wrap.appendChild(editor);
+
+      list.appendChild(wrap);
+    }
+
+    function loadVariantsForChosenProduct(
+      productId
+    ) {
+      if (!productId) {
+        return Promise.resolve(
+          []
+        );
+      }
+
+      return sb
+        .from(
+          "internal_product_variants_view"
+        )
+        .select(
+          "id,product_id,product_name,quickbutik_variant_sku,variant_name,stock_quantity,purchase_price_ex_vat,is_active"
+        )
+        .eq(
+          "product_id",
+          productId
+        )
+        .eq(
+          "is_active",
+          true
+        )
+        .order(
+          "quickbutik_variant_sku",
+          { ascending: true }
+        )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            return result.data || [];
+          }
+        );
+    }
+
+    function renderUnmatchedProductRow(
+      list,
+      row
+    ) {
+      var wrap = el("div");
+      wrap.className =
+        "sk-invoice-review-row sk-unmatched";
+
+      var head = el("div");
+      head.className =
+        "sk-invoice-review-head";
+
+      var title =
+        el(
+          "div",
+          "#" +
+            String(
+              row.line_number
+            ) +
+            " · " +
+            row.supplier_description
+        );
+
+      title.className =
+        "sk-invoice-review-title";
+
+      head.appendChild(title);
+      head.appendChild(
+        statusBadge(
+          "Produkt mangler",
+          "red"
+        )
+      );
+
+      wrap.appendChild(head);
+
+      var meta = el("div");
+      meta.className =
+        "sk-invoice-review-meta";
+
+      meta.appendChild(
+        el(
+          "span",
+          "Varenr. " +
+            (
+              row.supplier_sku ||
+              "–"
+            )
+        )
+      );
+
+      meta.appendChild(
+        el(
+          "span",
+          "EAN " +
+            (
+              row.ean ||
+              "–"
+            )
+        )
+      );
+
+      meta.appendChild(
+        el(
+          "span",
+          fmtNumber(
+            row.quantity,
+            0
+          ) +
+            " stk"
+        )
+      );
+
+      wrap.appendChild(meta);
+
+      var match = el("div");
+      match.className =
+        "sk-invoice-match-box";
+
+      match.appendChild(
+        el(
+          "div",
+          "Søk etter eksisterende produkt. Hvis varen faktisk ikke finnes i GolfKongen ennå, opprett den først under Produkter og kom tilbake hit."
+        )
+      );
+
+      wrap.appendChild(match);
+
+      var editor = el("div");
+      editor.className =
+        "sk-invoice-editor";
+
+      var fields = el("div");
+      fields.className =
+        "sk-invoice-editor-fields";
+
+      var searchLabel =
+        el("label");
+
+      searchLabel.appendChild(
+        document.createTextNode(
+          "Søk produkt"
+        )
+      );
+
+      var searchRow =
+        el("div");
+
+      searchRow.className =
+        "sk-invoice-search-row";
+
+      var searchInput =
+        el("input");
+
+      searchInput.value =
+        String(
+          row.supplier_description ||
+          ""
+        ).split(" / ")[0];
+
+      var searchBtn =
+        createButton("Søk");
+
+      searchRow.appendChild(
+        searchInput
+      );
+
+      searchRow.appendChild(
+        searchBtn
+      );
+
+      searchLabel.appendChild(
+        searchRow
+      );
+
+      fields.appendChild(
+        searchLabel
+      );
+
+      var productLabel =
+        el("label");
+
+      productLabel.appendChild(
+        document.createTextNode(
+          "Produktresultat"
+        )
+      );
+
+      var productSelect =
+        el("select");
+
+      addOption(
+        productSelect,
+        "",
+        "Søk først"
+      );
+
+      productLabel.appendChild(
+        productSelect
+      );
+
+      fields.appendChild(
+        productLabel
+      );
+
+      var variantLabel =
+        el("label");
+
+      variantLabel.appendChild(
+        document.createTextNode(
+          "Variant"
+        )
+      );
+
+      var variantSelect =
+        el("select");
+
+      addOption(
+        variantSelect,
+        "",
+        "Velg produkt først"
+      );
+
+      variantSelect.disabled =
+        true;
+
+      variantLabel.appendChild(
+        variantSelect
+      );
+
+      fields.appendChild(
+        variantLabel
+      );
+
+      var chosen = {
+        productId: null,
+        variants: []
+      };
+
+      function renderChosenVariants(
+        variants
+      ) {
+        clear(variantSelect);
+
+        chosen.variants =
+          variants || [];
+
+        if (!chosen.variants.length) {
+          addOption(
+            variantSelect,
+            "",
+            "Ingen variant nødvendig"
+          );
+
+          variantSelect.disabled =
+            true;
+          return;
+        }
+
+        addOption(
+          variantSelect,
+          "",
+          "Velg variant"
+        );
+
+        chosen.variants.forEach(
+          function (variant) {
+            addOption(
+              variantSelect,
+              variant.id,
+              variantOptionLabel(
+                variant
+              )
+            );
+          }
+        );
+
+        variantSelect.disabled =
+          false;
+      }
+
+      function searchProducts() {
+        var term =
+          searchInput.value.trim();
+
+        if (term.length < 2) {
+          alert(
+            "Skriv minst 2 tegn."
+          );
+          return;
+        }
+
+        searchBtn.disabled =
+          true;
+        searchBtn.textContent =
+          "Søker…";
+
+        sb
+          .from(
+            "internal_products_view"
+          )
+          .select(
+            "id,name,brand,quickbutik_sku,stock_quantity,purchase_price_ex_vat,is_active"
+          )
+          .eq(
+            "is_active",
+            true
+          )
+          .ilike(
+            "name",
+            "%" + term + "%"
+          )
+          .order(
+            "name",
+            { ascending: true }
+          )
+          .limit(30)
+          .then(
+            function (result) {
+              searchBtn.disabled =
+                false;
+              searchBtn.textContent =
+                "Søk";
+
+              if (result.error) {
+                throw result.error;
+              }
+
+              clear(productSelect);
+
+              addOption(
+                productSelect,
+                "",
+                result.data &&
+                result.data.length
+                  ? "Velg produkt"
+                  : "Ingen treff"
+              );
+
+              (
+                result.data || []
+              ).forEach(
+                function (product) {
+                  addOption(
+                    productSelect,
+                    product.id,
+                    (
+                      product.name ||
+                      "Produkt"
+                    ) +
+                      (
+                        product.brand
+                          ? " · " +
+                            product.brand
+                          : ""
+                      ) +
+                      " · lager " +
+                      fmtNumber(
+                        product.stock_quantity,
+                        0
+                      ) +
+                      " · kost " +
+                      fmtMoneyNok(
+                        product.purchase_price_ex_vat
+                      )
+                  );
+                }
+              );
+            }
+          )
+          .catch(
+            function (error) {
+              searchBtn.disabled =
+                false;
+              searchBtn.textContent =
+                "Søk";
+
+              alert(
+                "Produktsøk feilet: " +
+                  skReadableError(
+                    error &&
+                    error.message
+                      ? error.message
+                      : error
+                  )
+              );
+            }
+          );
+      }
+
+      searchBtn.onclick =
+        searchProducts;
+
+      searchInput.addEventListener(
+        "keydown",
+        function (event) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            searchProducts();
+          }
+        }
+      );
+
+      productSelect.onchange =
+        function () {
+          chosen.productId =
+            productSelect.value ||
+            null;
+
+          renderChosenVariants(
+            []
+          );
+
+          if (!chosen.productId) {
+            return;
+          }
+
+          variantSelect.disabled =
+            true;
+          clear(variantSelect);
+          addOption(
+            variantSelect,
+            "",
+            "Laster varianter…"
+          );
+
+          loadVariantsForChosenProduct(
+            chosen.productId
+          )
+            .then(
+              function (variants) {
+                renderChosenVariants(
+                  variants
+                );
+              }
+            )
+            .catch(
+              function (error) {
+                alert(
+                  "Kunne ikke laste varianter: " +
+                    skReadableError(
+                      error &&
+                      error.message
+                        ? error.message
+                        : error
+                    )
+                );
+              }
+            );
+        };
+
+      var actionStack =
+        el("div");
+
+      actionStack.style.display =
+        "grid";
+      actionStack.style.gap =
+        "6px";
+
+      var confirm =
+        createPrimaryButton(
+          "Godkjenn linje"
+        );
+
+      confirm.onclick =
+        function () {
+          if (!chosen.productId) {
+            alert(
+              "Velg produkt først."
+            );
+            return;
+          }
+
+          if (
+            chosen.variants.length &&
+            !variantSelect.value
+          ) {
+            alert(
+              "Valgt produkt har varianter. Velg riktig variant."
+            );
+            return;
+          }
+
+          confirmRow(
+            row,
+            chosen.productId,
+            chosen.variants.length
+              ? variantSelect.value
+              : null,
+            confirm
+          );
+        };
+
+      var productsBtn =
+        createButton(
+          "Gå til Produkter"
+        );
+
+      productsBtn.onclick =
+        function () {
+          if (skPortalNavigate) {
+            skPortalNavigate(
+              "products"
+            );
+          }
+        };
+
+      actionStack.appendChild(
+        confirm
+      );
+
+      actionStack.appendChild(
+        productsBtn
+      );
+
+      editor.appendChild(fields);
+      editor.appendChild(
+        actionStack
+      );
+
+      wrap.appendChild(editor);
+      list.appendChild(wrap);
+    }
+
+    function renderSafeSuggestions(
+      host,
+      summary
+    ) {
+      var rows =
+        state.reviewRows.filter(
+          function (row) {
+            return (
+              row.match_status !==
+                "confirmed" &&
+              (
+                row.variant_review_status ===
+                  "variant_suggested" ||
+                row.variant_review_status ===
+                  "no_variant_needed"
+              )
+            );
+          }
+        );
+
+      if (!rows.length) {
+        return;
+      }
+
+      var section =
+        createCollapsibleSection(
+          "✅ Trygge forslag · " +
+            String(rows.length),
+          "Entydige forslag som kan godkjennes samlet. Åpne listen hvis du vil kontrollere dem først.",
+          false
+        );
+
+      var wrap =
+        el("div");
+
+      wrap.className =
+        "sk-analysis-table-wrap";
+
+      var table =
+        el("table");
+
+      table.className =
+        "sk-invoice-safe-table";
+
+      var thead = el("thead");
+      var trh = el("tr");
+
+      [
+        "#",
+        "Fakturalinje",
+        "Produkt",
+        "Variant",
+        "Antall",
+        "Pris"
+      ].forEach(
+        function (label) {
+          trh.appendChild(
+            el("th", label)
+          );
+        }
+      );
+
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      var tbody = el("tbody");
+
+      rows.forEach(
+        function (row) {
+          var tr = el("tr");
+
+          tr.appendChild(
+            el(
+              "td",
+              String(
+                row.line_number
+              )
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              row.supplier_description
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              row.resolved_product_name ||
+              "–"
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              row.suggested_variant_sku ||
+              (
+                row.active_variant_count > 0
+                  ? "–"
+                  : "Ingen variant"
+              )
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              fmtNumber(
+                row.quantity,
+                0
+              )
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              fmtCurrency(
+                row.unit_price_ex_vat_currency,
+                row.currency
+              )
+            )
+          );
+
+          tbody.appendChild(tr);
+        }
+      );
+
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      section.body.appendChild(wrap);
+      host.appendChild(
+        section.wrap
+      );
+    }
+
+    function renderConfirmedRows(
+      host,
+      summary
+    ) {
+      var rows =
+        state.reviewRows.filter(
+          function (row) {
+            return (
+              row.match_status ===
+              "confirmed"
+            );
+          }
+        );
+
+      if (!rows.length) {
+        return;
+      }
+
+      var section =
+        createCollapsibleSection(
+          "🟢 Godkjente linjer · " +
+            String(rows.length),
+          "Disse linjene er koblet og klare. Ingen lager- eller kostoppdatering er utført.",
+          false
+        );
+
+      var wrap =
+        el("div");
+
+      wrap.className =
+        "sk-analysis-table-wrap";
+
+      var table =
+        el("table");
+
+      table.className =
+        "sk-invoice-safe-table";
+
+      var thead = el("thead");
+      var trh = el("tr");
+
+      [
+        "#",
+        "Fakturalinje",
+        "Produkt",
+        "Variant",
+        "Antall"
+      ].forEach(
+        function (label) {
+          trh.appendChild(
+            el("th", label)
+          );
+        }
+      );
+
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      var tbody = el("tbody");
+
+      rows.forEach(
+        function (row) {
+          var tr = el("tr");
+
+          tr.appendChild(
+            el(
+              "td",
+              String(
+                row.line_number
+              )
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              row.supplier_description
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              row.resolved_product_name ||
+              "–"
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              row.resolved_variant_name ||
+              row.suggested_variant_sku ||
+              "Ingen variant"
+            )
+          );
+
+          tr.appendChild(
+            el(
+              "td",
+              fmtNumber(
+                row.quantity,
+                0
+              )
+            )
+          );
+
+          tbody.appendChild(tr);
+        }
+      );
+
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      section.body.appendChild(wrap);
+      host.appendChild(
+        section.wrap
+      );
+    }
+
+    function renderCostPreview(
+      host,
+      summary,
+      importSummary
+    ) {
+      if (
+        Number(
+          summary.remaining_review_lines ||
+          0
+        ) > 0
+      ) {
+        var waiting =
+          el("div");
+
+        waiting.className =
+          "sk-invoice-section";
+
+        waiting.appendChild(
+          el(
+            "h3",
+            "💰 Reell kostpris"
+          )
+        );
+
+        var waitingText =
+          el(
+            "div",
+            "Kost-preview åpnes når alle fakturalinjene er godkjent. Da fordeles frakt/tillegg og vi viser gammel kost, reell ny kost og foreslått vektet snittkost."
+          );
+
+        waitingText.className =
+          "sk-invoice-section-sub";
+
+        waiting.appendChild(
+          waitingText
+        );
+
+        host.appendChild(
+          waiting
+        );
+
+        return;
+      }
+
+      var section = el("div");
+      section.className =
+        "sk-invoice-section";
+
+      section.appendChild(
+        el(
+          "h3",
+          "💰 Reell kostpris · preview"
+        )
+      );
+
+      var warning =
+        el(
+          "div",
+          "Preview bruker lagerbeholdningen og kostprisen som ligger i systemet når beregningen kjøres. En gammel historisk faktura skal derfor ikke postes tilbake på dagens lager uten egen kontroll."
+        );
+
+      warning.className =
+        "sk-warning";
+      warning.style.marginTop =
+        "8px";
+
+      section.appendChild(
+        warning
+      );
+
+      if (!state.previewRows.length) {
+        var note =
+          el(
+            "div",
+            "Alle linjer er godkjent. Trykk «Beregn reell kostpris» øverst for å lage preview."
+          );
+
+        note.className =
+          "sk-invoice-section-sub";
+        note.style.marginTop =
+          "10px";
+
+        section.appendChild(note);
+        host.appendChild(section);
+        return;
+      }
+
+      var readyRows =
+        state.previewRows.filter(
+          function (row) {
+            return (
+              row.calculation_ready ===
+              true
+            );
+          }
+        );
+
+      var totalCost =
+        readyRows.reduce(
+          function (sum, row) {
+            return (
+              sum +
+              num(
+                row.received_quantity
+              ) *
+              num(
+                row.landed_unit_cost_nok
+              )
+            );
+          },
+          0
+        );
+
+      var cards = el("div");
+      cards.className =
+        "sk-invoice-summary-grid";
+
+      addSummaryCard(
+        cards,
+        "Preview-linjer",
+        state.previewRows.length
+      );
+
+      addSummaryCard(
+        cards,
+        "Beregning klar",
+        readyRows.length
+      );
+
+      addSummaryCard(
+        cards,
+        "Reell varekost",
+        fmtMoneyNok(totalCost)
+      );
+
+      addSummaryCard(
+        cards,
+        "Frakt/tillegg",
+        fmtMoneyNok(
+          state.previewRows.reduce(
+            function (sum, row) {
+              return (
+                sum +
+                num(
+                  row.allocated_extra_cost_nok
+                )
+              );
+            },
+            0
+          )
+        )
+      );
+
+      addSummaryCard(
+        cards,
+        "Valutakurs",
+        fmtNumber(
+          summary.exchange_rate_to_nok,
+          4
+        )
+      );
+
+      section.appendChild(cards);
+
+      var wrap = el("div");
+      wrap.className =
+        "sk-invoice-preview-wrap";
+
+      var table = el("table");
+      table.className =
+        "sk-invoice-preview-table";
+
+      var thead = el("thead");
+      var trh = el("tr");
+
+      [
+        "Produkt",
+        "Variant",
+        "Ant.",
+        "Lager før",
+        "Kost før",
+        "Fakturapris",
+        "Fordelt frakt/tillegg",
+        "Reell ny kost/stk",
+        "Foreslått snittkost",
+        "Lager etter",
+        "Status"
+      ].forEach(
+        function (label) {
+          trh.appendChild(
+            el("th", label)
+          );
+        }
+      );
+
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      var tbody = el("tbody");
+
+      state.previewRows
+        .slice()
+        .sort(
+          function (a, b) {
+            return String(
+              a.product_name || ""
+            ).localeCompare(
+              String(
+                b.product_name || ""
+              ),
+              "nb"
+            );
+          }
+        )
+        .forEach(
+          function (row) {
+            var tr = el("tr");
+
+            tr.appendChild(
+              el(
+                "td",
+                row.product_name ||
+                "–"
+              )
+            );
+
+            tr.appendChild(
+              el(
+                "td",
+                row.quickbutik_variant_sku ||
+                row.variant_name ||
+                "–"
+              )
+            );
+
+            var qty =
+              el(
+                "td",
+                fmtNumber(
+                  row.received_quantity,
+                  0
+                )
+              );
+            qty.className = "sk-num";
+            tr.appendChild(qty);
+
+            var stockBefore =
+              el(
+                "td",
+                fmtNumber(
+                  row.stock_before,
+                  0
+                )
+              );
+            stockBefore.className =
+              "sk-num";
+            tr.appendChild(
+              stockBefore
+            );
+
+            var oldCost =
+              el(
+                "td",
+                fmtMoneyNok(
+                  row.average_cost_before_nok
+                )
+              );
+            oldCost.className =
+              "sk-num";
+            tr.appendChild(oldCost);
+
+            var invoicePrice =
+              el(
+                "td",
+                fmtCurrency(
+                  row.unit_price_ex_vat_currency,
+                  row.invoice_currency
+                )
+              );
+            invoicePrice.className =
+              "sk-num";
+            tr.appendChild(
+              invoicePrice
+            );
+
+            var extra =
+              el(
+                "td",
+                fmtMoneyNok(
+                  row.allocated_extra_cost_nok
+                )
+              );
+            extra.className =
+              "sk-num";
+            tr.appendChild(extra);
+
+            var landed =
+              el(
+                "td",
+                fmtMoneyNok(
+                  row.landed_unit_cost_nok
+                )
+              );
+            landed.className =
+              "sk-num sk-invoice-preview-cost";
+            tr.appendChild(landed);
+
+            var proposed =
+              el(
+                "td",
+                fmtMoneyNok(
+                  row.proposed_average_cost_nok
+                )
+              );
+            proposed.className =
+              "sk-num sk-invoice-preview-new";
+            tr.appendChild(
+              proposed
+            );
+
+            var stockAfter =
+              el(
+                "td",
+                fmtNumber(
+                  row.proposed_stock_after,
+                  0
+                )
+              );
+            stockAfter.className =
+              "sk-num";
+            tr.appendChild(
+              stockAfter
+            );
+
+            var statusCell =
+              el("td");
+
+            statusCell.appendChild(
+              statusBadge(
+                row.calculation_ready ===
+                  true
+                  ? (
+                      row.cost_locked ===
+                        true
+                        ? "Klar · kost låst"
+                        : "Klar"
+                    )
+                  : (
+                      row.calculation_status ||
+                      "Ikke klar"
+                    ),
+                row.calculation_ready ===
+                  true
+                  ? (
+                      row.cost_locked ===
+                        true
+                        ? "yellow"
+                        : "green"
+                    )
+                  : "red"
+              )
+            );
+
+            tr.appendChild(
+              statusCell
+            );
+
+            tbody.appendChild(tr);
+          }
+        );
+
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      section.appendChild(wrap);
+
+      var foot =
+        el(
+          "div",
+          "Ingen av verdiene i denne tabellen er sendt til Quickbutik eller skrevet tilbake til produktkost. Posting bygges som et eget, eksplisitt steg senere."
+        );
+
+      foot.className =
+        "sk-invoice-section-sub";
+      foot.style.marginTop =
+        "8px";
+
+      section.appendChild(foot);
+      host.appendChild(section);
+    }
+
+    refreshAll(null);
+  }
+
 
   function renderSuppliersAddonsManager(parent, data, sb) {
   var h2 = el("h2", "Leverandører og kostnader");
@@ -32269,6 +35132,21 @@ function renderPortal(sb, user, data) {
         }
       },
 
+      supplierInvoices: {
+        label: "Leverandørfakturaer",
+        icon: "📥",
+        group: "Innkjøp",
+        description:
+          "Fakturaer, produktkobling, variantkontroll og reell kostpris.",
+        render: function (parent) {
+          renderSupplierInvoicesManager(
+            parent,
+            data,
+            sb
+          );
+        }
+      },
+
       suppliers: {
         label: "Leverandører",
         icon: "🚚",
@@ -32767,3 +35645,4 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
+
