@@ -1099,6 +1099,15 @@
       "#sk-internal-root .sk-invoice-section{margin-top:14px;padding:13px;border:1px solid #e2e8f0;border-radius:13px;background:#fff;}" +
       "#sk-internal-root .sk-invoice-section h3{margin:0 0 5px;font-size:14px;}" +
       "#sk-internal-root .sk-invoice-section-sub{font-size:10px;color:#64748b;line-height:1.5;}" +
+      "#sk-internal-root .sk-invoice-upload{display:grid;gap:9px;padding:12px;border:1px dashed #93c5fd;border-radius:12px;background:#eff6ff;margin-bottom:10px;}" +
+      "#sk-internal-root .sk-invoice-upload-title{font-size:12px;font-weight:900;color:#0f172a;}" +
+      "#sk-internal-root .sk-invoice-import-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;}" +
+      "#sk-internal-root .sk-invoice-import-grid label{display:grid;gap:4px;font-size:10px;font-weight:900;color:#475569;}" +
+      "#sk-internal-root .sk-invoice-import-grid input,#sk-internal-root .sk-invoice-import-grid select{width:100%;padding:8px 9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-size:11px;}" +
+      "#sk-internal-root .sk-invoice-import-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px;}" +
+      "#sk-internal-root .sk-invoice-import-status{padding:9px 10px;border-radius:10px;font-size:10px;line-height:1.5;margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;}" +
+      "#sk-internal-root .sk-invoice-import-status.sk-ok{background:#f0fdf4;border-color:#86efac;color:#166534;}" +
+      "#sk-internal-root .sk-invoice-import-status.sk-bad{background:#fef2f2;border-color:#fca5a5;color:#991b1b;}" +
       "#sk-internal-root .sk-note{padding:13px 14px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-warning{padding:13px 14px;border:1px solid #fde68a;background:#fffbeb;color:#78350f;border-radius:14px;line-height:1.5;font-size:14px;}" +
       "#sk-internal-root .sk-danger-zone{padding:14px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:14px;}" +
@@ -1164,6 +1173,8 @@
       "  #sk-internal-root .sk-invoice-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-invoice-editor{display:block;}" +
       "  #sk-internal-root .sk-invoice-editor-fields{grid-template-columns:1fr;margin-bottom:8px;}" +
+      "  #sk-internal-root .sk-invoice-import-grid{grid-template-columns:1fr;}" +
+      "  #sk-internal-root .sk-invoice-import-summary{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-market-radar-coverage{margin-top:8px;white-space:normal;}" +
       "  #sk-internal-root .sk-market-monthly-strip{display:block;}" +
       "  #sk-internal-root .sk-market-monthly-state{margin-top:9px;}" +
@@ -1419,7 +1430,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.0 · Fakturakost"
+      "Admin v5.1 · PDF-import"
     );
 
     var products =
@@ -5410,7 +5421,7 @@ parent.appendChild(productListSection.wrap);
 
     var info = el(
       "div",
-      "Fakturaantall brukes kun til kostberegning og fordeling av frakt/tillegg. Lagerantall endres aldri fra denne siden. Når en faktura ferdigstilles, lagres reell innkjøpspris med fakturadato og brukes som kostgrunnlag for DB/DG."
+      "Last opp PDF, kontroller produktkoblinger og ferdigstill reell kostpris. Fakturaantall brukes kun til kostberegning og fordeling av frakt/tillegg. Lagerantall endres aldri fra denne siden."
     );
     info.className = "sk-note";
     parent.appendChild(info);
@@ -5439,7 +5450,9 @@ parent.appendChild(productListSection.wrap);
       costHistoryRows: [],
       variantsByProduct: {},
       productsById: {},
-      variantsById: {}
+      variantsById: {},
+      pdfImport: null,
+      pdfJsPromise: null
     };
 
     function num(value) {
@@ -5686,6 +5699,1815 @@ parent.appendChild(productListSection.wrap);
       host.appendChild(box);
     }
 
+
+    function normalizeSupplierName(
+      value
+    ) {
+      return String(
+        value || ""
+      )
+        .toLowerCase()
+        .replace(
+          /[^a-z0-9æøå]+/g,
+          " "
+        )
+        .replace(
+          /\s+/g,
+          " "
+        )
+        .trim();
+    }
+
+    function parseNordicNumber(
+      value
+    ) {
+      if (
+        value === null ||
+        value === undefined
+      ) {
+        return null;
+      }
+
+      var cleaned =
+        String(value)
+          .replace(
+            /\u00a0/g,
+            " "
+          )
+          .replace(
+            /\s+/g,
+            ""
+          )
+          .replace(
+            /\./g,
+            ""
+          )
+          .replace(
+            ",",
+            "."
+          )
+          .trim();
+
+      if (!cleaned) {
+        return null;
+      }
+
+      var parsed =
+        Number(cleaned);
+
+      return Number.isFinite(parsed)
+        ? parsed
+        : null;
+    }
+
+    function loadPdfJs() {
+      if (
+        window.pdfjsLib &&
+        window.pdfjsLib.getDocument
+      ) {
+        return Promise.resolve(
+          window.pdfjsLib
+        );
+      }
+
+      if (state.pdfJsPromise) {
+        return state.pdfJsPromise;
+      }
+
+      state.pdfJsPromise =
+        new Promise(
+          function (
+            resolve,
+            reject
+          ) {
+            var script =
+              document.createElement(
+                "script"
+              );
+
+            script.src =
+              "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+
+            script.async = true;
+            script.crossOrigin =
+              "anonymous";
+
+            var timer =
+              setTimeout(
+                function () {
+                  reject(
+                    new Error(
+                      "PDF-leseren brukte for lang tid på å laste."
+                    )
+                  );
+                },
+                20000
+              );
+
+            script.onload =
+              function () {
+                clearTimeout(timer);
+
+                if (
+                  !window.pdfjsLib ||
+                  !window.pdfjsLib
+                    .getDocument
+                ) {
+                  reject(
+                    new Error(
+                      "PDF-leseren ble lastet, men kunne ikke startes."
+                    )
+                  );
+                  return;
+                }
+
+                window.pdfjsLib
+                  .GlobalWorkerOptions
+                  .workerSrc =
+                  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+                resolve(
+                  window.pdfjsLib
+                );
+              };
+
+            script.onerror =
+              function () {
+                clearTimeout(timer);
+
+                reject(
+                  new Error(
+                    "Kunne ikke laste PDF-leseren fra jsDelivr."
+                  )
+                );
+              };
+
+            document.head.appendChild(
+              script
+            );
+          }
+        );
+
+      return state.pdfJsPromise;
+    }
+
+    function pdfTextContentToLines(
+      content
+    ) {
+      var groups = [];
+
+      (
+        content &&
+        content.items
+          ? content.items
+          : []
+      ).forEach(
+        function (item) {
+          var value =
+            String(
+              item.str || ""
+            ).trim();
+
+          if (!value) {
+            return;
+          }
+
+          var x =
+            item.transform &&
+            item.transform.length > 4
+              ? Number(
+                  item.transform[4]
+                )
+              : 0;
+
+          var y =
+            item.transform &&
+            item.transform.length > 5
+              ? Number(
+                  item.transform[5]
+                )
+              : 0;
+
+          var group =
+            groups.find(
+              function (candidate) {
+                return (
+                  Math.abs(
+                    candidate.y - y
+                  ) < 2.3
+                );
+              }
+            );
+
+          if (!group) {
+            group = {
+              y: y,
+              items: []
+            };
+
+            groups.push(group);
+          }
+
+          group.items.push({
+            x: x,
+            value: value
+          });
+        }
+      );
+
+      groups.sort(
+        function (a, b) {
+          return b.y - a.y;
+        }
+      );
+
+      return groups.map(
+        function (group) {
+          group.items.sort(
+            function (a, b) {
+              return a.x - b.x;
+            }
+          );
+
+          return group.items
+            .map(
+              function (item) {
+                return item.value;
+              }
+            )
+            .join(" ")
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+        }
+      );
+    }
+
+    function extractPdfText(
+      file
+    ) {
+      return loadPdfJs()
+        .then(
+          function (pdfjsLib) {
+            return file
+              .arrayBuffer()
+              .then(
+                function (
+                  buffer
+                ) {
+                  return pdfjsLib
+                    .getDocument({
+                      data:
+                        new Uint8Array(
+                          buffer
+                        )
+                    })
+                    .promise;
+                }
+              );
+          }
+        )
+        .then(
+          function (pdf) {
+            var jobs = [];
+
+            for (
+              var pageNo = 1;
+              pageNo <=
+              pdf.numPages;
+              pageNo += 1
+            ) {
+              (
+                function (
+                  currentPage
+                ) {
+                  jobs.push(
+                    pdf
+                      .getPage(
+                        currentPage
+                      )
+                      .then(
+                        function (page) {
+                          return page
+                            .getTextContent()
+                            .then(
+                              function (
+                                content
+                              ) {
+                                return {
+                                  page:
+                                    currentPage,
+                                  lines:
+                                    pdfTextContentToLines(
+                                      content
+                                    )
+                                };
+                              }
+                            );
+                        }
+                      )
+                  );
+                }
+              )(pageNo);
+            }
+
+            return Promise.all(
+              jobs
+            );
+          }
+        );
+    }
+
+    function latitudeRowMatch(
+      line
+    ) {
+      var compact =
+        String(line || "")
+          .replace(
+            /\u00a0/g,
+            " "
+          )
+          .replace(
+            /\s+/g,
+            " "
+          )
+          .trim();
+
+      var patterns = [
+        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(\d{5,})\s+EAN:\s*(\d{8,14})$/i,
+        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
+      ];
+
+      for (
+        var i = 0;
+        i < patterns.length;
+        i += 1
+      ) {
+        var match =
+          compact.match(
+            patterns[i]
+          );
+
+        if (match) {
+          return match;
+        }
+      }
+
+      return null;
+    }
+
+    function parseLatitude64Pdf(
+      pages
+    ) {
+      var allLines = [];
+
+      (pages || []).forEach(
+        function (page) {
+          (
+            page.lines || []
+          ).forEach(
+            function (line) {
+              allLines.push(line);
+            }
+          );
+        }
+      );
+
+      var fullText =
+        allLines.join("\n");
+
+      if (
+        !/Latitude\s*64/i.test(
+          fullText
+        ) &&
+        !/latitude64\.com/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      if (
+        !/Faktura\s+\d+/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      var invoiceNoMatch =
+        fullText.match(
+          /Faktura\s+([0-9]+)/i
+        );
+
+      var invoiceDateMatch =
+        fullText.match(
+          /Datum\s+(\d{4}-\d{2}-\d{2})/i
+        );
+
+      var dueDateMatch =
+        fullText.match(
+          /Förfallodatum\s+(\d{4}-\d{2}-\d{2})/i
+        );
+
+      var currencyMatch =
+        fullText.match(
+          /Summa\s+totalt\s+([A-Z]{3})/i
+        ) ||
+        fullText.match(
+          /Summa\s+([A-Z]{3})\s*Lev\.datum/i
+        );
+
+      var rows = [];
+
+      (pages || []).forEach(
+        function (page) {
+          var inItems = false;
+          var pending = [];
+
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var line =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (!line) {
+                return;
+              }
+
+              if (
+                /Antal/i.test(line) &&
+                /Artikel/i.test(line)
+              ) {
+                inItems = true;
+                pending = [];
+                return;
+              }
+
+              if (!inItems) {
+                return;
+              }
+
+              if (
+                /^Frakt$/i.test(line) ||
+                /^Summa totalt\b/i.test(
+                  line
+                )
+              ) {
+                inItems = false;
+                pending = [];
+                return;
+              }
+
+              if (
+                /^COO:/i.test(line) ||
+                /^HS Code:/i.test(line) ||
+                (
+                  /COO:/i.test(line) &&
+                  /HS Code:/i.test(line)
+                )
+              ) {
+                return;
+              }
+
+              var match =
+                latitudeRowMatch(
+                  line
+                );
+
+              if (match) {
+                var description =
+                  pending
+                    .join(" ")
+                    .replace(
+                      /\s+/g,
+                      " "
+                    )
+                    .trim();
+
+                rows.push({
+                  line_number:
+                    rows.length + 1,
+                  supplier_sku:
+                    match[5],
+                  ean:
+                    match[6],
+                  description:
+                    description,
+                  quantity:
+                    parseNordicNumber(
+                      match[2]
+                    ),
+                  unit_price:
+                    parseNordicNumber(
+                      match[3]
+                    ),
+                  line_total:
+                    parseNordicNumber(
+                      match[4]
+                    )
+                });
+
+                pending = [];
+                return;
+              }
+
+              pending.push(line);
+            }
+          );
+        }
+      );
+
+      var shipping = 0;
+
+      for (
+        var li = 0;
+        li < allLines.length;
+        li += 1
+      ) {
+        if (
+          /^Frakt$/i.test(
+            String(
+              allLines[li] || ""
+            ).trim()
+          )
+        ) {
+          var next =
+            String(
+              allLines[
+                li + 1
+              ] || ""
+            )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim();
+
+          var shipMatch =
+            next.match(
+              /^1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s*90000$/i
+            ) ||
+            next.match(
+              /^1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+90000$/i
+            );
+
+          if (shipMatch) {
+            shipping =
+              parseNordicNumber(
+                shipMatch[2]
+              ) || 0;
+          }
+        }
+      }
+
+      if (!shipping) {
+        var shipFallback =
+          fullText.match(
+            /Frakt\s+1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s*90000/i
+          );
+
+        if (shipFallback) {
+          shipping =
+            parseNordicNumber(
+              shipFallback[2]
+            ) || 0;
+        }
+      }
+
+      var totalMatch =
+        fullText.match(
+          /Summa\s+totalt\s+[A-Z]{3}\s+([\d\s]+,\d{2})/i
+        );
+
+      var invoiceTotal =
+        totalMatch
+          ? parseNordicNumber(
+              totalMatch[1]
+            )
+          : null;
+
+      var goodsTotal =
+        rows.reduce(
+          function (
+            sum,
+            row
+          ) {
+            return (
+              sum +
+              num(
+                row.line_total
+              )
+            );
+          },
+          0
+        );
+
+      var computedTotal =
+        goodsTotal +
+        shipping;
+
+      var difference =
+        invoiceTotal === null
+          ? null
+          : Math.abs(
+              computedTotal -
+              invoiceTotal
+            );
+
+      return {
+        parser:
+          "latitude64-v1",
+        parser_label:
+          "Latitude 64 / House of Discs",
+        supplier_hint:
+          "Latitude 64",
+        invoice_number:
+          invoiceNoMatch
+            ? invoiceNoMatch[1]
+            : "",
+        invoice_date:
+          invoiceDateMatch
+            ? invoiceDateMatch[1]
+            : "",
+        due_date:
+          dueDateMatch
+            ? dueDateMatch[1]
+            : "",
+        currency:
+          currencyMatch
+            ? String(
+                currencyMatch[1]
+              ).toUpperCase()
+            : "SEK",
+        rows: rows,
+        costs:
+          shipping > 0
+            ? [
+                {
+                  cost_type:
+                    "shipping",
+                  description:
+                    "Frakt",
+                  amount:
+                    shipping,
+                  allocation_method:
+                    "by_value"
+                }
+              ]
+            : [],
+        goods_total:
+          goodsTotal,
+        shipping_total:
+          shipping,
+        invoice_total:
+          invoiceTotal,
+        computed_total:
+          computedTotal,
+        difference:
+          difference,
+        raw_text:
+          fullText
+      };
+    }
+
+    function parseSupplierPdf(
+      pages
+    ) {
+      var parsed =
+        parseLatitude64Pdf(
+          pages
+        );
+
+      if (parsed) {
+        return parsed;
+      }
+
+      return {
+        parser:
+          "unsupported",
+        parser_label:
+          "Ukjent fakturaformat",
+        rows: [],
+        costs: [],
+        raw_text:
+          (pages || [])
+            .map(
+              function (page) {
+                return (
+                  page.lines || []
+                ).join("\n");
+              }
+            )
+            .join("\n\n")
+      };
+    }
+
+    function findSupplierByHint(
+      hint
+    ) {
+      var wanted =
+        normalizeSupplierName(
+          hint
+        );
+
+      var suppliers =
+        (
+          data &&
+          Array.isArray(
+            data.suppliers
+          )
+            ? data.suppliers
+            : []
+        ).filter(
+          function (supplier) {
+            return (
+              supplier.is_active !==
+              false
+            );
+          }
+        );
+
+      return (
+        suppliers.find(
+          function (supplier) {
+            var name =
+              normalizeSupplierName(
+                supplier.name
+              );
+
+            return (
+              name === wanted ||
+              name.indexOf(
+                wanted
+              ) !== -1 ||
+              wanted.indexOf(
+                name
+              ) !== -1
+            );
+          }
+        ) || null
+      );
+    }
+
+    function safeKnownFxRate(
+      currency,
+      invoiceDate
+    ) {
+      if (
+        !currency ||
+        !invoiceDate
+      ) {
+        return Promise.resolve(
+          null
+        );
+      }
+
+      if (
+        String(currency)
+          .toUpperCase() ===
+        "NOK"
+      ) {
+        return Promise.resolve({
+          rate: 1,
+          rate_date:
+            invoiceDate,
+          source: "NOK"
+        });
+      }
+
+      return sb
+        .from(
+          "internal_fx_rates"
+        )
+        .select(
+          "currency_code,rate_date,nok_per_unit,source"
+        )
+        .eq(
+          "currency_code",
+          String(currency)
+            .toUpperCase()
+        )
+        .lte(
+          "rate_date",
+          invoiceDate
+        )
+        .order(
+          "rate_date",
+          { ascending: false }
+        )
+        .limit(1)
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            var row =
+              result.data &&
+              result.data[0]
+                ? result.data[0]
+                : null;
+
+            if (!row) {
+              return null;
+            }
+
+            var invoiceMs =
+              new Date(
+                invoiceDate +
+                "T12:00:00"
+              ).getTime();
+
+            var rateMs =
+              new Date(
+                row.rate_date +
+                "T12:00:00"
+              ).getTime();
+
+            var dayDiff =
+              Math.round(
+                (
+                  invoiceMs -
+                  rateMs
+                ) /
+                86400000
+              );
+
+            if (
+              dayDiff < 0 ||
+              dayDiff > 7
+            ) {
+              return null;
+            }
+
+            return {
+              rate:
+                num(
+                  row.nok_per_unit
+                ),
+              rate_date:
+                row.rate_date,
+              source:
+                row.source ||
+                "Norges Bank"
+            };
+          }
+        );
+    }
+
+    function renderPdfImport(
+      file,
+      parsed
+    ) {
+      clear(right);
+
+      var section =
+        el("div");
+
+      section.className =
+        "sk-invoice-section";
+
+      section.appendChild(
+        el(
+          "h3",
+          "📄 Ny faktura fra PDF"
+        )
+      );
+
+      var intro =
+        el(
+          "div",
+          "PDF-en er lest lokalt i nettleseren. I denne versjonen lagres fakturadata og filnavn, men selve PDF-filen arkiveres ikke ennå."
+        );
+
+      intro.className =
+        "sk-invoice-section-sub";
+      section.appendChild(
+        intro
+      );
+
+      if (
+        parsed.parser ===
+        "unsupported"
+      ) {
+        var unsupported =
+          el(
+            "div",
+            "Dette fakturaformatet er ikke støttet automatisk ennå. Ingenting er importert. Send meg denne fakturaen, så kan neste parser legges til uten å endre kostmotoren."
+          );
+
+        unsupported.className =
+          "sk-invoice-import-status sk-bad";
+        section.appendChild(
+          unsupported
+        );
+
+        var fileMeta =
+          el(
+            "div",
+            "Fil: " +
+              file.name
+          );
+
+        fileMeta.className =
+          "sk-invoice-small";
+        section.appendChild(
+          fileMeta
+        );
+
+        var back =
+          createButton(
+            "Tilbake til fakturaer"
+          );
+
+        back.style.marginTop =
+          "10px";
+
+        back.onclick =
+          function () {
+            if (
+              state.selectedInvoiceId
+            ) {
+              loadInvoiceDetails(
+                state.selectedInvoiceId
+              );
+            } else {
+              refreshAll(null);
+            }
+          };
+
+        section.appendChild(
+          back
+        );
+
+        right.appendChild(
+          section
+        );
+        return;
+      }
+
+      var supplier =
+        findSupplierByHint(
+          parsed.supplier_hint
+        );
+
+      var suppliers =
+        (
+          data &&
+          Array.isArray(
+            data.suppliers
+          )
+            ? data.suppliers
+            : []
+        )
+          .filter(
+            function (item) {
+              return (
+                item.is_active !==
+                false
+              );
+            }
+          )
+          .slice()
+          .sort(
+            function (a, b) {
+              return String(
+                a.name || ""
+              ).localeCompare(
+                String(
+                  b.name || ""
+                ),
+                "nb"
+              );
+            }
+          );
+
+      var fields =
+        el("div");
+
+      fields.className =
+        "sk-invoice-import-grid";
+
+      function makeField(
+        labelText,
+        control
+      ) {
+        var label =
+          el("label");
+
+        label.appendChild(
+          el(
+            "span",
+            labelText
+          )
+        );
+
+        label.appendChild(
+          control
+        );
+
+        fields.appendChild(
+          label
+        );
+      }
+
+      var supplierSelect =
+        el("select");
+
+      var emptyOption =
+        el(
+          "option",
+          "Velg leverandør"
+        );
+      emptyOption.value = "";
+      supplierSelect.appendChild(
+        emptyOption
+      );
+
+      suppliers.forEach(
+        function (item) {
+          var option =
+            el(
+              "option",
+              item.name
+            );
+
+          option.value =
+            item.id;
+
+          if (
+            supplier &&
+            supplier.id ===
+              item.id
+          ) {
+            option.selected =
+              true;
+          }
+
+          supplierSelect.appendChild(
+            option
+          );
+        }
+      );
+
+      makeField(
+        "Leverandør",
+        supplierSelect
+      );
+
+      var invoiceNo =
+        el("input");
+      invoiceNo.type = "text";
+      invoiceNo.value =
+        parsed.invoice_number ||
+        "";
+      makeField(
+        "Fakturanummer",
+        invoiceNo
+      );
+
+      var invoiceDate =
+        el("input");
+      invoiceDate.type = "date";
+      invoiceDate.value =
+        parsed.invoice_date ||
+        "";
+      makeField(
+        "Fakturadato",
+        invoiceDate
+      );
+
+      var dueDate =
+        el("input");
+      dueDate.type = "date";
+      dueDate.value =
+        parsed.due_date ||
+        "";
+      makeField(
+        "Forfallsdato",
+        dueDate
+      );
+
+      var currency =
+        el("input");
+      currency.type = "text";
+      currency.maxLength = 3;
+      currency.value =
+        parsed.currency ||
+        "";
+      makeField(
+        "Valuta",
+        currency
+      );
+
+      var fxRate =
+        el("input");
+      fxRate.type = "number";
+      fxRate.step = "0.000001";
+      fxRate.min = "0";
+      fxRate.placeholder =
+        "NOK per 1 valuta";
+      makeField(
+        "Valutakurs til NOK",
+        fxRate
+      );
+
+      section.appendChild(
+        fields
+      );
+
+      var fxInfo =
+        el(
+          "div",
+          "Sjekker kjent valutakurs…"
+        );
+
+      fxInfo.className =
+        "sk-invoice-small";
+      fxInfo.style.marginTop =
+        "7px";
+
+      section.appendChild(
+        fxInfo
+      );
+
+      var fxMeta = {
+        rate_date: null,
+        source: null
+      };
+
+      function refreshKnownFx() {
+        var code =
+          String(
+            currency.value || ""
+          )
+            .trim()
+            .toUpperCase();
+
+        var date =
+          invoiceDate.value;
+
+        fxInfo.textContent =
+          "Sjekker kjent valutakurs…";
+
+        safeKnownFxRate(
+          code,
+          date
+        )
+          .then(
+            function (known) {
+              if (known) {
+                fxRate.value =
+                  String(
+                    known.rate
+                  );
+
+                fxMeta.rate_date =
+                  known.rate_date;
+
+                fxMeta.source =
+                  known.source;
+
+                fxInfo.textContent =
+                  "Valutakurs funnet: " +
+                  fmtNumber(
+                    known.rate,
+                    4
+                  ) +
+                  " NOK/" +
+                  code +
+                  " · " +
+                  fmtDate(
+                    known.rate_date
+                  ) +
+                  " · " +
+                  String(
+                    known.source ||
+                    "Norges Bank"
+                  );
+              } else {
+                fxMeta.rate_date =
+                  null;
+                fxMeta.source =
+                  null;
+
+                if (code === "NOK") {
+                  fxRate.value = "1";
+                  fxInfo.textContent =
+                    "NOK-faktura: kurs 1,0000.";
+                } else {
+                  fxRate.value = "";
+                  fxInfo.textContent =
+                    "Ingen trygg valutakurs ligger lagret for denne datoen. Skriv inn NOK per 1 " +
+                    code +
+                    " før import.";
+                }
+              }
+            }
+          )
+          .catch(
+            function (error) {
+              fxMeta.rate_date =
+                null;
+              fxMeta.source =
+                null;
+
+              fxInfo.textContent =
+                "Kunne ikke hente lagret valutakurs: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                );
+            }
+          );
+      }
+
+      currency.onchange =
+        refreshKnownFx;
+      invoiceDate.onchange =
+        refreshKnownFx;
+
+      refreshKnownFx();
+
+      var summaryCards =
+        el("div");
+
+      summaryCards.className =
+        "sk-invoice-import-summary";
+
+      addSummaryCard(
+        summaryCards,
+        "Parser",
+        parsed.parser_label
+      );
+
+      addSummaryCard(
+        summaryCards,
+        "Varelinjer",
+        parsed.rows.length
+      );
+
+      addSummaryCard(
+        summaryCards,
+        "Varer",
+        fmtCurrency(
+          parsed.goods_total,
+          parsed.currency
+        )
+      );
+
+      addSummaryCard(
+        summaryCards,
+        "Frakt/tillegg",
+        fmtCurrency(
+          parsed.shipping_total,
+          parsed.currency
+        )
+      );
+
+      addSummaryCard(
+        summaryCards,
+        "Fakturatotal",
+        fmtCurrency(
+          parsed.invoice_total,
+          parsed.currency
+        )
+      );
+
+      section.appendChild(
+        summaryCards
+      );
+
+      var validationOk =
+        parsed.rows.length > 0 &&
+        (
+          parsed.difference ===
+            null ||
+          parsed.difference <=
+            0.05
+        );
+
+      var validation =
+        el(
+          "div",
+          validationOk
+            ? (
+                "Kontroll OK: parseren fant " +
+                String(
+                  parsed.rows.length
+                ) +
+                " varelinjer. Beregnet varer + tillegg = " +
+                fmtCurrency(
+                  parsed.computed_total,
+                  parsed.currency
+                ) +
+                (
+                  parsed.invoice_total !==
+                  null
+                    ? ", som matcher fakturatotalen."
+                    : "."
+                )
+              )
+            : (
+                "Import stoppet: beregnet total matcher ikke fakturaen. Avvik " +
+                fmtCurrency(
+                  parsed.difference,
+                  parsed.currency
+                ) +
+                "."
+              )
+        );
+
+      validation.className =
+        "sk-invoice-import-status " +
+        (
+          validationOk
+            ? "sk-ok"
+            : "sk-bad"
+        );
+
+      section.appendChild(
+        validation
+      );
+
+      var rowSection =
+        createCollapsibleSection(
+          "Varelinjer · " +
+            String(
+              parsed.rows.length
+            ),
+          "Kontroller at varelinjene ser riktige ut før import.",
+          false
+        );
+
+      var wrap =
+        el("div");
+      wrap.className =
+        "sk-invoice-preview-wrap";
+
+      var table =
+        el("table");
+      table.className =
+        "sk-invoice-preview-table";
+
+      var thead =
+        el("thead");
+      var trh =
+        el("tr");
+
+      [
+        "#",
+        "Beskrivelse",
+        "Varenr.",
+        "EAN",
+        "Ant.",
+        "Pris/stk",
+        "Linjesum"
+      ].forEach(
+        function (label) {
+          trh.appendChild(
+            el("th", label)
+          );
+        }
+      );
+
+      thead.appendChild(
+        trh
+      );
+      table.appendChild(
+        thead
+      );
+
+      var tbody =
+        el("tbody");
+
+      parsed.rows.forEach(
+        function (row) {
+          var tr =
+            el("tr");
+
+          [
+            row.line_number,
+            row.description,
+            row.supplier_sku ||
+              "–",
+            row.ean || "–",
+            fmtNumber(
+              row.quantity,
+              0
+            ),
+            fmtCurrency(
+              row.unit_price,
+              parsed.currency
+            ),
+            fmtCurrency(
+              row.line_total,
+              parsed.currency
+            )
+          ].forEach(
+            function (
+              value,
+              index
+            ) {
+              var td =
+                el(
+                  "td",
+                  String(value)
+                );
+
+              if (
+                index >= 4
+              ) {
+                td.className =
+                  "sk-num";
+              }
+
+              tr.appendChild(
+                td
+              );
+            }
+          );
+
+          tbody.appendChild(
+            tr
+          );
+        }
+      );
+
+      table.appendChild(
+        tbody
+      );
+      wrap.appendChild(
+        table
+      );
+      rowSection.body.appendChild(
+        wrap
+      );
+      section.appendChild(
+        rowSection.wrap
+      );
+
+      var actions =
+        el("div");
+      actions.className =
+        "sk-invoice-actions";
+
+      var importBtn =
+        createPrimaryButton(
+          "Importer faktura til kontroll"
+        );
+
+      importBtn.disabled =
+        !validationOk;
+
+      importBtn.onclick =
+        function () {
+          var supplierId =
+            supplierSelect.value;
+
+          var code =
+            String(
+              currency.value || ""
+            )
+              .trim()
+              .toUpperCase();
+
+          var rate =
+            maybeNum(
+              fxRate.value
+            );
+
+          if (!supplierId) {
+            alert(
+              "Velg leverandør."
+            );
+            return;
+          }
+
+          if (
+            !invoiceNo.value.trim()
+          ) {
+            alert(
+              "Fakturanummer mangler."
+            );
+            return;
+          }
+
+          if (
+            !invoiceDate.value
+          ) {
+            alert(
+              "Fakturadato mangler."
+            );
+            return;
+          }
+
+          if (
+            !/^[A-Z]{3}$/.test(
+              code
+            )
+          ) {
+            alert(
+              "Valuta må være en trebokstavskode, for eksempel SEK eller EUR."
+            );
+            return;
+          }
+
+          if (
+            code !== "NOK" &&
+            (
+              rate === null ||
+              rate <= 0
+            )
+          ) {
+            alert(
+              "Legg inn riktig valutakurs til NOK før import."
+            );
+            return;
+          }
+
+          if (
+            !window.confirm(
+              "Importere faktura " +
+                invoiceNo.value.trim() +
+                " med " +
+                String(
+                  parsed.rows.length
+                ) +
+                " varelinjer? Dette oppretter bare fakturaen til kontroll og endrer ikke lagerantall."
+            )
+          ) {
+            return;
+          }
+
+          importBtn.disabled =
+            true;
+          importBtn.textContent =
+            "Importerer…";
+
+          var costRows =
+            parsed.costs.map(
+              function (cost) {
+                return {
+                  cost_type:
+                    cost.cost_type,
+                  description:
+                    cost.description,
+                  amount:
+                    cost.amount,
+                  currency:
+                    code,
+                  exchange_rate_to_nok:
+                    code === "NOK"
+                      ? 1
+                      : rate,
+                  exchange_rate_date:
+                    fxMeta.rate_date ||
+                    invoiceDate.value,
+                  exchange_rate_source:
+                    fxMeta.source ||
+                    (
+                      code === "NOK"
+                        ? "NOK"
+                        : "Manuell ved PDF-import"
+                    ),
+                  allocation_method:
+                    cost.allocation_method ||
+                    "by_value"
+                };
+              }
+            );
+
+          sb.rpc(
+            "internal_supplier_invoice_import_create",
+            {
+              p_supplier_id:
+                supplierId,
+              p_invoice_number:
+                invoiceNo.value.trim(),
+              p_invoice_date:
+                invoiceDate.value,
+              p_due_date:
+                dueDate.value ||
+                null,
+              p_currency:
+                code,
+              p_exchange_rate_to_nok:
+                code === "NOK"
+                  ? 1
+                  : rate,
+              p_exchange_rate_date:
+                fxMeta.rate_date ||
+                invoiceDate.value,
+              p_exchange_rate_source:
+                fxMeta.source ||
+                (
+                  code === "NOK"
+                    ? "NOK"
+                    : "Manuell ved PDF-import"
+                ),
+              p_exchange_rate_reference:
+                null,
+              p_source_file_name:
+                file.name,
+              p_source_file_mime_type:
+                file.type ||
+                "application/pdf",
+              p_notes:
+                "PDF-import via Admin v5.1 · " +
+                parsed.parser,
+              p_rows:
+                parsed.rows,
+              p_costs:
+                costRows
+            }
+          )
+            .then(
+              function (result) {
+                if (result.error) {
+                  throw result.error;
+                }
+
+                var row =
+                  result.data &&
+                  result.data[0]
+                    ? result.data[0]
+                    : null;
+
+                if (!row) {
+                  throw new Error(
+                    "Importen returnerte ingen faktura."
+                  );
+                }
+
+                alert(
+                  "Faktura importert. " +
+                    String(
+                      row.auto_confirmed_lines ||
+                      0
+                    ) +
+                    " linjer ble automatisk bekreftet fra tidligere SKU/EAN-læring, " +
+                    String(
+                      row.suggested_lines ||
+                      0
+                    ) +
+                    " fikk produktforslag og " +
+                    String(
+                      row.unmatched_lines ||
+                      0
+                    ) +
+                    " må kontrolleres manuelt. Lagerantall er ikke endret."
+                );
+
+                state.pdfImport =
+                  null;
+
+                refreshAll(
+                  row.invoice_id
+                );
+              }
+            )
+            .catch(
+              function (error) {
+                importBtn.disabled =
+                  false;
+                importBtn.textContent =
+                  "Importer faktura til kontroll";
+
+                alert(
+                  "Kunne ikke importere fakturaen: " +
+                    skReadableError(
+                      error &&
+                      error.message
+                        ? error.message
+                        : error
+                    )
+                );
+              }
+            );
+        };
+
+      var cancel =
+        createButton(
+          "Avbryt"
+        );
+
+      cancel.onclick =
+        function () {
+          state.pdfImport =
+            null;
+
+          if (
+            state.selectedInvoiceId
+          ) {
+            loadInvoiceDetails(
+              state.selectedInvoiceId
+            );
+          } else {
+            refreshAll(null);
+          }
+        };
+
+      actions.appendChild(
+        importBtn
+      );
+      actions.appendChild(
+        cancel
+      );
+
+      section.appendChild(
+        actions
+      );
+
+      right.appendChild(
+        section
+      );
+    }
+
+    function startPdfImport(
+      file
+    ) {
+      if (!file) {
+        return;
+      }
+
+      if (
+        file.type &&
+        file.type !==
+          "application/pdf" &&
+        !/\.pdf$/i.test(
+          file.name || ""
+        )
+      ) {
+        alert(
+          "Velg en PDF-faktura."
+        );
+        return;
+      }
+
+      setLoading(
+        right,
+        "Leser PDF og finner fakturalinjer…"
+      );
+
+      extractPdfText(file)
+        .then(
+          function (pages) {
+            var parsed =
+              parseSupplierPdf(
+                pages
+              );
+
+            state.pdfImport = {
+              file: file,
+              parsed: parsed
+            };
+
+            renderPdfImport(
+              file,
+              parsed
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            clear(right);
+
+            var warning =
+              el(
+                "div",
+                "Kunne ikke lese PDF-en: " +
+                  skReadableError(
+                    error &&
+                    error.message
+                      ? error.message
+                      : error
+                  )
+              );
+
+            warning.className =
+              "sk-warning";
+
+            right.appendChild(
+              warning
+            );
+          }
+        );
+    }
+
     function refreshAll(
       keepInvoiceId
     ) {
@@ -5842,6 +7664,75 @@ parent.appendChild(productListSection.wrap);
 
       left.appendChild(heading);
 
+      var uploadBox =
+        el("div");
+
+      uploadBox.className =
+        "sk-invoice-upload";
+
+      uploadBox.appendChild(
+        el(
+          "div",
+          "Ny leverandørfaktura"
+        )
+      ).className =
+        "sk-invoice-upload-title";
+
+      var uploadInfo =
+        el(
+          "div",
+          "Last opp PDF. Latitude 64 / House of Discs-formatet er støttet automatisk nå. Ukjente formater stoppes før import."
+        );
+
+      uploadInfo.className =
+        "sk-invoice-small";
+      uploadBox.appendChild(
+        uploadInfo
+      );
+
+      var fileInput =
+        el("input");
+      fileInput.type = "file";
+      fileInput.accept =
+        "application/pdf,.pdf";
+      fileInput.style.display =
+        "none";
+
+      var uploadBtn =
+        createPrimaryButton(
+          "＋ Last opp PDF"
+        );
+
+      uploadBtn.onclick =
+        function () {
+          fileInput.value = "";
+          fileInput.click();
+        };
+
+      fileInput.onchange =
+        function () {
+          var file =
+            fileInput.files &&
+            fileInput.files[0]
+              ? fileInput.files[0]
+              : null;
+
+          startPdfImport(
+            file
+          );
+        };
+
+      uploadBox.appendChild(
+        uploadBtn
+      );
+      uploadBox.appendChild(
+        fileInput
+      );
+
+      left.appendChild(
+        uploadBox
+      );
+
       var list = el("div");
       list.className =
         "sk-invoice-list";
@@ -5946,6 +7837,10 @@ parent.appendChild(productListSection.wrap);
           var confirmed =
             Number(
               summary.confirmed_lines ||
+              0
+            ) +
+            Number(
+              summary.ignored_lines ||
               0
             );
 
@@ -36133,5 +38028,3 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
-
-
