@@ -1419,7 +1419,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v4.9 · Faktura"
+      "Admin v5.0 · Fakturakost"
     );
 
     var products =
@@ -5404,13 +5404,13 @@ parent.appendChild(productListSection.wrap);
     createPageHeader(
       parent,
       "Leverandørfakturaer",
-      "Kontroller leverandørfakturaer, produkt- og variantkoblinger og se reell kostpris før noe får lov til å påvirke lager eller innkjøpspris.",
+      "Kontroller leverandørfakturaer, produkt- og variantkoblinger og bygg dokumentert reell innkjøpspris uten å endre lagerantall.",
       "Innkjøp · kostkontroll"
     );
 
     var info = el(
       "div",
-      "Denne siden er foreløpig kontroll- og previewsteget. Godkjenning av fakturalinjer lærer varenummer/EAN til neste faktura, men lager og kostpris blir ikke oppdatert her."
+      "Fakturaantall brukes kun til kostberegning og fordeling av frakt/tillegg. Lagerantall endres aldri fra denne siden. Når en faktura ferdigstilles, lagres reell innkjøpspris med fakturadato og brukes som kostgrunnlag for DB/DG."
     );
     info.className = "sk-note";
     parent.appendChild(info);
@@ -5436,7 +5436,10 @@ parent.appendChild(productListSection.wrap);
       importSummaries: [],
       reviewRows: [],
       previewRows: [],
-      variantsByProduct: {}
+      costHistoryRows: [],
+      variantsByProduct: {},
+      productsById: {},
+      variantsById: {}
     };
 
     function num(value) {
@@ -5569,6 +5572,13 @@ parent.appendChild(productListSection.wrap);
         return {
           label: "Kost-preview klar",
           tone: "blue"
+        };
+      }
+
+      if (status === "costed") {
+        return {
+          label: "Kostpris lagret",
+          tone: "green"
         };
       }
 
@@ -6065,6 +6075,125 @@ parent.appendChild(productListSection.wrap);
         );
     }
 
+    function loadInvoiceCostReferences(
+      rows
+    ) {
+      state.productsById = {};
+      state.variantsById = {};
+
+      var productIds = [];
+      var variantIds = [];
+
+      (rows || []).forEach(
+        function (row) {
+          if (
+            row.resolved_product_id &&
+            productIds.indexOf(
+              row.resolved_product_id
+            ) === -1
+          ) {
+            productIds.push(
+              row.resolved_product_id
+            );
+          }
+
+          if (
+            row.resolved_product_variant_id &&
+            variantIds.indexOf(
+              row.resolved_product_variant_id
+            ) === -1
+          ) {
+            variantIds.push(
+              row.resolved_product_variant_id
+            );
+          }
+        }
+      );
+
+      var queries = [];
+
+      if (productIds.length) {
+        queries.push(
+          sb
+            .from(
+              "internal_products_view"
+            )
+            .select(
+              "id,name,brand,sales_price_inc_vat,sales_price_ex_vat,vat_rate,purchase_price_ex_vat,is_active"
+            )
+            .in(
+              "id",
+              productIds
+            )
+        );
+      } else {
+        queries.push(
+          Promise.resolve({
+            data: [],
+            error: null
+          })
+        );
+      }
+
+      if (variantIds.length) {
+        queries.push(
+          sb
+            .from(
+              "internal_product_variants_view"
+            )
+            .select(
+              "id,product_id,quickbutik_variant_sku,variant_name,sales_price_inc_vat,purchase_price_ex_vat,is_active"
+            )
+            .in(
+              "id",
+              variantIds
+            )
+        );
+      } else {
+        queries.push(
+          Promise.resolve({
+            data: [],
+            error: null
+          })
+        );
+      }
+
+      return Promise.all(
+        queries
+      ).then(
+        function (results) {
+          if (results[0].error) {
+            throw results[0].error;
+          }
+
+          if (results[1].error) {
+            throw results[1].error;
+          }
+
+          (
+            results[0].data || []
+          ).forEach(
+            function (product) {
+              state.productsById[
+                product.id
+              ] = product;
+            }
+          );
+
+          (
+            results[1].data || []
+          ).forEach(
+            function (variant) {
+              state.variantsById[
+                variant.id
+              ] = variant;
+            }
+          );
+        }
+      );
+    }
+
+
     function loadInvoiceDetails(
       invoiceId
     ) {
@@ -6098,12 +6227,30 @@ parent.appendChild(productListSection.wrap);
 
         sb
           .from(
-            "internal_supplier_invoice_cost_preview_view"
+            "internal_supplier_invoice_cost_only_allocation_view"
           )
           .select("*")
           .eq(
             "invoice_id",
             invoiceId
+          )
+          .order(
+            "line_number",
+            { ascending: true }
+          ),
+
+        sb
+          .from(
+            "internal_product_real_cost_history_view"
+          )
+          .select("*")
+          .eq(
+            "invoice_id",
+            invoiceId
+          )
+          .order(
+            "product_name",
+            { ascending: true }
           )
       ])
         .then(
@@ -6118,6 +6265,12 @@ parent.appendChild(productListSection.wrap);
               resultData(
                 results[1],
                 "Kost-preview"
+              );
+
+            state.costHistoryRows =
+              resultData(
+                results[2],
+                "Lagret kosthistorikk"
               );
 
             var manualProductIds =
@@ -6139,9 +6292,14 @@ parent.appendChild(productListSection.wrap);
                   }
                 );
 
-            return loadVariantsForProducts(
-              manualProductIds
-            );
+            return Promise.all([
+              loadVariantsForProducts(
+                manualProductIds
+              ),
+              loadInvoiceCostReferences(
+                state.reviewRows
+              )
+            ]);
           }
         )
         .then(
@@ -6389,6 +6547,19 @@ parent.appendChild(productListSection.wrap);
           0
       );
 
+      if (
+        Number(
+          summary.ignored_lines ||
+          0
+        ) > 0
+      ) {
+        addSummaryCard(
+          grid,
+          "Utelatt",
+          summary.ignored_lines || 0
+        );
+      }
+
       right.appendChild(grid);
 
       renderInvoiceActions(
@@ -6533,30 +6704,35 @@ parent.appendChild(productListSection.wrap);
           0
         ) === 0
       ) {
-        var prepare =
+        var finalize =
           createPrimaryButton(
-            summary.status === "ready"
-              ? "Oppdater kost-preview"
-              : "Beregn reell kostpris"
+            summary.status === "costed"
+              ? "Oppdater lagret kostpris"
+              : "Ferdigstill kostpris"
           );
 
-        prepare.onclick =
+        finalize.onclick =
           function () {
+            var message =
+              summary.status === "costed"
+                ? "Beregne og lagre kosthistorikken på nytt fra denne fakturaen? Lagerantall blir ikke endret."
+                : "Ferdigstille fakturaen som kostgrunnlag? Reell innkjøpspris lagres med fakturadato. Lagerantall blir ikke endret.";
+
             if (
               !window.confirm(
-                "Klargjøre fakturaen for kostberegning? Dette lager bare preview og endrer ikke lager eller innkjøpspris."
+                message
               )
             ) {
               return;
             }
 
-            prepare.disabled =
+            finalize.disabled =
               true;
-            prepare.textContent =
-              "Beregner…";
+            finalize.textContent =
+              "Lagrer kost…";
 
             sb.rpc(
-              "internal_supplier_invoice_prepare_cost_preview",
+              "internal_supplier_invoice_finalize_cost_only",
               {
                 p_invoice_id:
                   summary.invoice_id
@@ -6577,17 +6753,31 @@ parent.appendChild(productListSection.wrap);
                   alert(
                     row
                       ? (
-                          "Kost-preview er klart for " +
+                          "Kostpris lagret fra " +
                           String(
-                            row.prepared_lines ||
+                            row.tracked_lines ||
                             0
                           ) +
-                          " linjer. Beregnet kost: " +
+                          " linjer" +
+                          (
+                            Number(
+                              row.ignored_lines ||
+                              0
+                            ) > 0
+                              ? " · " +
+                                String(
+                                  row.ignored_lines
+                                ) +
+                                " utelatt"
+                              : ""
+                          ) +
+                          ". Total dokumentert kost: " +
                           fmtMoneyNok(
-                            row.total_landed_cost_nok
-                          )
+                            row.total_real_cost_nok
+                          ) +
+                          ". Lagerantall er ikke endret."
                         )
-                      : "Kost-preview er klart."
+                      : "Kosthistorikken ble lagret. Lagerantall er ikke endret."
                   );
 
                   refreshAll(
@@ -6597,16 +6787,16 @@ parent.appendChild(productListSection.wrap);
               )
               .catch(
                 function (error) {
-                  prepare.disabled =
+                  finalize.disabled =
                     false;
-                  prepare.textContent =
+                  finalize.textContent =
                     summary.status ===
-                    "ready"
-                      ? "Oppdater kost-preview"
-                      : "Beregn reell kostpris";
+                    "costed"
+                      ? "Oppdater lagret kostpris"
+                      : "Ferdigstill kostpris";
 
                   alert(
-                    "Kunne ikke beregne kost-preview: " +
+                    "Kunne ikke lagre kosthistorikken: " +
                       skReadableError(
                         error &&
                         error.message
@@ -6619,7 +6809,7 @@ parent.appendChild(productListSection.wrap);
           };
 
         actions.appendChild(
-          prepare
+          finalize
         );
       }
 
@@ -6738,6 +6928,75 @@ parent.appendChild(productListSection.wrap);
         );
     }
 
+    function ignoreInvoiceRow(
+      row,
+      button
+    ) {
+      var reason =
+        window.prompt(
+          "Hvorfor skal linjen utelates fra produktkost? Linjen beholdes på fakturaen.",
+          "Ikke lagerført produkt / skal ikke påvirke produktkost"
+        );
+
+      if (reason === null) {
+        return;
+      }
+
+      if (
+        !window.confirm(
+          "Utelate denne fakturalinjen fra produktkost? Den beholdes på fakturaen og dens andel av frakt/tillegg blir ikke flyttet over på andre varer."
+        )
+      ) {
+        return;
+      }
+
+      button.disabled = true;
+      var oldText =
+        button.textContent;
+      button.textContent =
+        "Utelater…";
+
+      sb.rpc(
+        "internal_supplier_invoice_ignore_row",
+        {
+          p_import_row_id:
+            row.import_row_id,
+          p_reason:
+            reason || null
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            refreshAll(
+              row.invoice_id
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            button.disabled =
+              false;
+            button.textContent =
+              oldText;
+
+            alert(
+              "Kunne ikke utelate linjen: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                )
+            );
+          }
+        );
+    }
+
+
     function renderOutstandingReview(
       host,
       summary
@@ -6779,7 +7038,7 @@ parent.appendChild(productListSection.wrap);
       var desc =
         el(
           "div",
-          "Her godkjenner du kun linjene hvor systemet ikke kunne velge entydig. Fakturateksten, leverandørens varenummer og dagens lager/kost vises som hjelp."
+          "Her godkjenner du kun linjene hvor systemet ikke kunne velge entydig. Fakturatekst, varenummer/EAN og variantinformasjon brukes som hjelp. Du kan også utelate en linje fra produktkost."
         );
 
       desc.className =
@@ -7000,6 +7259,14 @@ parent.appendChild(productListSection.wrap);
         productLabel
       );
 
+      var actionStack =
+        el("div");
+
+      actionStack.style.display =
+        "grid";
+      actionStack.style.gap =
+        "6px";
+
       var confirm =
         createPrimaryButton(
           "Godkjenn linje"
@@ -7022,8 +7289,31 @@ parent.appendChild(productListSection.wrap);
           );
         };
 
+      var ignore =
+        createButton(
+          "Utelat linje"
+        );
+
+      ignore.onclick =
+        function () {
+          ignoreInvoiceRow(
+            row,
+            ignore
+          );
+        };
+
+      actionStack.appendChild(
+        confirm
+      );
+
+      actionStack.appendChild(
+        ignore
+      );
+
       editor.appendChild(fields);
-      editor.appendChild(confirm);
+      editor.appendChild(
+        actionStack
+      );
       wrap.appendChild(editor);
 
       list.appendChild(wrap);
@@ -7535,8 +7825,25 @@ parent.appendChild(productListSection.wrap);
           }
         };
 
+      var ignore =
+        createButton(
+          "Utelat linje"
+        );
+
+      ignore.onclick =
+        function () {
+          ignoreInvoiceRow(
+            row,
+            ignore
+          );
+        };
+
       actionStack.appendChild(
         confirm
+      );
+
+      actionStack.appendChild(
+        ignore
       );
 
       actionStack.appendChild(
@@ -7830,14 +8137,14 @@ parent.appendChild(productListSection.wrap);
         waiting.appendChild(
           el(
             "h3",
-            "💰 Reell kostpris"
+            "💰 Reell innkjøpspris"
           )
         );
 
         var waitingText =
           el(
             "div",
-            "Kost-preview åpnes når alle fakturalinjene er godkjent. Da fordeles frakt/tillegg og vi viser gammel kost, reell ny kost og foreslått vektet snittkost."
+            "Kostberegningen blir komplett når alle fakturalinjene enten er godkjent eller utelatt. Fakturaantall brukes kun i kostberegningen – lagerantall endres ikke."
           );
 
         waitingText.className =
@@ -7861,62 +8168,85 @@ parent.appendChild(productListSection.wrap);
       section.appendChild(
         el(
           "h3",
-          "💰 Reell kostpris · preview"
+          summary.status === "costed"
+            ? "💰 Reell innkjøpspris · lagret"
+            : "💰 Reell innkjøpspris · klar til lagring"
         )
       );
 
-      var warning =
+      var note =
         el(
           "div",
-          "Preview bruker lagerbeholdningen og kostprisen som ligger i systemet når beregningen kjøres. En gammel historisk faktura skal derfor ikke postes tilbake på dagens lager uten egen kontroll."
+          "Denne beregningen påvirker ikke lagerantall. Gjeldende kost bestemmes senere av seneste fakturadato, så gamle 2026-fakturaer kan registreres i vilkårlig rekkefølge. DB/DG under bruker dagens utsalgspris mot reell kost fra fakturaen."
         );
 
-      warning.className =
-        "sk-warning";
-      warning.style.marginTop =
+      note.className =
+        "sk-note";
+      note.style.marginTop =
         "8px";
 
       section.appendChild(
-        warning
+        note
       );
 
-      if (!state.previewRows.length) {
-        var note =
-          el(
-            "div",
-            "Alle linjer er godkjent. Trykk «Beregn reell kostpris» øverst for å lage preview."
-          );
-
-        note.className =
-          "sk-invoice-section-sub";
-        note.style.marginTop =
-          "10px";
-
-        section.appendChild(note);
-        host.appendChild(section);
-        return;
-      }
-
-      var readyRows =
+      var confirmedRows =
         state.previewRows.filter(
           function (row) {
             return (
+              row.match_status ===
+                "confirmed" &&
               row.calculation_ready ===
-              true
+                true
             );
           }
         );
 
-      var totalCost =
-        readyRows.reduce(
+      var ignoredRows =
+        state.previewRows.filter(
+          function (row) {
+            return (
+              row.match_status ===
+              "ignored"
+            );
+          }
+        );
+
+      var totalRealCost =
+        confirmedRows.reduce(
           function (sum, row) {
             return (
               sum +
               num(
-                row.received_quantity
+                row.invoice_quantity
               ) *
               num(
                 row.landed_unit_cost_nok
+              )
+            );
+          },
+          0
+        );
+
+      var totalExtraTracked =
+        confirmedRows.reduce(
+          function (sum, row) {
+            return (
+              sum +
+              num(
+                row.allocated_extra_cost_nok
+              )
+            );
+          },
+          0
+        );
+
+      var allExtra =
+        state.previewRows.reduce(
+          function (sum, row) {
+            return (
+              sum +
+              num(
+                row.allocated_extra_cost_nok
               )
             );
           },
@@ -7929,37 +8259,29 @@ parent.appendChild(productListSection.wrap);
 
       addSummaryCard(
         cards,
-        "Preview-linjer",
-        state.previewRows.length
+        "Kostlinjer",
+        confirmedRows.length
       );
 
       addSummaryCard(
         cards,
-        "Beregning klar",
-        readyRows.length
+        "Utelatt",
+        ignoredRows.length
       );
 
       addSummaryCard(
         cards,
-        "Reell varekost",
-        fmtMoneyNok(totalCost)
-      );
-
-      addSummaryCard(
-        cards,
-        "Frakt/tillegg",
+        "Total reell innkjøpskost",
         fmtMoneyNok(
-          state.previewRows.reduce(
-            function (sum, row) {
-              return (
-                sum +
-                num(
-                  row.allocated_extra_cost_nok
-                )
-              );
-            },
-            0
-          )
+          totalRealCost
+        )
+      );
+
+      addSummaryCard(
+        cards,
+        "Frakt/tillegg totalt",
+        fmtMoneyNok(
+          allExtra
         )
       );
 
@@ -7974,229 +8296,395 @@ parent.appendChild(productListSection.wrap);
 
       section.appendChild(cards);
 
-      var wrap = el("div");
-      wrap.className =
-        "sk-invoice-preview-wrap";
+      function reviewForImport(
+        importRowId
+      ) {
+        return (
+          state.reviewRows.find(
+            function (review) {
+              return (
+                review.import_row_id ===
+                importRowId
+              );
+            }
+          ) || {}
+        );
+      }
 
-      var table = el("table");
-      table.className =
-        "sk-invoice-preview-table";
-
-      var thead = el("thead");
-      var trh = el("tr");
-
-      [
-        "Produkt",
-        "Variant",
-        "Ant.",
-        "Lager før",
-        "Kost før",
-        "Fakturapris",
-        "Fordelt frakt/tillegg",
-        "Reell ny kost/stk",
-        "Foreslått snittkost",
-        "Lager etter",
-        "Status"
-      ].forEach(
-        function (label) {
-          trh.appendChild(
-            el("th", label)
+      function salesInfoForRow(
+        row
+      ) {
+        var review =
+          reviewForImport(
+            row.import_row_id
           );
+
+        var product =
+          state.productsById[
+            review.resolved_product_id ||
+            row.product_id
+          ] || {};
+
+        var variant =
+          state.variantsById[
+            review.resolved_product_variant_id ||
+            row.product_variant_id
+          ] || {};
+
+        var salesInc =
+          maybeNum(
+            variant.sales_price_inc_vat
+          );
+
+        if (salesInc === null) {
+          salesInc =
+            maybeNum(
+              product.sales_price_inc_vat
+            );
         }
-      );
 
-      thead.appendChild(trh);
-      table.appendChild(thead);
+        var salesEx =
+          null;
 
-      var tbody = el("tbody");
-
-      state.previewRows
-        .slice()
-        .sort(
-          function (a, b) {
-            return String(
-              a.product_name || ""
-            ).localeCompare(
-              String(
-                b.product_name || ""
-              ),
-              "nb"
+        if (salesInc !== null) {
+          salesEx =
+            salesInc /
+            (
+              1 +
+              num(
+                product.vat_rate ||
+                25
+              ) /
+              100
             );
-          }
-        )
-        .forEach(
-          function (row) {
-            var tr = el("tr");
-
-            tr.appendChild(
-              el(
-                "td",
-                row.product_name ||
-                "–"
-              )
+        } else {
+          salesEx =
+            maybeNum(
+              product.sales_price_ex_vat
             );
+        }
 
-            tr.appendChild(
-              el(
-                "td",
-                row.quickbutik_variant_sku ||
-                row.variant_name ||
-                "–"
-              )
+        var landed =
+          maybeNum(
+            row.landed_unit_cost_nok
+          );
+
+        var db =
+          salesEx !== null &&
+          landed !== null
+            ? salesEx - landed
+            : null;
+
+        var dg =
+          db !== null &&
+          salesEx !== null &&
+          salesEx > 0
+            ? db / salesEx * 100
+            : null;
+
+        return {
+          product: product,
+          variant: variant,
+          salesInc: salesInc,
+          salesEx: salesEx,
+          db: db,
+          dg: dg,
+          review: review
+        };
+      }
+
+      if (confirmedRows.length) {
+        var wrap = el("div");
+        wrap.className =
+          "sk-invoice-preview-wrap";
+
+        var table = el("table");
+        table.className =
+          "sk-invoice-preview-table";
+
+        var thead = el("thead");
+        var trh = el("tr");
+
+        [
+          "Produkt",
+          "Variant",
+          "Fakturaantall",
+          "Fakturapris",
+          "Vareverdi NOK",
+          "Fordelt frakt/tillegg",
+          "Reell kost/stk",
+          "Salgspris",
+          "DB/stk",
+          "DG",
+          "Status"
+        ].forEach(
+          function (label) {
+            trh.appendChild(
+              el("th", label)
             );
-
-            var qty =
-              el(
-                "td",
-                fmtNumber(
-                  row.received_quantity,
-                  0
-                )
-              );
-            qty.className = "sk-num";
-            tr.appendChild(qty);
-
-            var stockBefore =
-              el(
-                "td",
-                fmtNumber(
-                  row.stock_before,
-                  0
-                )
-              );
-            stockBefore.className =
-              "sk-num";
-            tr.appendChild(
-              stockBefore
-            );
-
-            var oldCost =
-              el(
-                "td",
-                fmtMoneyNok(
-                  row.average_cost_before_nok
-                )
-              );
-            oldCost.className =
-              "sk-num";
-            tr.appendChild(oldCost);
-
-            var invoicePrice =
-              el(
-                "td",
-                fmtCurrency(
-                  row.unit_price_ex_vat_currency,
-                  row.invoice_currency
-                )
-              );
-            invoicePrice.className =
-              "sk-num";
-            tr.appendChild(
-              invoicePrice
-            );
-
-            var extra =
-              el(
-                "td",
-                fmtMoneyNok(
-                  row.allocated_extra_cost_nok
-                )
-              );
-            extra.className =
-              "sk-num";
-            tr.appendChild(extra);
-
-            var landed =
-              el(
-                "td",
-                fmtMoneyNok(
-                  row.landed_unit_cost_nok
-                )
-              );
-            landed.className =
-              "sk-num sk-invoice-preview-cost";
-            tr.appendChild(landed);
-
-            var proposed =
-              el(
-                "td",
-                fmtMoneyNok(
-                  row.proposed_average_cost_nok
-                )
-              );
-            proposed.className =
-              "sk-num sk-invoice-preview-new";
-            tr.appendChild(
-              proposed
-            );
-
-            var stockAfter =
-              el(
-                "td",
-                fmtNumber(
-                  row.proposed_stock_after,
-                  0
-                )
-              );
-            stockAfter.className =
-              "sk-num";
-            tr.appendChild(
-              stockAfter
-            );
-
-            var statusCell =
-              el("td");
-
-            statusCell.appendChild(
-              statusBadge(
-                row.calculation_ready ===
-                  true
-                  ? (
-                      row.cost_locked ===
-                        true
-                        ? "Klar · kost låst"
-                        : "Klar"
-                    )
-                  : (
-                      row.calculation_status ||
-                      "Ikke klar"
-                    ),
-                row.calculation_ready ===
-                  true
-                  ? (
-                      row.cost_locked ===
-                        true
-                        ? "yellow"
-                        : "green"
-                    )
-                  : "red"
-              )
-            );
-
-            tr.appendChild(
-              statusCell
-            );
-
-            tbody.appendChild(tr);
           }
         );
 
-      table.appendChild(tbody);
-      wrap.appendChild(table);
-      section.appendChild(wrap);
+        thead.appendChild(trh);
+        table.appendChild(thead);
+
+        var tbody = el("tbody");
+
+        confirmedRows
+          .slice()
+          .sort(
+            function (a, b) {
+              var aReview =
+                reviewForImport(
+                  a.import_row_id
+                );
+
+              var bReview =
+                reviewForImport(
+                  b.import_row_id
+                );
+
+              return String(
+                aReview.resolved_product_name ||
+                a.supplier_description ||
+                ""
+              ).localeCompare(
+                String(
+                  bReview.resolved_product_name ||
+                  b.supplier_description ||
+                  ""
+                ),
+                "nb"
+              );
+            }
+          )
+          .forEach(
+            function (row) {
+              var info =
+                salesInfoForRow(
+                  row
+                );
+
+              var review =
+                info.review;
+
+              var tr = el("tr");
+
+              tr.appendChild(
+                el(
+                  "td",
+                  review.resolved_product_name ||
+                  info.product.name ||
+                  row.supplier_description ||
+                  "–"
+                )
+              );
+
+              tr.appendChild(
+                el(
+                  "td",
+                  info.variant.quickbutik_variant_sku ||
+                  review.resolved_variant_name ||
+                  "Ingen variant"
+                )
+              );
+
+              var qty =
+                el(
+                  "td",
+                  fmtNumber(
+                    row.invoice_quantity,
+                    0
+                  )
+                );
+              qty.className =
+                "sk-num";
+              tr.appendChild(qty);
+
+              var invoicePrice =
+                el(
+                  "td",
+                  fmtCurrency(
+                    row.unit_price_ex_vat_currency,
+                    row.invoice_currency
+                  )
+                );
+              invoicePrice.className =
+                "sk-num";
+              tr.appendChild(
+                invoicePrice
+              );
+
+              var goodsNok =
+                el(
+                  "td",
+                  fmtMoneyNok(
+                    row.goods_line_value_nok
+                  )
+                );
+              goodsNok.className =
+                "sk-num";
+              tr.appendChild(
+                goodsNok
+              );
+
+              var extra =
+                el(
+                  "td",
+                  fmtMoneyNok(
+                    row.allocated_extra_cost_nok
+                  )
+                );
+              extra.className =
+                "sk-num";
+              tr.appendChild(extra);
+
+              var landed =
+                el(
+                  "td",
+                  fmtMoneyNok(
+                    row.landed_unit_cost_nok
+                  )
+                );
+              landed.className =
+                "sk-num sk-invoice-preview-cost";
+              tr.appendChild(landed);
+
+              var sales =
+                el(
+                  "td",
+                  fmtMoneyNok(
+                    info.salesInc
+                  )
+                );
+              sales.className =
+                "sk-num";
+              tr.appendChild(sales);
+
+              var dbCell =
+                el(
+                  "td",
+                  fmtMoneyNok(
+                    info.db
+                  )
+                );
+              dbCell.className =
+                "sk-num";
+              tr.appendChild(
+                dbCell
+              );
+
+              var dgCell =
+                el(
+                  "td",
+                  info.dg === null
+                    ? "–"
+                    : fmtNumber(
+                        info.dg,
+                        1
+                      ) + "%"
+                );
+              dgCell.className =
+                "sk-num";
+              tr.appendChild(
+                dgCell
+              );
+
+              var statusCell =
+                el("td");
+
+              statusCell.appendChild(
+                statusBadge(
+                  row.calculation_ready ===
+                    true
+                    ? "Klar"
+                    : (
+                        row.calculation_status ||
+                        "Ikke klar"
+                      ),
+                  row.calculation_ready ===
+                    true
+                    ? "green"
+                    : "red"
+                )
+              );
+
+              tr.appendChild(
+                statusCell
+              );
+
+              tbody.appendChild(tr);
+            }
+          );
+
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        section.appendChild(wrap);
+      }
+
+      if (ignoredRows.length) {
+        var ignored =
+          createCollapsibleSection(
+            "🚫 Utelatte fakturalinjer · " +
+              String(
+                ignoredRows.length
+              ),
+            "Linjen beholdes på fakturaen, men påvirker ikke reell produktkost. Dens egen fraktandel blir heller ikke fordelt over på andre varer.",
+            false
+          );
+
+        ignoredRows.forEach(
+          function (row) {
+            var item =
+              el(
+                "div",
+                "#" +
+                  String(
+                    row.line_number
+                  ) +
+                  " · " +
+                  (
+                    row.supplier_description ||
+                    "Fakturalinje"
+                  ) +
+                  " · " +
+                  fmtCurrency(
+                    row.line_total_currency,
+                    row.invoice_currency
+                  )
+              );
+
+            item.className =
+              "sk-invoice-small";
+            item.style.padding =
+              "6px 0";
+
+            ignored.body.appendChild(
+              item
+            );
+          }
+        );
+
+        section.appendChild(
+          ignored.wrap
+        );
+      }
 
       var foot =
         el(
           "div",
-          "Ingen av verdiene i denne tabellen er sendt til Quickbutik eller skrevet tilbake til produktkost. Posting bygges som et eget, eksplisitt steg senere."
+          summary.status === "costed"
+            ? "Kosthistorikken fra denne fakturaen er lagret. Gjeldende reell innkjøpspris per vare bestemmes av den nyeste fakturadatoen på tvers av alle registrerte fakturaer."
+            : "Kontroller kost og DB/DG. Trykk «Ferdigstill kostpris» øverst når fakturaen skal lagres i kosthistorikken. Ingen lagerantall blir endret."
         );
 
       foot.className =
         "sk-invoice-section-sub";
       foot.style.marginTop =
-        "8px";
+        "9px";
 
       section.appendChild(foot);
+
       host.appendChild(section);
     }
 
@@ -35645,4 +36133,5 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
+
 
