@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.7 · Latitude utstyrsfaktura"
+      "Admin v5.7.1 · Latitude dato/handling/shipping"
     );
 
     var products =
@@ -6181,13 +6181,145 @@ parent.appendChild(productListSection.wrap);
 
       var invoiceDateMatch =
         fullText.match(
-          /Datum\s+(\d{4}-\d{2}-\d{2})/i
+          /Datum\s*:?\s*(\d{4}-\d{2}-\d{2})/i
         );
 
       var dueDateMatch =
         fullText.match(
-          /Förfallodatum\s+(\d{4}-\d{2}-\d{2})/i
+          /Förfallodatum\s*:?\s*(\d{4}-\d{2}-\d{2})/i
         );
+
+      /*
+       * På enkelte DiscGolfPark-PDF-er ligger kolonneoverskriftene
+       * "Kundnr.  Datum  Sida" på én tekstlinje og verdiene
+       * "C10847  2026-08-18  1 av 1" på neste. Da står ikke ordet
+       * Datum direkte foran datoen i PDF-teksten.
+       */
+      if (!invoiceDateMatch) {
+        for (
+          var d = 0;
+          d < allLines.length - 1;
+          d += 1
+        ) {
+          if (
+            /Kundnr\./i.test(
+              allLines[d]
+            ) &&
+            /Datum/i.test(
+              allLines[d]
+            )
+          ) {
+            var headerDate =
+              String(
+                allLines[d + 1] || ""
+              ).match(
+                /(\d{4}-\d{2}-\d{2})/
+              );
+
+            if (headerDate) {
+              invoiceDateMatch =
+                headerDate;
+              break;
+            }
+          }
+        }
+      }
+
+      /*
+       * Samme kolonnelogikk brukes for
+       * "Förfallodatum  Betalningsvillkor".
+       */
+      if (!dueDateMatch) {
+        for (
+          var fd = 0;
+          fd < allLines.length - 1;
+          fd += 1
+        ) {
+          if (
+            /Förfallodatum/i.test(
+              allLines[fd]
+            )
+          ) {
+            var dueHeaderDate =
+              String(
+                allLines[fd + 1] || ""
+              ).match(
+                /(\d{4}-\d{2}-\d{2})/
+              );
+
+            if (dueHeaderDate) {
+              dueDateMatch =
+                dueHeaderDate;
+              break;
+            }
+          }
+        }
+      }
+
+      /*
+       * Siste sikkerhetsnett for akkurat denne fakturatypen:
+       * - leveringsdatoene på varelinjene er ofte dagen før fakturadato
+       * - forfallsdato er senere enn fakturadato
+       *
+       * Vi bruker kun dette når de eksplisitte headerforsøkene feiler.
+       */
+      if (
+        !invoiceDateMatch ||
+        !dueDateMatch
+      ) {
+        var uniqueIsoDates = [];
+
+        allLines.forEach(
+          function (line) {
+            var found =
+              String(
+                line || ""
+              ).match(
+                /\b\d{4}-\d{2}-\d{2}\b/g
+              ) || [];
+
+            found.forEach(
+              function (value) {
+                if (
+                  uniqueIsoDates.indexOf(
+                    value
+                  ) < 0
+                ) {
+                  uniqueIsoDates.push(
+                    value
+                  );
+                }
+              }
+            );
+          }
+        );
+
+        uniqueIsoDates.sort();
+
+        if (
+          !dueDateMatch &&
+          uniqueIsoDates.length >= 2
+        ) {
+          dueDateMatch = [
+            "",
+            uniqueIsoDates[
+              uniqueIsoDates.length - 1
+            ]
+          ];
+        }
+
+        if (
+          !invoiceDateMatch &&
+          uniqueIsoDates.length >= 2
+        ) {
+          invoiceDateMatch = [
+            "",
+            uniqueIsoDates[
+              uniqueIsoDates.length - 2
+            ]
+          ];
+        }
+      }
 
       var currencyMatch =
         fullText.match(
@@ -6488,7 +6620,7 @@ parent.appendChild(productListSection.wrap);
            */
           var match =
             compact.match(
-              /^(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(?:\s+(.*))?$/i
+              /^(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(?:\s+(.*))?$/i
             );
 
           if (match) {
@@ -6521,7 +6653,7 @@ parent.appendChild(productListSection.wrap);
            */
           match =
             compact.match(
-              /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?(?:\s+(.*))?$/i
+              /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?(?:\s+(.*))?$/i
             );
 
           if (match) {
@@ -6649,7 +6781,7 @@ parent.appendChild(productListSection.wrap);
             allLines.join(" ");
 
           var flatPattern =
-            /(?:^|\s)(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(.+?)(?=\s+\d{5,}(?:\s+EAN:|\s+\d{4}-\d{2}-\d{2})|\s+Outside Community|\s+Netto\b|$)/gi;
+            /(?:^|\s)(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(.+?)(?=\s+\d{5,}(?:\s+EAN:|\s+\d{4}-\d{2}-\d{2})|\s+Outside Community|\s+Netto\b|$)/gi;
 
           var flatMatch;
 
@@ -9722,7 +9854,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.7 · " +
+                "PDF-import via Admin v5.7.1 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -41309,4 +41441,3 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
-
