@@ -1085,6 +1085,17 @@
       "#sk-internal-root .sk-invoice-editor-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}" +
       "#sk-internal-root .sk-invoice-editor label{display:grid;gap:4px;font-size:10px;font-weight:900;color:#475569;}" +
       "#sk-internal-root .sk-invoice-editor select,#sk-internal-root .sk-invoice-editor input{width:100%;padding:8px 9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-size:11px;}" +
+      "#sk-internal-root .sk-variant-split{display:none;margin-top:10px;padding:12px;border:1px solid #bfdbfe;border-radius:12px;background:#f8fbff;}" +
+      "#sk-internal-root .sk-variant-split.is-open{display:grid;gap:8px;}" +
+      "#sk-internal-root .sk-variant-split-title{font-size:11px;font-weight:900;color:#0f172a;}" +
+      "#sk-internal-root .sk-variant-split-help{font-size:10px;line-height:1.45;color:#475569;}" +
+      "#sk-internal-root .sk-variant-split-list{display:grid;gap:6px;}" +
+      "#sk-internal-root .sk-variant-split-row{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;align-items:center;padding:7px 8px;border:1px solid #e2e8f0;border-radius:9px;background:#fff;}" +
+      "#sk-internal-root .sk-variant-split-name{font-size:10px;font-weight:800;color:#334155;line-height:1.35;}" +
+      "#sk-internal-root .sk-variant-split-row input{width:100%;padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:11px;text-align:right;}" +
+      "#sk-internal-root .sk-variant-split-footer{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:2px;}" +
+      "#sk-internal-root .sk-variant-split-total{font-size:10px;font-weight:900;color:#92400e;}" +
+      "#sk-internal-root .sk-variant-split-total.is-ok{color:#166534;}" +
       "#sk-internal-root .sk-invoice-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;}" +
       "#sk-internal-root .sk-invoice-safe-table{width:100%;border-collapse:collapse;font-size:10px;}" +
       "#sk-internal-root .sk-invoice-safe-table th{padding:7px;background:#f8fafc;text-align:left;border-bottom:1px solid #e2e8f0;white-space:nowrap;}" +
@@ -1180,6 +1191,7 @@
       "  #sk-internal-root .sk-invoice-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-invoice-editor{display:block;}" +
       "  #sk-internal-root .sk-invoice-editor-fields{grid-template-columns:1fr;margin-bottom:8px;}" +
+      "  #sk-internal-root .sk-variant-split-row{grid-template-columns:minmax(0,1fr) 78px;}" +
       "  #sk-internal-root .sk-invoice-import-grid{grid-template-columns:1fr;}" +
       "  #sk-internal-root .sk-invoice-import-summary{grid-template-columns:repeat(2,minmax(0,1fr));}" +
       "  #sk-internal-root .sk-market-radar-coverage{margin-top:8px;white-space:normal;}" +
@@ -1437,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.4.2 · Sune varenr-format"
+      "Admin v5.5 · Variantfordeling"
     );
 
     var products =
@@ -8792,7 +8804,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.4.2 · " +
+                "PDF-import via Admin v5.5 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -10604,6 +10616,388 @@ parent.appendChild(productListSection.wrap);
         );
     }
 
+    function confirmRowVariantSplit(
+      row,
+      productId,
+      allocations,
+      button
+    ) {
+      if (!productId) {
+        alert(
+          "Velg produkt først."
+        );
+        return;
+      }
+
+      if (
+        !allocations ||
+        !allocations.length
+      ) {
+        alert(
+          "Legg inn antall på minst én variant."
+        );
+        return;
+      }
+
+      button.disabled = true;
+      var oldText =
+        button.textContent;
+      button.textContent =
+        "Godkjenner…";
+
+      sb.rpc(
+        "internal_supplier_invoice_confirm_row_variant_split",
+        {
+          p_import_row_id:
+            row.import_row_id,
+          p_product_id:
+            productId,
+          p_allocations:
+            allocations
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            refreshAll(
+              row.invoice_id
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            button.disabled =
+              false;
+            button.textContent =
+              oldText;
+
+            alert(
+              "Kunne ikke lagre variantfordelingen: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                )
+            );
+          }
+        );
+    }
+
+    function createVariantSplitEditor(
+      row,
+      productId,
+      variants
+    ) {
+      var box =
+        el("div");
+
+      box.className =
+        "sk-variant-split";
+
+      var title =
+        el(
+          "div",
+          "Fordel " +
+            fmtNumber(
+              row.quantity,
+              0
+            ) +
+            " stk på varianter"
+        );
+
+      title.className =
+        "sk-variant-split-title";
+      box.appendChild(title);
+
+      var help =
+        el(
+          "div",
+          "Legg inn hvor mange av hver Quickbutik-variant som faktisk kom på denne fakturalinjen. Summen må være nøyaktig " +
+            fmtNumber(
+              row.quantity,
+              0
+            ) +
+            " stk. Dette brukes bare til kosthistorikk – lagerantall endres ikke."
+        );
+
+      help.className =
+        "sk-variant-split-help";
+      box.appendChild(help);
+
+      var list =
+        el("div");
+
+      list.className =
+        "sk-variant-split-list";
+      box.appendChild(list);
+
+      var inputs = [];
+
+      (
+        variants || []
+      ).forEach(
+        function (variant) {
+          var line =
+            el("div");
+
+          line.className =
+            "sk-variant-split-row";
+
+          var name =
+            el(
+              "div",
+              variantOptionLabel(
+                variant
+              )
+            );
+
+          name.className =
+            "sk-variant-split-name";
+
+          var input =
+            el("input");
+
+          input.type =
+            "number";
+          input.min =
+            "0";
+          input.step =
+            "1";
+          input.inputMode =
+            "numeric";
+          input.placeholder =
+            "0";
+          input.value =
+            "";
+
+          line.appendChild(name);
+          line.appendChild(input);
+          list.appendChild(line);
+
+          inputs.push({
+            variant: variant,
+            input: input
+          });
+        }
+      );
+
+      var footer =
+        el("div");
+
+      footer.className =
+        "sk-variant-split-footer";
+
+      var total =
+        el("div");
+
+      total.className =
+        "sk-variant-split-total";
+
+      var save =
+        createPrimaryButton(
+          "Godkjenn fordeling"
+        );
+
+      footer.appendChild(total);
+      footer.appendChild(save);
+      box.appendChild(footer);
+
+      function readAllocationState() {
+        var allocations = [];
+        var sum = 0;
+        var invalid = false;
+
+        inputs.forEach(
+          function (entry) {
+            var raw =
+              String(
+                entry.input.value ||
+                ""
+              ).trim();
+
+            if (!raw) {
+              return;
+            }
+
+            var quantity =
+              Number(
+                raw.replace(
+                  ",",
+                  "."
+                )
+              );
+
+            if (
+              !Number.isFinite(
+                quantity
+              ) ||
+              quantity < 0
+            ) {
+              invalid = true;
+              return;
+            }
+
+            if (quantity > 0) {
+              sum += quantity;
+
+              allocations.push({
+                variant_id:
+                  entry.variant.id,
+                quantity:
+                  quantity
+              });
+            }
+          }
+        );
+
+        return {
+          allocations:
+            allocations,
+          sum:
+            sum,
+          invalid:
+            invalid
+        };
+      }
+
+      function updateTotal() {
+        var stateValue =
+          readAllocationState();
+
+        var wanted =
+          Number(
+            row.quantity ||
+            0
+          );
+
+        var isOk =
+          !stateValue.invalid &&
+          stateValue.allocations.length >
+            0 &&
+          Math.abs(
+            stateValue.sum -
+            wanted
+          ) < 0.000001;
+
+        total.textContent =
+          "Fordelt: " +
+          fmtNumber(
+            stateValue.sum,
+            0
+          ) +
+          " / " +
+          fmtNumber(
+            wanted,
+            0
+          ) +
+          " stk";
+
+        total.className =
+          "sk-variant-split-total" +
+          (
+            isOk
+              ? " is-ok"
+              : ""
+          );
+
+        save.disabled =
+          !isOk;
+      }
+
+      inputs.forEach(
+        function (entry) {
+          entry.input.addEventListener(
+            "input",
+            updateTotal
+          );
+        }
+      );
+
+      save.onclick =
+        function () {
+          var stateValue =
+            readAllocationState();
+
+          var wanted =
+            Number(
+              row.quantity ||
+              0
+            );
+
+          if (
+            stateValue.invalid ||
+            !stateValue.allocations.length ||
+            Math.abs(
+              stateValue.sum -
+              wanted
+            ) >= 0.000001
+          ) {
+            alert(
+              "Variantantallene må summere til nøyaktig " +
+                fmtNumber(
+                  wanted,
+                  0
+                ) +
+                " stk."
+            );
+            return;
+          }
+
+          if (
+            !window.confirm(
+              "Godkjenne fakturalinjen med " +
+                String(
+                  stateValue.allocations.length
+                ) +
+                " varianter og totalt " +
+                fmtNumber(
+                  stateValue.sum,
+                  0
+                ) +
+                " stk? Lagerantall endres ikke."
+            )
+          ) {
+            return;
+          }
+
+          confirmRowVariantSplit(
+            row,
+            productId,
+            stateValue.allocations,
+            save
+          );
+        };
+
+      updateTotal();
+
+      return {
+        box: box,
+
+        open: function () {
+          box.classList.add(
+            "is-open"
+          );
+        },
+
+        close: function () {
+          box.classList.remove(
+            "is-open"
+          );
+        },
+
+        isOpen: function () {
+          return box.classList.contains(
+            "is-open"
+          );
+        }
+      };
+    }
+
+
     function ignoreInvoiceRow(
       row,
       button
@@ -10853,12 +11247,7 @@ parent.appendChild(productListSection.wrap);
       var help =
         el(
           "div",
-          "Leverandørens primærfarge: " +
-            (
-              row.supplier_primary_color ||
-              "ukjent"
-            ) +
-            ". Velg hvilken Quickbutik-variant denne leveransen faktisk tilhører."
+          "Velg én variant hvis hele fakturaantallet gjelder samme variant, eller fordel antallet på flere varianter dersom leveransen er assortert."
         );
 
       help.className =
@@ -10878,7 +11267,7 @@ parent.appendChild(productListSection.wrap);
       var label = el("label");
       label.appendChild(
         document.createTextNode(
-          "Variant"
+          "Én variant"
         )
       );
 
@@ -10945,7 +11334,7 @@ parent.appendChild(productListSection.wrap);
 
       var confirm =
         createPrimaryButton(
-          "Godkjenn linje"
+          "Godkjenn én variant"
         );
 
       confirm.onclick =
@@ -10965,6 +11354,46 @@ parent.appendChild(productListSection.wrap);
           );
         };
 
+      actionStack.appendChild(
+        confirm
+      );
+
+      var splitEditor =
+        null;
+
+      if (variants.length > 1) {
+        splitEditor =
+          createVariantSplitEditor(
+            row,
+            row.resolved_product_id,
+            variants
+          );
+
+        var splitToggle =
+          createButton(
+            "Fordel på flere varianter"
+          );
+
+        splitToggle.onclick =
+          function () {
+            if (
+              splitEditor.isOpen()
+            ) {
+              splitEditor.close();
+              splitToggle.textContent =
+                "Fordel på flere varianter";
+            } else {
+              splitEditor.open();
+              splitToggle.textContent =
+                "Skjul variantfordeling";
+            }
+          };
+
+        actionStack.appendChild(
+          splitToggle
+        );
+      }
+
       var ignore =
         createButton(
           "Utelat linje"
@@ -10979,10 +11408,6 @@ parent.appendChild(productListSection.wrap);
         };
 
       actionStack.appendChild(
-        confirm
-      );
-
-      actionStack.appendChild(
         ignore
       );
 
@@ -10991,6 +11416,12 @@ parent.appendChild(productListSection.wrap);
         actionStack
       );
       wrap.appendChild(editor);
+
+      if (splitEditor) {
+        wrap.appendChild(
+          splitEditor.box
+        );
+      }
 
       list.appendChild(wrap);
     }
@@ -11116,7 +11547,7 @@ parent.appendChild(productListSection.wrap);
       match.appendChild(
         el(
           "div",
-          "Smart søk ser på kjernen i produktnavnet uavhengig av ordrekkefølge og ignorerer ord som Driver, Midrange, Assorted og vekt. Velg riktig produkt hvis flere kandidater er plausible."
+          "Smart søk ser på kjernen i produktnavnet uavhengig av ordrekkefølge og ignorerer ord som Driver, Midrange, Assorted og vekt. Når produktet har flere varianter kan du enten velge én variant eller fordele fakturaantallet på flere."
         )
       );
 
@@ -11204,7 +11635,7 @@ parent.appendChild(productListSection.wrap);
 
       variantLabel.appendChild(
         document.createTextNode(
-          "Variant"
+          "Én variant"
         )
       );
 
@@ -11233,13 +11664,23 @@ parent.appendChild(productListSection.wrap);
         variants: []
       };
 
+      var splitHost =
+        el("div");
+
+      var splitEditor =
+        null;
+
       function renderChosenVariants(
         variants
       ) {
         clear(variantSelect);
+        clear(splitHost);
 
         chosen.variants =
           variants || [];
+
+        splitEditor =
+          null;
 
         if (!chosen.variants.length) {
           addOption(
@@ -11250,6 +11691,12 @@ parent.appendChild(productListSection.wrap);
 
           variantSelect.disabled =
             true;
+
+          splitToggle.disabled =
+            true;
+          splitToggle.style.display =
+            "none";
+
           return;
         }
 
@@ -11273,6 +11720,34 @@ parent.appendChild(productListSection.wrap);
 
         variantSelect.disabled =
           false;
+
+        if (
+          chosen.variants.length >
+          1
+        ) {
+          splitEditor =
+            createVariantSplitEditor(
+              row,
+              chosen.productId,
+              chosen.variants
+            );
+
+          splitHost.appendChild(
+            splitEditor.box
+          );
+
+          splitToggle.disabled =
+            false;
+          splitToggle.style.display =
+            "";
+          splitToggle.textContent =
+            "Fordel på flere varianter";
+        } else {
+          splitToggle.disabled =
+            true;
+          splitToggle.style.display =
+            "none";
+        }
       }
 
       function searchProducts() {
@@ -11560,6 +12035,35 @@ parent.appendChild(productListSection.wrap);
           );
         };
 
+      var splitToggle =
+        createButton(
+          "Fordel på flere varianter"
+        );
+
+      splitToggle.disabled =
+        true;
+      splitToggle.style.display =
+        "none";
+
+      splitToggle.onclick =
+        function () {
+          if (!splitEditor) {
+            return;
+          }
+
+          if (
+            splitEditor.isOpen()
+          ) {
+            splitEditor.close();
+            splitToggle.textContent =
+              "Fordel på flere varianter";
+          } else {
+            splitEditor.open();
+            splitToggle.textContent =
+              "Skjul variantfordeling";
+          }
+        };
+
       var productsBtn =
         createButton(
           "Gå til Produkter"
@@ -11592,6 +12096,10 @@ parent.appendChild(productListSection.wrap);
       );
 
       actionStack.appendChild(
+        splitToggle
+      );
+
+      actionStack.appendChild(
         ignore
       );
 
@@ -11605,6 +12113,7 @@ parent.appendChild(productListSection.wrap);
       );
 
       wrap.appendChild(editor);
+      wrap.appendChild(splitHost);
       list.appendChild(wrap);
     }
 
