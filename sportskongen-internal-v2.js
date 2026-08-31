@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.7.1 · Latitude dato/handling/shipping"
+      "Admin v5.7.2 · Automatisk Norges Bank-kurs"
     );
 
     var products =
@@ -8130,6 +8130,528 @@ parent.appendChild(productListSection.wrap);
       );
     }
 
+    function fxDateMinusDays(
+      isoDate,
+      days
+    ) {
+      var date =
+        new Date(
+          isoDate +
+          "T12:00:00"
+        );
+
+      if (
+        !Number.isFinite(
+          date.getTime()
+        )
+      ) {
+        return isoDate;
+      }
+
+      date.setDate(
+        date.getDate() -
+        Number(
+          days || 0
+        )
+      );
+
+      var year =
+        date.getFullYear();
+
+      var month =
+        String(
+          date.getMonth() + 1
+        ).padStart(
+          2,
+          "0"
+        );
+
+      var day =
+        String(
+          date.getDate()
+        ).padStart(
+          2,
+          "0"
+        );
+
+      return (
+        year +
+        "-" +
+        month +
+        "-" +
+        day
+      );
+    }
+
+    function parseNorgesBankCsvNumber(
+      value
+    ) {
+      var clean =
+        String(
+          value === null ||
+          value === undefined
+            ? ""
+            : value
+        )
+          .replace(
+            /\u00a0/g,
+            ""
+          )
+          .replace(
+            /\s+/g,
+            ""
+          )
+          .trim();
+
+      if (!clean) {
+        return null;
+      }
+
+      /*
+       * API-et kan bruke komma eller punktum avhengig av locale/format.
+       */
+      if (
+        clean.indexOf(",") >= 0 &&
+        clean.indexOf(".") >= 0
+      ) {
+        if (
+          clean.lastIndexOf(",") >
+          clean.lastIndexOf(".")
+        ) {
+          clean =
+            clean
+              .replace(
+                /\./g,
+                ""
+              )
+              .replace(
+                ",",
+                "."
+              );
+        } else {
+          clean =
+            clean.replace(
+              /,/g,
+              ""
+            );
+        }
+      } else {
+        clean =
+          clean.replace(
+            ",",
+            "."
+          );
+      }
+
+      var parsed =
+        Number(
+          clean
+        );
+
+      return Number.isFinite(
+        parsed
+      )
+        ? parsed
+        : null;
+    }
+
+    function parseSemicolonCsv(
+      textValue
+    ) {
+      var lines =
+        String(
+          textValue || ""
+        )
+          .replace(
+            /^\uFEFF/,
+            ""
+          )
+          .split(
+            /\r?\n/
+          )
+          .filter(
+            function (line) {
+              return (
+                String(
+                  line || ""
+                ).trim() !==
+                ""
+              );
+            }
+          );
+
+      if (!lines.length) {
+        return [];
+      }
+
+      function parseLine(
+        line
+      ) {
+        var result = [];
+        var current = "";
+        var quoted = false;
+
+        for (
+          var i = 0;
+          i < line.length;
+          i += 1
+        ) {
+          var char =
+            line[i];
+
+          if (char === '"') {
+            if (
+              quoted &&
+              line[
+                i + 1
+              ] === '"'
+            ) {
+              current += '"';
+              i += 1;
+            } else {
+              quoted =
+                !quoted;
+            }
+
+            continue;
+          }
+
+          if (
+            char === ";" &&
+            !quoted
+          ) {
+            result.push(
+              current
+            );
+            current = "";
+            continue;
+          }
+
+          current += char;
+        }
+
+        result.push(
+          current
+        );
+
+        return result;
+      }
+
+      var headers =
+        parseLine(
+          lines[0]
+        ).map(
+          function (header) {
+            return String(
+              header || ""
+            ).trim();
+          }
+        );
+
+      return lines
+        .slice(1)
+        .map(
+          function (line) {
+            var values =
+              parseLine(
+                line
+              );
+
+            var row = {};
+
+            headers.forEach(
+              function (
+                header,
+                index
+              ) {
+                row[header] =
+                  values[index] !==
+                  undefined
+                    ? values[index]
+                    : "";
+              }
+            );
+
+            return row;
+          }
+        );
+    }
+
+    function fetchNorgesBankFxRate(
+      currency,
+      invoiceDate
+    ) {
+      var code =
+        String(
+          currency || ""
+        )
+          .trim()
+          .toUpperCase();
+
+      if (
+        !code ||
+        !invoiceDate
+      ) {
+        return Promise.resolve(
+          null
+        );
+      }
+
+      if (code === "NOK") {
+        return Promise.resolve({
+          rate: 1,
+          rate_date:
+            invoiceDate,
+          source:
+            "NOK",
+          source_reference:
+            null
+        });
+      }
+
+      var startDate =
+        fxDateMinusDays(
+          invoiceDate,
+          7
+        );
+
+      var series =
+        "B." +
+        encodeURIComponent(
+          code
+        ) +
+        ".NOK.SP";
+
+      var url =
+        "https://data.norges-bank.no/api/data/EXR/" +
+        series +
+        "?format=csv" +
+        "&startPeriod=" +
+        encodeURIComponent(
+          startDate
+        ) +
+        "&endPeriod=" +
+        encodeURIComponent(
+          invoiceDate
+        ) +
+        "&locale=en" +
+        "&bom=exclude";
+
+      return fetch(
+        url,
+        {
+          method: "GET",
+          headers: {
+            Accept:
+              "text/csv,text/plain;q=0.9,*/*;q=0.8"
+          },
+          cache: "no-store"
+        }
+      )
+        .then(
+          function (
+            response
+          ) {
+            if (!response.ok) {
+              throw new Error(
+                "Norges Bank svarte HTTP " +
+                String(
+                  response.status
+                )
+              );
+            }
+
+            return response.text();
+          }
+        )
+        .then(
+          function (
+            csvText
+          ) {
+            var rows =
+              parseSemicolonCsv(
+                csvText
+              );
+
+            var matches =
+              rows
+                .filter(
+                  function (
+                    row
+                  ) {
+                    return (
+                      String(
+                        row.BASE_CUR ||
+                        ""
+                      )
+                        .trim()
+                        .toUpperCase() ===
+                        code &&
+                      String(
+                        row.QUOTE_CUR ||
+                        ""
+                      )
+                        .trim()
+                        .toUpperCase() ===
+                        "NOK" &&
+                      String(
+                        row.TIME_PERIOD ||
+                        ""
+                      ).trim() <=
+                        invoiceDate
+                    );
+                  }
+                )
+                .map(
+                  function (
+                    row
+                  ) {
+                    var observed =
+                      parseNorgesBankCsvNumber(
+                        row.OBS_VALUE
+                      );
+
+                    var unitMult =
+                      parseNorgesBankCsvNumber(
+                        row.UNIT_MULT
+                      );
+
+                    if (
+                      observed ===
+                      null
+                    ) {
+                      return null;
+                    }
+
+                    if (
+                      unitMult ===
+                      null
+                    ) {
+                      unitMult = 0;
+                    }
+
+                    var scale =
+                      Math.pow(
+                        10,
+                        unitMult
+                      );
+
+                    if (
+                      !Number.isFinite(
+                        scale
+                      ) ||
+                      scale <= 0
+                    ) {
+                      return null;
+                    }
+
+                    return {
+                      rate:
+                        observed /
+                        scale,
+                      rate_date:
+                        String(
+                          row.TIME_PERIOD ||
+                          ""
+                        ).trim(),
+                      source:
+                        "Norges Bank – daglig valutakurs",
+                      source_reference:
+                        "EXR/B." +
+                        code +
+                        ".NOK.SP"
+                    };
+                  }
+                )
+                .filter(
+                  function (
+                    row
+                  ) {
+                    return (
+                      row &&
+                      row.rate_date &&
+                      Number.isFinite(
+                        row.rate
+                      ) &&
+                      row.rate > 0
+                    );
+                  }
+                )
+                .sort(
+                  function (
+                    a,
+                    b
+                  ) {
+                    return String(
+                      b.rate_date
+                    ).localeCompare(
+                      String(
+                        a.rate_date
+                      )
+                    );
+                  }
+                );
+
+            var found =
+              matches[0] ||
+              null;
+
+            if (!found) {
+              return null;
+            }
+
+            /*
+             * Lagre kursen i vår egen historikk så neste faktura på samme
+             * dato slipper nytt API-kall. Hvis RLS eller nettverk skulle
+             * stoppe lagringen, brukes kursen fortsatt i denne importen.
+             */
+            return sb
+              .from(
+                "internal_fx_rates"
+              )
+              .upsert(
+                {
+                  currency_code:
+                    code,
+                  rate_date:
+                    found.rate_date,
+                  nok_per_unit:
+                    found.rate,
+                  source_label:
+                    found.source,
+                  source_reference:
+                    found.source_reference
+                },
+                {
+                  onConflict:
+                    "currency_code,rate_date"
+                }
+              )
+              .then(
+                function (
+                  saveResult
+                ) {
+                  if (
+                    saveResult.error
+                  ) {
+                    console.warn(
+                      "Kunne ikke cache Norges Bank-kurs:",
+                      saveResult.error
+                    );
+                  }
+
+                  return found;
+                }
+              )
+              .catch(
+                function () {
+                  return found;
+                }
+              );
+          }
+        );
+    }
+
     function safeKnownFxRate(
       currency,
       invoiceDate
@@ -8143,30 +8665,40 @@ parent.appendChild(productListSection.wrap);
         );
       }
 
-      if (
-        String(currency)
-          .toUpperCase() ===
-        "NOK"
-      ) {
+      var code =
+        String(
+          currency
+        )
+          .trim()
+          .toUpperCase();
+
+      if (code === "NOK") {
         return Promise.resolve({
           rate: 1,
           rate_date:
             invoiceDate,
-          source: "NOK"
+          source: "NOK",
+          source_reference:
+            null
         });
       }
 
+      /*
+       * 1) Prøv først vår egen valutahistorikk.
+       *
+       * Tabellen bruker source_label/source_reference. Tidligere frontend
+       * spurte feilaktig etter kolonnen "source", som ikke finnes.
+       */
       return sb
         .from(
           "internal_fx_rates"
         )
         .select(
-          "currency_code,rate_date,nok_per_unit,source"
+          "currency_code,rate_date,nok_per_unit,source_label,source_reference"
         )
         .eq(
           "currency_code",
-          String(currency)
-            .toUpperCase()
+          code
         )
         .lte(
           "rate_date",
@@ -8189,49 +8721,77 @@ parent.appendChild(productListSection.wrap);
                 ? result.data[0]
                 : null;
 
-            if (!row) {
-              return null;
+            if (row) {
+              var invoiceMs =
+                new Date(
+                  invoiceDate +
+                  "T12:00:00"
+                ).getTime();
+
+              var rateMs =
+                new Date(
+                  row.rate_date +
+                  "T12:00:00"
+                ).getTime();
+
+              var dayDiff =
+                Math.round(
+                  (
+                    invoiceMs -
+                    rateMs
+                  ) /
+                  86400000
+                );
+
+              /*
+               * Maks 7 dager dekker helg/helligdag, men hindrer at en gammel
+               * lagret kurs brukes på en ny fakturadato.
+               */
+              if (
+                dayDiff >= 0 &&
+                dayDiff <= 7
+              ) {
+                return {
+                  rate:
+                    num(
+                      row.nok_per_unit
+                    ),
+                  rate_date:
+                    row.rate_date,
+                  source:
+                    row.source_label ||
+                    "Norges Bank",
+                  source_reference:
+                    row.source_reference ||
+                    null
+                };
+              }
             }
 
-            var invoiceMs =
-              new Date(
-                invoiceDate +
-                "T12:00:00"
-              ).getTime();
+            /*
+             * 2) Mangler kursen lokalt: hent automatisk fra Norges Banks
+             * åpne API. Ved helg/helligdag brukes seneste publiserte kurs
+             * opptil 7 dager før fakturadatoen.
+             */
+            return fetchNorgesBankFxRate(
+              code,
+              invoiceDate
+            );
+          }
+        )
+        .catch(
+          function (
+            localError
+          ) {
+            console.warn(
+              "Lokal valutakursoppslag feilet, prøver Norges Bank direkte:",
+              localError
+            );
 
-            var rateMs =
-              new Date(
-                row.rate_date +
-                "T12:00:00"
-              ).getTime();
-
-            var dayDiff =
-              Math.round(
-                (
-                  invoiceMs -
-                  rateMs
-                ) /
-                86400000
-              );
-
-            if (
-              dayDiff < 0 ||
-              dayDiff > 7
-            ) {
-              return null;
-            }
-
-            return {
-              rate:
-                num(
-                  row.nok_per_unit
-                ),
-              rate_date:
-                row.rate_date,
-              source:
-                row.source ||
-                "Norges Bank"
-            };
+            return fetchNorgesBankFxRate(
+              code,
+              invoiceDate
+            );
           }
         );
     }
@@ -8954,7 +9514,7 @@ parent.appendChild(productListSection.wrap);
                 } else {
                   fxRate.value = "";
                   fxInfo.textContent =
-                    "Ingen trygg valutakurs ligger lagret for denne datoen. Skriv inn NOK per 1 " +
+                    "Fant ikke valutakurs automatisk hos Norges Bank. Du kan skrive inn NOK per 1 " +
                     code +
                     " før import.";
                 }
@@ -8969,7 +9529,7 @@ parent.appendChild(productListSection.wrap);
                 null;
 
               fxInfo.textContent =
-                "Kunne ikke hente lagret valutakurs: " +
+                "Kunne ikke hente valutakurs automatisk: " +
                 skReadableError(
                   error &&
                   error.message
@@ -9854,7 +10414,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.7.1 · " +
+                "PDF-import via Admin v5.7.2 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
