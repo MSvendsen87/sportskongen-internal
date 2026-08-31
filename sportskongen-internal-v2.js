@@ -1437,7 +1437,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.4.1 · Sune rabatt/flerlinje"
+      "Admin v5.4.2 · Sune varenr-format"
     );
 
     var products =
@@ -6549,6 +6549,9 @@ parent.appendChild(productListSection.wrap);
           /^\d{8}$/.test(
             token
           ) ||
+          /^\d{2,}-\d{2,}$/.test(
+            token
+          ) ||
           /^(?:FI|FD)\d?-[A-Z0-9-]+$/i.test(
             token
           )
@@ -6924,7 +6927,7 @@ parent.appendChild(productListSection.wrap);
 
       return {
         parser:
-          "sune-sport-v4",
+          "sune-sport-v5",
         parser_label:
           "Sune Sport AS",
         supplier_hint:
@@ -8789,7 +8792,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.4.1 · " +
+                "PDF-import via Admin v5.4.2 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
