@@ -1437,7 +1437,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.3 · Felles forsendelse"
+      "Admin v5.4 · Smart produktmatch"
     );
 
     var products =
@@ -8746,7 +8746,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.3 · " +
+                "PDF-import via Admin v5.4 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -8771,6 +8771,15 @@ parent.appendChild(productListSection.wrap);
                     "Importen returnerte ingen faktura."
                   );
                 }
+
+                var smartSuggestionInfo = {
+                  added: 0,
+                  still_unmatched:
+                    Number(
+                      row.unmatched_lines ||
+                      0
+                    )
+                };
 
                 var finishImport =
                   function (
@@ -8805,7 +8814,23 @@ parent.appendChild(productListSection.wrap);
                           row.unmatched_lines ||
                           0
                         ) +
-                        " må kontrolleres manuelt." +
+                        " var ukjente ved råimport." +
+                        (
+                          smartSuggestionInfo.added > 0
+                            ? (
+                                " Smart navnmatch fant " +
+                                String(
+                                  smartSuggestionInfo.added
+                                ) +
+                                " produktforslag."
+                              )
+                            : ""
+                        ) +
+                        " " +
+                        String(
+                          smartSuggestionInfo.still_unmatched
+                        ) +
+                        " linjer står fortsatt uten sikker produktmatch." +
                         shipmentText +
                         " Lagerantall er ikke endret."
                     );
@@ -8818,87 +8843,135 @@ parent.appendChild(productListSection.wrap);
                     );
                   };
 
-                if (
-                  shipmentDecision.mode ===
-                    "shared" &&
-                  parsed.costs &&
-                  parsed.costs.length
-                ) {
-                  createSharedShipmentAfterImport(
-                    {
-                      supplierId:
-                        supplierId,
-                      supplierName:
-                        selectedSupplierName(),
-                      currentInvoiceId:
-                        row.invoice_id,
-                      currentInvoiceNumber:
-                        invoiceNo.value.trim(),
-                      invoiceDate:
-                        invoiceDate.value,
-                      existingInvoiceIds:
-                        sharedInvoiceIds,
-                      existingInvoiceNumbers:
-                        sharedInvoiceNumbers,
-                      costs:
-                        parsed.costs,
-                      currency:
-                        code,
-                      rate:
-                        code === "NOK"
-                          ? 1
-                          : rate,
-                      rateDate:
-                        fxMeta.rate_date ||
-                        invoiceDate.value,
-                      rateSource:
-                        fxMeta.source ||
-                        (
-                          code === "NOK"
-                            ? "NOK"
-                            : "Manuell ved PDF-import"
+                var continueAfterSmartMatch =
+                  function () {
+                    if (
+                      shipmentDecision.mode ===
+                        "shared" &&
+                      parsed.costs &&
+                      parsed.costs.length
+                    ) {
+                      createSharedShipmentAfterImport(
+                        {
+                          supplierId:
+                            supplierId,
+                          supplierName:
+                            selectedSupplierName(),
+                          currentInvoiceId:
+                            row.invoice_id,
+                          currentInvoiceNumber:
+                            invoiceNo.value.trim(),
+                          invoiceDate:
+                            invoiceDate.value,
+                          existingInvoiceIds:
+                            sharedInvoiceIds,
+                          existingInvoiceNumbers:
+                            sharedInvoiceNumbers,
+                          costs:
+                            parsed.costs,
+                          currency:
+                            code,
+                          rate:
+                            code === "NOK"
+                              ? 1
+                              : rate,
+                          rateDate:
+                            fxMeta.rate_date ||
+                            invoiceDate.value,
+                          rateSource:
+                            fxMeta.source ||
+                            (
+                              code === "NOK"
+                                ? "NOK"
+                                : "Manuell ved PDF-import"
+                            )
+                        }
+                      )
+                        .then(
+                          function (
+                            shipmentInfo
+                          ) {
+                            finishImport(
+                              shipmentInfo
+                            );
+                          }
                         )
+                        .catch(
+                          function (
+                            shipmentError
+                          ) {
+                            alert(
+                              "Fakturaen ble importert, men felles forsendelse kunne ikke opprettes: " +
+                                skReadableError(
+                                  shipmentError &&
+                                  shipmentError.message
+                                    ? shipmentError.message
+                                    : shipmentError
+                                ) +
+                                ". Ikke ferdigstill kostpris før dette er rettet."
+                            );
+
+                            state.pdfImport =
+                              null;
+
+                            refreshAll(
+                              row.invoice_id
+                            );
+                          }
+                        );
+
+                      return;
+                    }
+
+                    finishImport(
+                      null
+                    );
+                  };
+
+                sb.rpc(
+                  "internal_supplier_invoice_apply_smart_suggestions",
+                  {
+                    p_invoice_id:
+                      row.invoice_id
+                  }
+                )
+                  .then(
+                    function (smartResult) {
+                      if (smartResult.error) {
+                        throw smartResult.error;
+                      }
+
+                      var smartRow =
+                        smartResult.data &&
+                        smartResult.data[0]
+                          ? smartResult.data[0]
+                          : {};
+
+                      smartSuggestionInfo.added =
+                        Number(
+                          smartRow.suggestions_added ||
+                          0
+                        );
+
+                      smartSuggestionInfo.still_unmatched =
+                        Number(
+                          smartRow.still_unmatched ||
+                          0
+                        );
+
+                      continueAfterSmartMatch();
                     }
                   )
-                    .then(
-                      function (
-                        shipmentInfo
-                      ) {
-                        finishImport(
-                          shipmentInfo
-                        );
-                      }
-                    )
-                    .catch(
-                      function (
-                        shipmentError
-                      ) {
-                        alert(
-                          "Fakturaen ble importert, men felles forsendelse kunne ikke opprettes: " +
-                            skReadableError(
-                              shipmentError &&
-                              shipmentError.message
-                                ? shipmentError.message
-                                : shipmentError
-                            ) +
-                            ". Ikke ferdigstill kostpris før dette er rettet."
-                        );
+                  .catch(
+                    function (smartError) {
+                      console.warn(
+                        "Smart produktmatch feilet:",
+                        smartError
+                      );
 
-                        state.pdfImport =
-                          null;
-
-                        refreshAll(
-                          row.invoice_id
-                        );
-                      }
-                    );
-
-                  return;
-                }
-
-                finishImport(
-                  null
-                );
+                      continueAfterSmartMatch();
+                    }
+                  );
               }
             )
             .catch(
@@ -10302,6 +10375,88 @@ parent.appendChild(productListSection.wrap);
         refresh
       );
 
+      if (
+        Number(
+          summary.unmatched_product_lines ||
+          0
+        ) > 0 &&
+        summary.status !== "costed"
+      ) {
+        var smartMatch =
+          createButton(
+            "✨ Finn produktforslag"
+          );
+
+        smartMatch.onclick =
+          function () {
+            smartMatch.disabled =
+              true;
+            smartMatch.textContent =
+              "Søker smart…";
+
+            sb.rpc(
+              "internal_supplier_invoice_apply_smart_suggestions",
+              {
+                p_invoice_id:
+                  summary.invoice_id
+              }
+            )
+              .then(
+                function (result) {
+                  if (result.error) {
+                    throw result.error;
+                  }
+
+                  var smartRow =
+                    result.data &&
+                    result.data[0]
+                      ? result.data[0]
+                      : {};
+
+                  alert(
+                    "Smart produktsøk fant " +
+                      String(
+                        smartRow.suggestions_added ||
+                        0
+                      ) +
+                      " nye forslag. " +
+                      String(
+                        smartRow.still_unmatched ||
+                        0
+                      ) +
+                      " linjer står fortsatt uten sikker produktmatch."
+                  );
+
+                  refreshAll(
+                    summary.invoice_id
+                  );
+                }
+              )
+              .catch(
+                function (error) {
+                  smartMatch.disabled =
+                    false;
+                  smartMatch.textContent =
+                    "✨ Finn produktforslag";
+
+                  alert(
+                    "Smart produktsøk feilet: " +
+                      skReadableError(
+                        error &&
+                        error.message
+                          ? error.message
+                          : error
+                      )
+                  );
+                }
+              );
+          };
+
+        actions.appendChild(
+          smartMatch
+        );
+      }
+
       host.appendChild(actions);
     }
 
@@ -10915,7 +11070,7 @@ parent.appendChild(productListSection.wrap);
       match.appendChild(
         el(
           "div",
-          "Søk etter eksisterende produkt. Hvis varen faktisk ikke finnes i GolfKongen ennå, opprett den først under Produkter og kom tilbake hit."
+          "Smart søk ser på kjernen i produktnavnet uavhengig av ordrekkefølge og ignorerer ord som Driver, Midrange, Assorted og vekt. Velg riktig produkt hvis flere kandidater er plausible."
         )
       );
 
@@ -11088,79 +11243,163 @@ parent.appendChild(productListSection.wrap);
         searchBtn.disabled =
           true;
         searchBtn.textContent =
-          "Søker…";
+          "Søker smart…";
 
-        sb
-          .from(
-            "internal_products_view"
-          )
-          .select(
-            "id,name,brand,quickbutik_sku,stock_quantity,purchase_price_ex_vat,is_active"
-          )
-          .eq(
-            "is_active",
-            true
-          )
-          .ilike(
-            "name",
-            "%" + term + "%"
-          )
-          .order(
-            "name",
-            { ascending: true }
-          )
-          .limit(30)
+        sb.rpc(
+          "internal_invoice_smart_candidates_text",
+          {
+            p_text: term,
+            p_limit: 10
+          }
+        )
           .then(
             function (result) {
+              if (result.error) {
+                throw result.error;
+              }
+
               searchBtn.disabled =
                 false;
               searchBtn.textContent =
                 "Søk";
 
-              if (result.error) {
-                throw result.error;
-              }
-
               clear(productSelect);
+
+              var candidates =
+                result.data || [];
 
               addOption(
                 productSelect,
                 "",
-                result.data &&
-                result.data.length
+                candidates.length
                   ? "Velg produkt"
-                  : "Ingen treff"
+                  : "Ingen smarttreff"
               );
 
-              (
-                result.data || []
-              ).forEach(
-                function (product) {
+              candidates.forEach(
+                function (candidate) {
                   addOption(
                     productSelect,
-                    product.id,
-                    (
-                      product.name ||
-                      "Produkt"
-                    ) +
+                    candidate.product_id,
+                    "#" +
+                      String(
+                        candidate.candidate_rank
+                      ) +
+                      " · " +
                       (
-                        product.brand
+                        candidate.product_name ||
+                        "Produkt"
+                      ) +
+                      (
+                        candidate.brand
                           ? " · " +
-                            product.brand
+                            candidate.brand
                           : ""
                       ) +
-                      " · lager " +
+                      " · treff " +
                       fmtNumber(
-                        product.stock_quantity,
-                        0
+                        candidate.match_score,
+                        1
                       ) +
-                      " · kost " +
-                      fmtMoneyNok(
-                        product.purchase_price_ex_vat
-                      )
+                      "%"
                   );
                 }
               );
+
+              if (!candidates.length) {
+                var fallbackTokens =
+                  term
+                    .replace(
+                      /[^A-Za-zÆØÅæøå0-9]+/g,
+                      " "
+                    )
+                    .split(/\s+/)
+                    .filter(
+                      function (token) {
+                        return (
+                          token.length >= 4 &&
+                          !/^(driver|fairway|midrange|putter|putt|approach|assorted|distance)$/i.test(
+                            token
+                          )
+                        );
+                      }
+                    )
+                    .sort(
+                      function (a, b) {
+                        return b.length - a.length;
+                      }
+                    );
+
+                var fallback =
+                  fallbackTokens[0];
+
+                if (!fallback) {
+                  return;
+                }
+
+                return sb
+                  .from(
+                    "internal_products_view"
+                  )
+                  .select(
+                    "id,name,brand,is_active"
+                  )
+                  .eq(
+                    "is_active",
+                    true
+                  )
+                  .ilike(
+                    "name",
+                    "%" +
+                      fallback +
+                      "%"
+                  )
+                  .order(
+                    "name",
+                    { ascending: true }
+                  )
+                  .limit(20)
+                  .then(
+                    function (fallbackResult) {
+                      if (fallbackResult.error) {
+                        throw fallbackResult.error;
+                      }
+
+                      clear(productSelect);
+
+                      addOption(
+                        productSelect,
+                        "",
+                        fallbackResult.data &&
+                        fallbackResult.data.length
+                          ? "Velg produkt"
+                          : "Ingen treff"
+                      );
+
+                      (
+                        fallbackResult.data ||
+                        []
+                      ).forEach(
+                        function (product) {
+                          addOption(
+                            productSelect,
+                            product.id,
+                            (
+                              product.name ||
+                              "Produkt"
+                            ) +
+                              (
+                                product.brand
+                                  ? " · " +
+                                    product.brand
+                                  : ""
+                              )
+                          );
+                        }
+                      );
+                    }
+                  );
+              }
             }
           )
           .catch(
@@ -11266,22 +11505,11 @@ parent.appendChild(productListSection.wrap);
             return;
           }
 
-          if (
-            chosen.variants.length &&
-            !variantSelect.value
-          ) {
-            alert(
-              "Valgt produkt har varianter. Velg riktig variant."
-            );
-            return;
-          }
-
           confirmRow(
             row,
             chosen.productId,
-            chosen.variants.length
-              ? variantSelect.value
-              : null,
+            variantSelect.value ||
+              null,
             confirm
           );
         };
