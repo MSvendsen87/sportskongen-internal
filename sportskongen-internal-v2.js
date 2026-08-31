@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.5 · Variantfordeling"
+      "Admin v5.6 · DiscFinder PDF"
     );
 
     var products =
@@ -6992,6 +6992,379 @@ parent.appendChild(productListSection.wrap);
       };
     }
 
+
+    function parseDiscFinderPdf(
+      pages
+    ) {
+      var fullLines = [];
+
+      (pages || []).forEach(
+        function (page) {
+          (
+            page.lines || []
+          ).forEach(
+            function (line) {
+              var clean =
+                String(
+                  line || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (clean) {
+                fullLines.push(
+                  clean
+                );
+              }
+            }
+          );
+        }
+      );
+
+      var fullText =
+        fullLines.join("\n");
+
+      if (
+        !/DiscFinder\s+AS/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      /*
+       * DiscFinder-fakturaene har i eksempelet:
+       *   Fakturanr.: 100549
+       *   Dato       30.08.2026
+       *   Forfallsdato 09.09.2026
+       *
+       * Feltene kan havne på samme eller separate PDF-tekstlinjer.
+       */
+      var invoiceNoMatch =
+        fullText.match(
+          /Fakturanr\.?\s*:?\s*(?:\n\s*)?([0-9]+)/i
+        );
+
+      var invoiceDateMatch =
+        fullText.match(
+          /(?:^|\n)\s*Dato\s*:?\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})(?:\s|$)/im
+        );
+
+      var dueDateMatch =
+        fullText.match(
+          /Forfallsdato\s*:?\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})/i
+        );
+
+      if (
+        !invoiceNoMatch ||
+        !invoiceDateMatch
+      ) {
+        return null;
+      }
+
+      function discFinderIsoDate(
+        value
+      ) {
+        var match =
+          String(
+            value || ""
+          )
+            .trim()
+            .match(
+              /^(\d{2})\.(\d{2})\.(\d{4})$/
+            );
+
+        return match
+          ? (
+              match[3] +
+              "-" +
+              match[2] +
+              "-" +
+              match[1]
+            )
+          : "";
+      }
+
+      /*
+       * Radformat:
+       *   #DFV2-5 - DiscFinder V2 5-pak 150,00 15 25 % 2 812,50
+       *   #Frakt Bring - Frakt          100,00  1 25 %   125,00
+       *
+       * Sum-kolonnen er inkl. MVA, mens Enhetspris er eks. MVA.
+       * Kostmotoren skal derfor bruke Enhetspris × Antall som vare-/fraktkost.
+       *
+       * Vi flater ut PDF-tekstlinjene fordi tabellcellene kan deles opp
+       * forskjellig fra PDF til PDF.
+       */
+      var flatText =
+        fullLines.join(" ");
+
+      var rowPattern =
+        /#(.+?)\s+-\s+(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})(?=\s+#|\s+Netto\b|\s+Mva\b|\s+Å betale\b|$)/gi;
+
+      var rows = [];
+      var costs = [];
+      var rowMatch;
+
+      while (
+        (
+          rowMatch =
+            rowPattern.exec(
+              flatText
+            )
+        ) !== null
+      ) {
+        var supplierSku =
+          String(
+            rowMatch[1] || ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        var description =
+          String(
+            rowMatch[2] || ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        var unitPrice =
+          parseNordicNumber(
+            rowMatch[3]
+          );
+
+        var quantity =
+          parseNordicNumber(
+            rowMatch[4]
+          );
+
+        var vatPercent =
+          parseNordicNumber(
+            rowMatch[5]
+          );
+
+        var grossLineTotal =
+          parseNordicNumber(
+            rowMatch[6]
+          );
+
+        if (
+          unitPrice === null ||
+          quantity === null ||
+          quantity <= 0
+        ) {
+          continue;
+        }
+
+        var netLineTotal =
+          unitPrice *
+          quantity;
+
+        var isShipping =
+          /^frakt\b/i.test(
+            supplierSku
+          ) ||
+          /^frakt\b/i.test(
+            description
+          ) ||
+          /\bbring\b/i.test(
+            supplierSku
+          );
+
+        if (isShipping) {
+          costs.push({
+            cost_type:
+              "shipping",
+            description:
+              (
+                supplierSku +
+                " - " +
+                description
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim(),
+            amount:
+              netLineTotal,
+            allocation_method:
+              "by_value",
+            gross_amount:
+              grossLineTotal,
+            vat_percent:
+              vatPercent
+          });
+
+          continue;
+        }
+
+        rows.push({
+          line_number:
+            rows.length + 1,
+          supplier_sku:
+            supplierSku,
+          ean:
+            null,
+          description:
+            description,
+          quantity:
+            quantity,
+          unit_price:
+            unitPrice,
+          line_total:
+            netLineTotal,
+          list_unit_price:
+            unitPrice,
+          discount_percent:
+            0,
+          gross_line_total:
+            grossLineTotal,
+          vat_percent:
+            vatPercent
+        });
+      }
+
+      var netMatch =
+        fullText.match(
+          /(?:^|\n)\s*Netto\s+(\d[\d\s.]*,\d{2})(?:\s|$)/im
+        );
+
+      var vatMatch =
+        fullText.match(
+          /(?:^|\n)\s*Mva\s+(\d[\d\s.]*,\d{2})(?:\s|$)/im
+        );
+
+      var grossMatch =
+        fullText.match(
+          /Å betale(?:\s+NOK)?\s+(\d[\d\s.]*,\d{2})/i
+        );
+
+      var goodsTotal =
+        rows.reduce(
+          function (
+            sum,
+            row
+          ) {
+            return (
+              sum +
+              num(
+                row.line_total
+              )
+            );
+          },
+          0
+        );
+
+      var shippingTotal =
+        costs.reduce(
+          function (
+            sum,
+            cost
+          ) {
+            return (
+              sum +
+              num(
+                cost.amount
+              )
+            );
+          },
+          0
+        );
+
+      var netTotal =
+        netMatch
+          ? parseNordicNumber(
+              netMatch[1]
+            )
+          : null;
+
+      var vatTotal =
+        vatMatch
+          ? parseNordicNumber(
+              vatMatch[1]
+            )
+          : null;
+
+      var grossTotal =
+        grossMatch
+          ? parseNordicNumber(
+              grossMatch[1]
+            )
+          : null;
+
+      var computedTotal =
+        goodsTotal +
+        shippingTotal;
+
+      var difference =
+        netTotal === null
+          ? null
+          : Math.abs(
+              computedTotal -
+              netTotal
+            );
+
+      return {
+        parser:
+          "discfinder-v1",
+        parser_label:
+          "DiscFinder AS",
+        supplier_hint:
+          "DiscFinder AS",
+        invoice_number:
+          invoiceNoMatch[1],
+        invoice_date:
+          discFinderIsoDate(
+            invoiceDateMatch[1]
+          ),
+        due_date:
+          dueDateMatch
+            ? discFinderIsoDate(
+                dueDateMatch[1]
+              )
+            : "",
+        currency:
+          "NOK",
+        rows:
+          rows,
+        costs:
+          costs,
+        goods_total:
+          goodsTotal,
+        shipping_total:
+          shippingTotal,
+        invoice_total:
+          netTotal,
+        total_label:
+          "Netto ekskl. MVA",
+        vat_total:
+          vatTotal,
+        gross_total:
+          grossTotal,
+        computed_total:
+          computedTotal,
+        difference:
+          difference,
+        raw_text:
+          fullText
+      };
+    }
+
+
     function parseSupplierPdf(
       pages
     ) {
@@ -7006,6 +7379,15 @@ parent.appendChild(productListSection.wrap);
 
       parsed =
         parseSuneSportPdf(
+          pages
+        );
+
+      if (parsed) {
+        return parsed;
+      }
+
+      parsed =
+        parseDiscFinderPdf(
           pages
         );
 
@@ -7575,7 +7957,7 @@ parent.appendChild(productListSection.wrap);
       var intro =
         el(
           "div",
-          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs og Sune Sport støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
+          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs, Sune Sport og DiscFinder støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
         );
 
       intro.className =
@@ -8804,7 +9186,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.5 · " +
+                "PDF-import via Admin v5.6 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -9333,7 +9715,7 @@ parent.appendChild(productListSection.wrap);
       var uploadInfo =
         el(
           "div",
-          "Last opp PDF. Latitude 64 / House of Discs og Sune Sport-formatet støttes automatisk. Ukjente formater stoppes før import."
+          "Last opp PDF. Latitude 64 / House of Discs, Sune Sport og DiscFinder-formatet støttes automatisk. Ukjente formater stoppes før import."
         );
 
       uploadInfo.className =
