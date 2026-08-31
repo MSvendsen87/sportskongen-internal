@@ -1437,7 +1437,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.4 · Smart produktmatch"
+      "Admin v5.4.1 · Sune rabatt/flerlinje"
     );
 
     var products =
@@ -6549,7 +6549,7 @@ parent.appendChild(productListSection.wrap);
           /^\d{8}$/.test(
             token
           ) ||
-          /^(?:FI|FD)\d-[A-Z0-9-]+$/i.test(
+          /^(?:FI|FD)\d?-[A-Z0-9-]+$/i.test(
             token
           )
         );
@@ -6724,16 +6724,29 @@ parent.appendChild(productListSection.wrap);
         }
 
         /*
-         * Rabattfeltet er 0% på testfakturaen.
+         * Rabatt kan være 0%, 15% eller andre prosenter.
+         * Sune kan levere den som "15%" eller "15 %".
          */
+        var discountPercent = 0;
+
         if (
-          /^0%$/i.test(
+          /^\d+(?:[.,]\d+)?%$/i.test(
             tokens[i] || ""
           )
         ) {
+          discountPercent =
+            parseEnglishNumber(
+              String(
+                tokens[i]
+              ).replace(
+                "%",
+                ""
+              )
+            ) || 0;
+
           i += 1;
         } else if (
-          /^0$/i.test(
+          /^\d+(?:[.,]\d+)?$/i.test(
             tokens[i] || ""
           ) &&
           /^%$/i.test(
@@ -6742,6 +6755,11 @@ parent.appendChild(productListSection.wrap);
             ] || ""
           )
         ) {
+          discountPercent =
+            parseEnglishNumber(
+              tokens[i]
+            ) || 0;
+
           i += 2;
         }
 
@@ -6783,6 +6801,17 @@ parent.appendChild(productListSection.wrap);
           continue;
         }
 
+        /*
+         * Fakturaens "Pris" er før linjerabatt. For kostmotoren vil vi lagre
+         * faktisk nettopris per enhet, slik at 15 % rabatt blir med i
+         * innkjøpsprisen. Linjesummen er fasiten fordi den også fanger
+         * fakturaens avrunding.
+         */
+        var netUnitPrice =
+          quantity > 0
+            ? lineTotal / quantity
+            : unitPrice;
+
         rows.push({
           line_number:
             rows.length + 1,
@@ -6795,9 +6824,13 @@ parent.appendChild(productListSection.wrap);
           quantity:
             quantity,
           unit_price:
-            unitPrice,
+            netUnitPrice,
           line_total:
-            lineTotal
+            lineTotal,
+          list_unit_price:
+            unitPrice,
+          discount_percent:
+            discountPercent
         });
       }
 
@@ -6891,7 +6924,7 @@ parent.appendChild(productListSection.wrap);
 
       return {
         parser:
-          "sune-sport-v3",
+          "sune-sport-v4",
         parser_label:
           "Sune Sport AS",
         supplier_hint:
@@ -8417,7 +8450,8 @@ parent.appendChild(productListSection.wrap);
         "Varenr.",
         "EAN",
         "Ant.",
-        "Pris/stk",
+        "Pris/stk netto",
+        "Rabatt",
         "Linjesum"
       ].forEach(
         function (label) {
@@ -8456,6 +8490,15 @@ parent.appendChild(productListSection.wrap);
               row.unit_price,
               parsed.currency
             ),
+            row.discount_percent !==
+              undefined
+              ? (
+                  fmtNumber(
+                    row.discount_percent,
+                    0
+                  ) + "%"
+                )
+              : "–",
             fmtCurrency(
               row.line_total,
               parsed.currency
@@ -8746,7 +8789,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.4 · " +
+                "PDF-import via Admin v5.4.1 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
