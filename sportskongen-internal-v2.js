@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.6 · DiscFinder PDF"
+      "Admin v5.7 · Latitude utstyrsfaktura"
     );
 
     var products =
@@ -6127,8 +6127,26 @@ parent.appendChild(productListSection.wrap);
           (
             page.lines || []
           ).forEach(
-            function (line) {
-              allLines.push(line);
+            function (rawLine) {
+              var clean =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (clean) {
+                allLines.push(
+                  clean
+                );
+              }
             }
           );
         }
@@ -6179,8 +6197,24 @@ parent.appendChild(productListSection.wrap);
           /Summa\s+([A-Z]{3})\s*Lev\.datum/i
         );
 
-      var rows = [];
+      var currency =
+        currencyMatch
+          ? String(
+              currencyMatch[1]
+            ).toUpperCase()
+          : "SEK";
 
+      var rows = [];
+      var costs = [];
+
+      /*
+       * ------------------------------------------------------------
+       * TYPE A: ordinære Latitude-/House of Discs-varefakturaer.
+       *
+       * Dette er den gamle parseren som allerede brukes på f.eks.
+       * faktura 2010943. Den beholdes uendret som første forsøk.
+       * ------------------------------------------------------------
+       */
       (pages || []).forEach(
         function (page) {
           var inItems = false;
@@ -6287,7 +6321,7 @@ parent.appendChild(productListSection.wrap);
         }
       );
 
-      var shipping = 0;
+      var legacyShipping = 0;
 
       for (
         var li = 0;
@@ -6322,7 +6356,7 @@ parent.appendChild(productListSection.wrap);
             );
 
           if (shipMatch) {
-            shipping =
+            legacyShipping =
               parseNordicNumber(
                 shipMatch[2]
               ) || 0;
@@ -6330,19 +6364,470 @@ parent.appendChild(productListSection.wrap);
         }
       }
 
-      if (!shipping) {
+      if (!legacyShipping) {
         var shipFallback =
           fullText.match(
             /Frakt\s+1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s*90000/i
           );
 
         if (shipFallback) {
-          shipping =
+          legacyShipping =
             parseNordicNumber(
               shipFallback[2]
             ) || 0;
         }
       }
+
+      if (
+        rows.length > 0
+      ) {
+        if (
+          legacyShipping > 0
+        ) {
+          costs.push({
+            cost_type:
+              "shipping",
+            description:
+              "Frakt",
+            amount:
+              legacyShipping,
+            allocation_method:
+              "by_value"
+          });
+        }
+      }
+
+
+      /*
+       * ------------------------------------------------------------
+       * TYPE B: DiscGolfPark / utstyrsfaktura.
+       *
+       * Typisk struktur:
+       *
+       * 115500  EAN: ...  2026-08-17  5 pcs  3 203,00  16 015,00
+       * DGP DiscGolfPark Pro Target (permanent)
+       *
+       * 115520 ... 5 pcs 0,00 0,00
+       * DGP Top with chains & basket (target set)
+       *
+       * 117370 ... 5 pcs 429,00 2 145,00
+       * Concrete base w/tightening ring
+       *
+       * 115974 ... 1 pcs 550,00 550,00
+       * DGP Handling
+       *
+       * 90000 ... 1 pcs 3 923,00 3 923,00
+       * Shipping
+       *
+       * Her skal:
+       *   - betalte hovedvarer bli varelinjer
+       *   - 0-kroners komponenter ignoreres (de følger hovedvaren)
+       *   - concrete base / jordfeste bli tilleggskost
+       *   - handling bli tilleggskost
+       *   - shipping bli frakt
+       *
+       * Dermed blir hele fakturabeløpet med i reell kost, uten at
+       * komponentene blir egne GolfKongen-produkter.
+       * ------------------------------------------------------------
+       */
+      if (
+        rows.length === 0 &&
+        /Enhetspris/i.test(
+          fullText
+        ) &&
+        /Lev\.datum/i.test(
+          fullText
+        )
+      ) {
+        var equipmentRaw = [];
+        var current = null;
+        var inEquipment = false;
+
+        function finishEquipmentRow() {
+          if (!current) {
+            return;
+          }
+
+          current.description =
+            String(
+              current.description ||
+              ""
+            )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim();
+
+          equipmentRaw.push(
+            current
+          );
+
+          current = null;
+        }
+
+        function equipmentAnchorMatch(
+          line
+        ) {
+          var compact =
+            String(
+              line || ""
+            )
+              .replace(
+                /\u00a0/g,
+                " "
+              )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim();
+
+          /*
+           * Artikkel først, EAN valgfri.
+           */
+          var match =
+            compact.match(
+              /^(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(?:\s+(.*))?$/i
+            );
+
+          if (match) {
+            return {
+              supplier_sku:
+                match[1],
+              ean:
+                match[2] || null,
+              date:
+                match[3],
+              quantity:
+                parseNordicNumber(
+                  match[4]
+                ),
+              unit_price:
+                parseNordicNumber(
+                  match[5]
+                ),
+              line_total:
+                parseNordicNumber(
+                  match[6]
+                ),
+              description:
+                match[7] || ""
+            };
+          }
+
+          /*
+           * Noen PDF-er kan plassere datoen først.
+           */
+          match =
+            compact.match(
+              /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?(?:\s+(.*))?$/i
+            );
+
+          if (match) {
+            return {
+              supplier_sku:
+                match[5],
+              ean:
+                match[6] || null,
+              date:
+                match[1],
+              quantity:
+                parseNordicNumber(
+                  match[2]
+                ),
+              unit_price:
+                parseNordicNumber(
+                  match[3]
+                ),
+              line_total:
+                parseNordicNumber(
+                  match[4]
+                ),
+              description:
+                match[7] || ""
+            };
+          }
+
+          return null;
+        }
+
+        allLines.forEach(
+          function (line) {
+            if (
+              /Artikel/i.test(line) &&
+              /Lev\.datum/i.test(line) &&
+              /Enhetspris/i.test(line)
+            ) {
+              inEquipment = true;
+              finishEquipmentRow();
+              return;
+            }
+
+            if (!inEquipment) {
+              return;
+            }
+
+            if (
+              /^Outside Community/i.test(
+                line
+              ) ||
+              /^Netto\b/i.test(
+                line
+              ) ||
+              /^Summa totalt\b/i.test(
+                line
+              )
+            ) {
+              finishEquipmentRow();
+              inEquipment = false;
+              return;
+            }
+
+            if (
+              /^HS Code:/i.test(line) ||
+              /^COO:/i.test(line) ||
+              (
+                /HS Code:/i.test(line) &&
+                /COO:/i.test(line)
+              )
+            ) {
+              return;
+            }
+
+            var anchor =
+              equipmentAnchorMatch(
+                line
+              );
+
+            if (anchor) {
+              finishEquipmentRow();
+              current = anchor;
+              return;
+            }
+
+            if (current) {
+              /*
+               * EAN kan ligge på egen PDF-tekstlinje.
+               */
+              var eanOnly =
+                line.match(
+                  /^EAN:\s*(\d{8,14})$/i
+                );
+
+              if (eanOnly) {
+                current.ean =
+                  eanOnly[1];
+                return;
+              }
+
+              current.description =
+                (
+                  current.description
+                    ? (
+                        current.description +
+                        " "
+                      )
+                    : ""
+                ) +
+                line;
+            }
+          }
+        );
+
+        finishEquipmentRow();
+
+
+        /*
+         * Ekstra fallback når PDF-en har artikkelnummer og resten av
+         * tallkolonnene på én tekstlinje, men beskrivelsen på neste.
+         */
+        if (
+          equipmentRaw.length === 0
+        ) {
+          var flat =
+            allLines.join(" ");
+
+          var flatPattern =
+            /(?:^|\s)(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(.+?)(?=\s+\d{5,}(?:\s+EAN:|\s+\d{4}-\d{2}-\d{2})|\s+Outside Community|\s+Netto\b|$)/gi;
+
+          var flatMatch;
+
+          while (
+            (
+              flatMatch =
+                flatPattern.exec(
+                  flat
+                )
+            ) !== null
+          ) {
+            equipmentRaw.push({
+              supplier_sku:
+                flatMatch[1],
+              ean:
+                flatMatch[2] || null,
+              date:
+                flatMatch[3],
+              quantity:
+                parseNordicNumber(
+                  flatMatch[4]
+                ),
+              unit_price:
+                parseNordicNumber(
+                  flatMatch[5]
+                ),
+              line_total:
+                parseNordicNumber(
+                  flatMatch[6]
+                ),
+              description:
+                String(
+                  flatMatch[7] || ""
+                )
+                  .replace(
+                    /HS Code:.*?(?=\s+\d{5,}|\s+Outside Community|\s+Netto\b|$)/gi,
+                    ""
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim()
+            });
+          }
+        }
+
+
+        equipmentRaw.forEach(
+          function (item) {
+            var description =
+              String(
+                item.description ||
+                ""
+              )
+                .replace(
+                  /HS Code:.*$/i,
+                  ""
+                )
+                .replace(
+                  /COO:.*$/i,
+                  ""
+                )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim();
+
+            var amount =
+              num(
+                item.line_total
+              );
+
+            var unitPrice =
+              num(
+                item.unit_price
+              );
+
+            /*
+             * 0-kroners komponenter er deler av hovedproduktet og skal
+             * derfor ikke skape manuelle produktlinjer i kostkontrollen.
+             */
+            if (
+              amount === 0 &&
+              unitPrice === 0
+            ) {
+              return;
+            }
+
+            var isShipping =
+              String(
+                item.supplier_sku
+              ) === "90000" ||
+              /\bshipping\b/i.test(
+                description
+              ) ||
+              /\bfrakt\b/i.test(
+                description
+              );
+
+            var isHandling =
+              /\bhandling\b/i.test(
+                description
+              );
+
+            var isConcreteBase =
+              /concrete\s+base/i.test(
+                description
+              ) ||
+              /tightening\s+ring/i.test(
+                description
+              ) ||
+              /\bjordfeste\b/i.test(
+                description
+              );
+
+            if (
+              isShipping ||
+              isHandling ||
+              isConcreteBase
+            ) {
+              costs.push({
+                cost_type:
+                  isShipping
+                    ? "shipping"
+                    : "other",
+
+                description:
+                  isConcreteBase
+                    ? (
+                        description ||
+                        "Concrete base / jordfeste"
+                      )
+                    : (
+                        description ||
+                        (
+                          isHandling
+                            ? "Handling"
+                            : "Shipping"
+                        )
+                      ),
+
+                amount:
+                  amount,
+
+                /*
+                 * På disse DiscGolfPark-fakturaene er kostnadene en del
+                 * av den ferdige målkurven. by_value gjør også løsningen
+                 * trygg hvis en senere faktura har flere betalte måltyper.
+                 */
+                allocation_method:
+                  "by_value"
+              });
+
+              return;
+            }
+
+            rows.push({
+              line_number:
+                rows.length + 1,
+              supplier_sku:
+                item.supplier_sku,
+              ean:
+                item.ean,
+              description:
+                description,
+              quantity:
+                item.quantity,
+              unit_price:
+                item.unit_price,
+              line_total:
+                item.line_total
+            });
+          }
+        );
+      }
+
 
       var totalMatch =
         fullText.match(
@@ -6355,6 +6840,26 @@ parent.appendChild(productListSection.wrap);
               totalMatch[1]
             )
           : null;
+
+      /*
+       * Enkel fallback til Netto hvis "Summa totalt SEK" blir splittet
+       * annerledes i PDF-teksten.
+       */
+      if (
+        invoiceTotal === null
+      ) {
+        var netFallback =
+          fullText.match(
+            /(?:^|\n)\s*Netto\s+([\d\s]+,\d{2})(?:\s|$)/im
+          );
+
+        if (netFallback) {
+          invoiceTotal =
+            parseNordicNumber(
+              netFallback[1]
+            );
+        }
+      }
 
       var goodsTotal =
         rows.reduce(
@@ -6372,9 +6877,25 @@ parent.appendChild(productListSection.wrap);
           0
         );
 
+      var extraTotal =
+        costs.reduce(
+          function (
+            sum,
+            cost
+          ) {
+            return (
+              sum +
+              num(
+                cost.amount
+              )
+            );
+          },
+          0
+        );
+
       var computedTotal =
         goodsTotal +
-        shipping;
+        extraTotal;
 
       var difference =
         invoiceTotal === null
@@ -6386,60 +6907,75 @@ parent.appendChild(productListSection.wrap);
 
       return {
         parser:
-          "latitude64-v1",
+          rows.length > 0 &&
+          costs.some(
+            function (cost) {
+              return (
+                /concrete\s+base/i.test(
+                  cost.description || ""
+                ) ||
+                /\bhandling\b/i.test(
+                  cost.description || ""
+                )
+              );
+            }
+          )
+            ? "latitude64-equipment-v1"
+            : "latitude64-v2",
+
         parser_label:
           "Latitude 64 / House of Discs",
+
         supplier_hint:
           "Latitude 64",
+
         invoice_number:
           invoiceNoMatch
             ? invoiceNoMatch[1]
             : "",
+
         invoice_date:
           invoiceDateMatch
             ? invoiceDateMatch[1]
             : "",
+
         due_date:
           dueDateMatch
             ? dueDateMatch[1]
             : "",
+
         currency:
-          currencyMatch
-            ? String(
-                currencyMatch[1]
-              ).toUpperCase()
-            : "SEK",
-        rows: rows,
+          currency,
+
+        rows:
+          rows,
+
         costs:
-          shipping > 0
-            ? [
-                {
-                  cost_type:
-                    "shipping",
-                  description:
-                    "Frakt",
-                  amount:
-                    shipping,
-                  allocation_method:
-                    "by_value"
-                }
-              ]
-            : [],
+          costs,
+
         goods_total:
           goodsTotal,
+
+        /*
+         * UI-feltet heter Frakt/tillegg. Derfor skal dette være SUMMEN
+         * av concrete base + handling + shipping, ikke bare shipping.
+         */
         shipping_total:
-          shipping,
+          extraTotal,
+
         invoice_total:
           invoiceTotal,
+
         computed_total:
           computedTotal,
+
         difference:
           difference,
+
         raw_text:
           fullText
       };
     }
-
 
     function parseSuneSportPdf(
       pages
@@ -9186,7 +9722,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.6 · " +
+                "PDF-import via Admin v5.7 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -40773,3 +41309,4 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
+
