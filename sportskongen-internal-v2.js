@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.9 · Latitude rabatt/pall/frakt"
+      "Admin v5.9.1 · Latitude robust PDF-rekkefølge"
     );
 
     var products =
@@ -6099,32 +6099,52 @@ parent.appendChild(productListSection.wrap);
           .trim();
 
       /*
-       * Vanlig Latitude-rad:
-       *   2026-02-17 2 pcs 109,50 219,00 109129 EAN: ...
+       * Latitude-PDF-er kan levere samme visuelle tabellrad i to
+       * forskjellige tekst-rekkefølger avhengig av PDF-generering/PDF.js:
        *
-       * Rabatt-rad:
-       *   2026-02-17 2 pcs 124,50 30% 174,30 117490 EAN: ...
+       * A) dato først:
+       *   2026-02-17 2 pcs 124,50 30% 174,30117490 EAN: 733...
        *
-       * Rabattprosenten er non-capturing slik at indeksene under er de samme.
+       * B) artikkel først:
+       *   117490 EAN: 733... 2026-02-17 2 pcs 124,50 30% 174,30
+       *
+       * Vi normaliserer begge til samme gamle array-format:
+       *   [0] hele treffet
+       *   [1] dato
+       *   [2] antall
+       *   [3] enhetspris
+       *   [4] linjesum etter rabatt
+       *   [5] leverandørens artikkelnummer
+       *   [6] EAN
        */
-      var patterns = [
-        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})\s+(\d{5,})\s+EAN:\s*(\d{8,14})$/i,
-        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
-      ];
 
-      for (
-        var i = 0;
-        i < patterns.length;
-        i += 1
-      ) {
-        var match =
-          compact.match(
-            patterns[i]
-          );
+      var match =
+        compact.match(
+          /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})\s+(\d{5,})\s+EAN:\s*(\d{8,14})$/i
+        ) ||
+        compact.match(
+          /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
+        );
 
-        if (match) {
-          return match;
-        }
+      if (match) {
+        return match;
+      }
+
+      var skuFirst =
+        compact.match(
+          /^(\d{5,})\s+EAN:\s*(\d{8,14})\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})$/i
+        );
+
+      if (skuFirst) {
+        return [
+          skuFirst[0],
+          skuFirst[3],
+          skuFirst[4],
+          skuFirst[5],
+          skuFirst[6],
+          skuFirst[1],
+          skuFirst[2]
+        ];
       }
 
       return null;
@@ -6666,6 +6686,119 @@ parent.appendChild(productListSection.wrap);
       }
 
       /*
+       * Ekstra robust fallback for 90000/90002:
+       * enkelte Latitude-PDF-er grupperer logistikkradene annerledes enn
+       * ordinære varelinjer. Søk derfor også direkte i hele tekstlaget.
+       * Deduplisering skjer på artikkelnummer.
+       */
+      if (
+        rows.length > 0
+      ) {
+        var existingCostDescriptions =
+          costs.map(
+            function (cost) {
+              return String(
+                cost.description || ""
+              ).toLowerCase();
+            }
+          );
+
+        function addLatitudeFallbackCost(
+          sku,
+          amount
+        ) {
+          var numericAmount =
+            num(
+              amount
+            );
+
+          if (
+            !Number.isFinite(
+              numericAmount
+            ) ||
+            numericAmount < 0
+          ) {
+            return;
+          }
+
+          if (
+            sku === "90000" &&
+            existingCostDescriptions.indexOf(
+              "frakt"
+            ) < 0
+          ) {
+            costs.push({
+              cost_type:
+                "shipping",
+              description:
+                "Frakt",
+              amount:
+                numericAmount,
+              allocation_method:
+                "by_value"
+            });
+
+            existingCostDescriptions.push(
+              "frakt"
+            );
+
+            return;
+          }
+
+          if (
+            sku === "90002" &&
+            existingCostDescriptions.indexOf(
+              "pall - eur"
+            ) < 0
+          ) {
+            costs.push({
+              cost_type:
+                "other",
+              description:
+                "Pall - EUR",
+              amount:
+                numericAmount,
+              allocation_method:
+                "by_value"
+            });
+
+            existingCostDescriptions.push(
+              "pall - eur"
+            );
+          }
+        }
+
+        var palletFallback =
+          fullText.match(
+            /(?:^|\n)\s*90002\s+1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(?:\s|$)/im
+          );
+
+        if (palletFallback) {
+          addLatitudeFallbackCost(
+            "90002",
+            parseNordicNumber(
+              palletFallback[2]
+            )
+          );
+        }
+
+        var shippingFallback =
+          fullText.match(
+            /(?:^|\n)\s*90000\s+1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(?:\s|$)/im
+          );
+
+        if (shippingFallback) {
+          addLatitudeFallbackCost(
+            "90000",
+            parseNordicNumber(
+              shippingFallback[2]
+            )
+          );
+        }
+      }
+
+
+      /*
        * ------------------------------------------------------------
        * TYPE B: DiscGolfPark / utstyrsfaktura.
        *
@@ -7191,7 +7324,7 @@ parent.appendChild(productListSection.wrap);
             : "latitude64-v2",
 
         parser_label:
-          "Latitude 64 / House of Discs",
+          "Latitude 64 / House of Discs · v3",
 
         supplier_hint:
           "Latitude 64",
@@ -11265,7 +11398,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.9 · " +
+                "PDF-import via Admin v5.9.1 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
