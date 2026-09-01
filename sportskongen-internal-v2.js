@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.8.1 · Negativ øreavrunding"
+      "Admin v5.9 · Latitude rabatt/pall/frakt"
     );
 
     var products =
@@ -6098,9 +6098,18 @@ parent.appendChild(productListSection.wrap);
           )
           .trim();
 
+      /*
+       * Vanlig Latitude-rad:
+       *   2026-02-17 2 pcs 109,50 219,00 109129 EAN: ...
+       *
+       * Rabatt-rad:
+       *   2026-02-17 2 pcs 124,50 30% 174,30 117490 EAN: ...
+       *
+       * Rabattprosenten er non-capturing slik at indeksene under er de samme.
+       */
       var patterns = [
-        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(\d{5,})\s+EAN:\s*(\d{8,14})$/i,
-        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
+        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})\s+(\d{5,})\s+EAN:\s*(\d{8,14})$/i,
+        /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
       ];
 
       for (
@@ -6116,6 +6125,104 @@ parent.appendChild(productListSection.wrap);
         if (match) {
           return match;
         }
+      }
+
+      return null;
+    }
+
+    function latitudeSpecialCostMatch(
+      line
+    ) {
+      var compact =
+        String(line || "")
+          .replace(
+            /\u00a0/g,
+            " "
+          )
+          .replace(
+            /\s+/g,
+            " "
+          )
+          .trim();
+
+      var match = null;
+
+      /*
+       * Eksempler fra Latitude:
+       *
+       *   1 pcs 100,00 100,00 90002
+       *   1 pcs 2 595,00 2 595,00 90000
+       *
+       * PDF.js kan også flytte artikkelnummeret først eller legge inn dato.
+       */
+      var patterns = [
+        /^1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(90000|90002)$/i,
+        /^1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})(90000|90002)$/i,
+        /^(90000|90002)\s+1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})$/i,
+        /^(\d{4}-\d{2}-\d{2})\s+1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(90000|90002)$/i
+      ];
+
+      match =
+        compact.match(
+          patterns[0]
+        ) ||
+        compact.match(
+          patterns[1]
+        );
+
+      if (match) {
+        return {
+          supplier_sku:
+            match[3],
+          unit_price:
+            parseNordicNumber(
+              match[1]
+            ),
+          amount:
+            parseNordicNumber(
+              match[2]
+            )
+        };
+      }
+
+      match =
+        compact.match(
+          patterns[2]
+        );
+
+      if (match) {
+        return {
+          supplier_sku:
+            match[1],
+          unit_price:
+            parseNordicNumber(
+              match[2]
+            ),
+          amount:
+            parseNordicNumber(
+              match[3]
+            )
+        };
+      }
+
+      match =
+        compact.match(
+          patterns[3]
+        );
+
+      if (match) {
+        return {
+          supplier_sku:
+            match[4],
+          unit_price:
+            parseNordicNumber(
+              match[2]
+            ),
+          amount:
+            parseNordicNumber(
+              match[3]
+            )
+        };
       }
 
       return null;
@@ -6388,13 +6495,29 @@ parent.appendChild(productListSection.wrap);
               }
 
               if (
-                /^Frakt$/i.test(line) ||
                 /^Summa totalt\b/i.test(
                   line
                 )
               ) {
                 inItems = false;
                 pending = [];
+                return;
+              }
+
+              /*
+               * Ikke avslutt varetabellen på Frakt/Pall.
+               * På noen Latitude-PDF-er kommer disse beskrivelsene i
+               * tekststrømmen før den siste ordinære varens tallkolonner.
+               * De egne kostlinjene 90000/90002 leses separat nedenfor.
+               */
+              if (
+                /^Frakt$/i.test(
+                  line
+                ) ||
+                /^Pall\s*-\s*EUR$/i.test(
+                  line
+                )
+              ) {
                 return;
               }
 
@@ -6457,82 +6580,90 @@ parent.appendChild(productListSection.wrap);
         }
       );
 
-      var legacyShipping = 0;
-
-      for (
-        var li = 0;
-        li < allLines.length;
-        li += 1
-      ) {
-        if (
-          /^Frakt$/i.test(
-            String(
-              allLines[li] || ""
-            ).trim()
-          )
-        ) {
-          var next =
-            String(
-              allLines[
-                li + 1
-              ] || ""
-            )
-              .replace(
-                /\s+/g,
-                " "
-              )
-              .trim();
-
-          var shipMatch =
-            next.match(
-              /^1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s*90000$/i
-            ) ||
-            next.match(
-              /^1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+90000$/i
-            );
-
-          if (shipMatch) {
-            legacyShipping =
-              parseNordicNumber(
-                shipMatch[2]
-              ) || 0;
-          }
-        }
-      }
-
-      if (!legacyShipping) {
-        var shipFallback =
-          fullText.match(
-            /Frakt\s+1\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s*90000/i
-          );
-
-        if (shipFallback) {
-          legacyShipping =
-            parseNordicNumber(
-              shipFallback[2]
-            ) || 0;
-        }
-      }
-
+      /*
+       * Latitude bruker egne artikler for logistikk:
+       *   90000 = Frakt
+       *   90002 = Pall - EUR
+       *
+       * Disse mangler normalt EAN og skal derfor aldri bli varelinjer.
+       * Vi leser dem eksplisitt og fordeler dem etter vareverdi.
+       */
       if (
         rows.length > 0
       ) {
-        if (
-          legacyShipping > 0
-        ) {
-          costs.push({
-            cost_type:
-              "shipping",
-            description:
-              "Frakt",
-            amount:
-              legacyShipping,
-            allocation_method:
-              "by_value"
-          });
-        }
-      }
+        var seenSpecialCosts = {};
 
+        allLines.forEach(
+          function (line) {
+            var special =
+              latitudeSpecialCostMatch(
+                line
+              );
+
+            if (
+              !special ||
+              !special.supplier_sku ||
+              !Number.isFinite(
+                num(
+                  special.amount
+                )
+              )
+            ) {
+              return;
+            }
+
+            var sku =
+              String(
+                special.supplier_sku
+              );
+
+            if (
+              seenSpecialCosts[sku]
+            ) {
+              return;
+            }
+
+            seenSpecialCosts[sku] =
+              true;
+
+            if (
+              sku === "90000"
+            ) {
+              costs.push({
+                cost_type:
+                  "shipping",
+                description:
+                  "Frakt",
+                amount:
+                  num(
+                    special.amount
+                  ),
+                allocation_method:
+                  "by_value"
+              });
+
+              return;
+            }
+
+            if (
+              sku === "90002"
+            ) {
+              costs.push({
+                cost_type:
+                  "other",
+                description:
+                  "Pall - EUR",
+                amount:
+                  num(
+                    special.amount
+                  ),
+                allocation_method:
+                  "by_value"
+              });
+            }
+          }
+        );
+      }
 
       /*
        * ------------------------------------------------------------
@@ -11134,7 +11265,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.8.1 · " +
+                "PDF-import via Admin v5.9 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
