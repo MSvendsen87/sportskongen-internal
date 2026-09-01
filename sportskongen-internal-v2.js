@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.7.2 · Automatisk Norges Bank-kurs"
+      "Admin v5.8 · DiscGolfShop PDF"
     );
 
     var products =
@@ -8033,6 +8033,704 @@ parent.appendChild(productListSection.wrap);
     }
 
 
+    function parseDiscGolfShopPdf(
+      pages
+    ) {
+      var fullLines = [];
+
+      (pages || []).forEach(
+        function (page) {
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var clean =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (clean) {
+                fullLines.push(
+                  clean
+                );
+              }
+            }
+          );
+        }
+      );
+
+      var fullText =
+        fullLines.join("\n");
+
+      if (
+        !/DiscGolfShop\s+AS/i.test(
+          fullText
+        ) &&
+        !/Discgolfshop\s+AS/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      var invoiceNoMatch =
+        fullText.match(
+          /Fakturanr\.?\s*:?\s*(?:\n\s*)?([0-9]+)/i
+        );
+
+      var invoiceDateMatch =
+        fullText.match(
+          /(?:^|\n)\s*Dato\s*:?\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})(?:\s|$)/im
+        );
+
+      var dueDateMatch =
+        fullText.match(
+          /Forfallsdato\s*:?\s*(?:\n\s*)?(\d{2}\.\d{2}\.\d{4})/i
+        );
+
+      if (
+        !invoiceNoMatch ||
+        !invoiceDateMatch
+      ) {
+        return null;
+      }
+
+      function dgshopIsoDate(
+        value
+      ) {
+        var match =
+          String(
+            value || ""
+          )
+            .trim()
+            .match(
+              /^(\d{2})\.(\d{2})\.(\d{4})$/
+            );
+
+        return match
+          ? (
+              match[3] +
+              "-" +
+              match[2] +
+              "-" +
+              match[1]
+            )
+          : "";
+      }
+
+      var rows = [];
+      var costs = [];
+
+      /*
+       * DiscGolfShop bruker Fiken-lignende fakturaoppsett over flere sider:
+       *
+       *   MVP/Axiom Neutron           115,00   15   25 %   2 156,25
+       *   Neutron Trail - Goliath
+       *
+       *   Frakt                       346,00    1   25 %     432,50
+       *   Postnord pakke til bedrift
+       *
+       *   Øreavrunding                  0,25    1    0 %       0,25
+       *
+       * Sum-kolonnen er inkl. MVA. Reell varekost er Enhetspris × Antall,
+       * altså eks. MVA. Tekstlinjen under tall-linjen hører til samme vare.
+       */
+      var numberTailPattern =
+        /^(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})$/i;
+
+      function isTableHeader(
+        line
+      ) {
+        return (
+          /Beskrivelse/i.test(
+            line
+          ) &&
+          /Enhetspris/i.test(
+            line
+          ) &&
+          /Antall/i.test(
+            line
+          ) &&
+          /Mva/i.test(
+            line
+          )
+        );
+      }
+
+      function isStopLine(
+        line
+      ) {
+        return (
+          /^Netto\b/i.test(
+            line
+          ) ||
+          /^Mva\b/i.test(
+            line
+          ) ||
+          /^Å betale\b/i.test(
+            line
+          ) ||
+          /^Alle beløp er oppgitt/i.test(
+            line
+          ) ||
+          /^Fortsetter på neste side/i.test(
+            line
+          ) ||
+          /^DiscGolfShop AS\b/i.test(
+            line
+          ) ||
+          /^Discgolfshop AS\b/i.test(
+            line
+          )
+        );
+      }
+
+      function cleanDescription(
+        primary,
+        continuation
+      ) {
+        var first =
+          String(
+            primary || ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        var second =
+          String(
+            continuation || ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        /*
+         * Den nederste tekstlinjen inneholder normalt det spesifikke
+         * produktnavnet (f.eks. "Neutron Trail - Goliath"), mens øverste
+         * linje gir MVP/Axiom/plastfamilie. Vi beholder begge for smartmatch.
+         */
+        if (
+          first &&
+          second
+        ) {
+          return (
+            first +
+            " / " +
+            second
+          );
+        }
+
+        return (
+          second ||
+          first
+        );
+      }
+
+      function finishRow(
+        pending
+      ) {
+        if (!pending) {
+          return;
+        }
+
+        var description =
+          cleanDescription(
+            pending.primary_description,
+            pending.continuation.join(
+              " "
+            )
+          );
+
+        if (!description) {
+          return;
+        }
+
+        var quantity =
+          num(
+            pending.quantity
+          );
+
+        var unitPrice =
+          num(
+            pending.unit_price
+          );
+
+        if (
+          !Number.isFinite(
+            quantity
+          ) ||
+          quantity <= 0 ||
+          !Number.isFinite(
+            unitPrice
+          ) ||
+          unitPrice < 0
+        ) {
+          return;
+        }
+
+        var netLineTotal =
+          unitPrice *
+          quantity;
+
+        var combinedLower =
+          description.toLowerCase();
+
+        var isShipping =
+          /^frakt\b/i.test(
+            pending.primary_description
+          ) ||
+          /\bpostnord\b/i.test(
+            combinedLower
+          ) ||
+          /\bfrakt\b/i.test(
+            combinedLower
+          );
+
+        var isRounding =
+          /øreavrunding/i.test(
+            combinedLower
+          ) ||
+          /avrunding/i.test(
+            combinedLower
+          );
+
+        if (
+          isShipping ||
+          isRounding
+        ) {
+          costs.push({
+            cost_type:
+              isShipping
+                ? "shipping"
+                : "other",
+
+            description:
+              description,
+
+            amount:
+              netLineTotal,
+
+            allocation_method:
+              "by_value",
+
+            gross_amount:
+              pending.gross_line_total,
+
+            vat_percent:
+              pending.vat_percent
+          });
+
+          return;
+        }
+
+        rows.push({
+          line_number:
+            rows.length + 1,
+
+          /*
+           * DiscGolfShop-fakturaene har ikke eget varenummer i tabellen.
+           * Produktmatch skjer derfor på produktnavn, og bekreftede navn
+           * kan gjenbrukes av smartmatcheren på senere fakturaer.
+           */
+          supplier_sku:
+            null,
+
+          ean:
+            null,
+
+          description:
+            description,
+
+          quantity:
+            quantity,
+
+          unit_price:
+            unitPrice,
+
+          line_total:
+            netLineTotal,
+
+          list_unit_price:
+            unitPrice,
+
+          discount_percent:
+            0,
+
+          gross_line_total:
+            pending.gross_line_total,
+
+          vat_percent:
+            pending.vat_percent
+        });
+      }
+
+
+      (pages || []).forEach(
+        function (page) {
+          var inTable = false;
+          var pending = null;
+
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var line =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (!line) {
+                return;
+              }
+
+              if (
+                isTableHeader(
+                  line
+                )
+              ) {
+                finishRow(
+                  pending
+                );
+
+                pending = null;
+                inTable = true;
+                return;
+              }
+
+              if (!inTable) {
+                return;
+              }
+
+              if (
+                isStopLine(
+                  line
+                )
+              ) {
+                finishRow(
+                  pending
+                );
+
+                pending = null;
+
+                if (
+                  /^Netto\b/i.test(
+                    line
+                  ) ||
+                  /^Alle beløp/i.test(
+                    line
+                  ) ||
+                  /^Fortsetter på neste side/i.test(
+                    line
+                  )
+                ) {
+                  inTable = false;
+                }
+
+                return;
+              }
+
+              var numericRow =
+                line.match(
+                  numberTailPattern
+                );
+
+              if (
+                numericRow
+              ) {
+                finishRow(
+                  pending
+                );
+
+                pending = {
+                  primary_description:
+                    numericRow[1],
+
+                  continuation:
+                    [],
+
+                  unit_price:
+                    parseNordicNumber(
+                      numericRow[2]
+                    ),
+
+                  quantity:
+                    parseNordicNumber(
+                      numericRow[3]
+                    ),
+
+                  vat_percent:
+                    parseNordicNumber(
+                      numericRow[4]
+                    ),
+
+                  gross_line_total:
+                    parseNordicNumber(
+                      numericRow[5]
+                    )
+                };
+
+                return;
+              }
+
+              /*
+               * Den andre beskrivelseslinjen kommer normalt etter tallene.
+               * Ignorer kjente side-/headerlinjer som kan ligge mellom.
+               */
+              if (
+                pending &&
+                !/^FAKTURA$/i.test(
+                  line
+                ) &&
+                !/^Forfallsdato\b/i.test(
+                  line
+                ) &&
+                !/^Kontonr\./i.test(
+                  line
+                ) &&
+                !/^Å betale\b/i.test(
+                  line
+                )
+              ) {
+                pending.continuation.push(
+                  line
+                );
+              }
+            }
+          );
+
+          finishRow(
+            pending
+          );
+        }
+      );
+
+
+      /*
+       * Fallback for PDF-er der tabellkolonnene blir slått sammen annerledes:
+       * finn alle tekstsekvenser som slutter med pris + antall + MVA + sum.
+       */
+      if (
+        rows.length === 0
+      ) {
+        var flatText =
+          fullLines.join(" ");
+
+        var flatPattern =
+          /(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|Øreavrunding\b|Netto\b|Mva\b|Å betale\b|$))/gi;
+
+        var flatMatch;
+
+        while (
+          (
+            flatMatch =
+              flatPattern.exec(
+                flatText
+              )
+          ) !== null
+        ) {
+          var fallbackPrimary =
+            String(
+              flatMatch[1] || ""
+            )
+              .replace(
+                /.*?Beskrivelse\s+Enhetspris\s+Antall\s+Mva\s+Sum\s+/i,
+                ""
+              )
+              .trim();
+
+          finishRow({
+            primary_description:
+              fallbackPrimary,
+            continuation:
+              [],
+            unit_price:
+              parseNordicNumber(
+                flatMatch[2]
+              ),
+            quantity:
+              parseNordicNumber(
+                flatMatch[3]
+              ),
+            vat_percent:
+              parseNordicNumber(
+                flatMatch[4]
+              ),
+            gross_line_total:
+              parseNordicNumber(
+                flatMatch[5]
+              )
+          });
+        }
+      }
+
+
+      var netMatch =
+        fullText.match(
+          /(?:^|\n)\s*Netto\s+(\d[\d\s.]*,\d{2})(?:\s|$)/im
+        );
+
+      var vatMatch =
+        fullText.match(
+          /(?:^|\n)\s*Mva\s+(\d[\d\s.]*,\d{2})(?:\s|$)/im
+        );
+
+      var grossMatch =
+        fullText.match(
+          /Å betale\s+(\d[\d\s.]*,\d{2})/i
+        );
+
+      var goodsTotal =
+        rows.reduce(
+          function (
+            sum,
+            row
+          ) {
+            return (
+              sum +
+              num(
+                row.line_total
+              )
+            );
+          },
+          0
+        );
+
+      var extraTotal =
+        costs.reduce(
+          function (
+            sum,
+            cost
+          ) {
+            return (
+              sum +
+              num(
+                cost.amount
+              )
+            );
+          },
+          0
+        );
+
+      var netTotal =
+        netMatch
+          ? parseNordicNumber(
+              netMatch[1]
+            )
+          : null;
+
+      var vatTotal =
+        vatMatch
+          ? parseNordicNumber(
+              vatMatch[1]
+            )
+          : null;
+
+      var grossTotal =
+        grossMatch
+          ? parseNordicNumber(
+              grossMatch[1]
+            )
+          : null;
+
+      var computedTotal =
+        goodsTotal +
+        extraTotal;
+
+      var difference =
+        netTotal === null
+          ? null
+          : Math.abs(
+              computedTotal -
+              netTotal
+            );
+
+      return {
+        parser:
+          "discgolfshop-v1",
+
+        parser_label:
+          "DiscGolfShop AS",
+
+        supplier_hint:
+          "DiscGolfShop AS",
+
+        invoice_number:
+          invoiceNoMatch[1],
+
+        invoice_date:
+          dgshopIsoDate(
+            invoiceDateMatch[1]
+          ),
+
+        due_date:
+          dueDateMatch
+            ? dgshopIsoDate(
+                dueDateMatch[1]
+              )
+            : "",
+
+        currency:
+          "NOK",
+
+        rows:
+          rows,
+
+        costs:
+          costs,
+
+        goods_total:
+          goodsTotal,
+
+        shipping_total:
+          extraTotal,
+
+        invoice_total:
+          netTotal,
+
+        total_label:
+          "Netto ekskl. MVA",
+
+        vat_total:
+          vatTotal,
+
+        gross_total:
+          grossTotal,
+
+        computed_total:
+          computedTotal,
+
+        difference:
+          difference,
+
+        raw_text:
+          fullText
+      };
+    }
+
+
     function parseSupplierPdf(
       pages
     ) {
@@ -8047,6 +8745,15 @@ parent.appendChild(productListSection.wrap);
 
       parsed =
         parseSuneSportPdf(
+          pages
+        );
+
+      if (parsed) {
+        return parsed;
+      }
+
+      parsed =
+        parseDiscGolfShopPdf(
           pages
         );
 
@@ -9185,7 +9892,7 @@ parent.appendChild(productListSection.wrap);
       var intro =
         el(
           "div",
-          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs, Sune Sport og DiscFinder støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
+          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs, Sune Sport, DiscFinder og DiscGolfShop støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
         );
 
       intro.className =
@@ -10414,7 +11121,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.7.2 · " +
+                "PDF-import via Admin v5.8 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -10943,7 +11650,7 @@ parent.appendChild(productListSection.wrap);
       var uploadInfo =
         el(
           "div",
-          "Last opp PDF. Latitude 64 / House of Discs, Sune Sport og DiscFinder-formatet støttes automatisk. Ukjente formater stoppes før import."
+          "Last opp PDF. Latitude 64 / House of Discs, Sune Sport, DiscFinder og DiscGolfShop-formatet støttes automatisk. Ukjente formater stoppes før import."
         );
 
       uploadInfo.className =
