@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.10 · Latitude uten EAN + fakturafilter"
+      "Admin v5.11 · OTB Europe PDF"
     );
 
     var products =
@@ -9160,6 +9160,381 @@ parent.appendChild(productListSection.wrap);
     }
 
 
+    function parseOtbEuropePdf(
+      pages
+    ) {
+      var fullLines = [];
+
+      (pages || []).forEach(
+        function (page) {
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var clean =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (clean) {
+                fullLines.push(
+                  clean
+                );
+              }
+            }
+          );
+        }
+      );
+
+      var fullText =
+        fullLines.join("\n");
+
+      if (
+        !/OTB\s+Europe\s+AB/i.test(
+          fullText
+        ) &&
+        !/Payment\s+information\s+for\s+OTB\s+Europe/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+
+      var invoiceNoMatch =
+        fullText.match(
+          /Invoice\s+No\.?\s*([0-9]+)/i
+        );
+
+      var invoiceDateMatch =
+        fullText.match(
+          /Invoice\s+date\s+(\d{4}-\d{2}-\d{2})/i
+        );
+
+      var dueDateMatch =
+        fullText.match(
+          /Due\s+date\s+(\d{4}-\d{2}-\d{2})/i
+        );
+
+      if (
+        !invoiceNoMatch ||
+        !invoiceDateMatch
+      ) {
+        return null;
+      }
+
+
+      var rows = [];
+      var costs = [];
+
+
+      /*
+       * OTB Europe-format:
+       *
+       *   Designation Quantity PPU Total
+       *   Big Z Luna - 170-172 grams 6,00 13,00 78,00
+       *
+       * Produktnavnet kan inneholde årstall, bindestrek, gram og "Vary".
+       * Derfor leser vi alltid de TRE siste tallfeltene som:
+       *
+       *   Quantity | PPU | Total
+       *
+       * og lar alt foran være produktbeskrivelsen.
+       */
+      (pages || []).forEach(
+        function (page) {
+          var inItems = false;
+
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var line =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (!line) {
+                return;
+              }
+
+              if (
+                /^Designation\s+Quantity\s+PPU\s+Total$/i.test(
+                  line
+                )
+              ) {
+                inItems = true;
+                return;
+              }
+
+              if (!inItems) {
+                return;
+              }
+
+              if (
+                /^Payment\s+information\s+for\s+OTB\s+Europe/i.test(
+                  line
+                ) ||
+                /^Rate\b/i.test(
+                  line
+                ) ||
+                /^Shipping\s+Excl\.\s*VAT/i.test(
+                  line
+                )
+              ) {
+                inItems = false;
+                return;
+              }
+
+              var match =
+                line.match(
+                  /^(.+?)\s+(\d+(?:[.,]\d+)?)\s+(\d[\d\s.]*,\d{2})\s+(\d[\d\s.]*,\d{2})$/i
+                );
+
+              if (!match) {
+                return;
+              }
+
+              var description =
+                String(
+                  match[1] || ""
+                )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              var quantity =
+                parseNordicNumber(
+                  match[2]
+                );
+
+              var unitPrice =
+                parseNordicNumber(
+                  match[3]
+                );
+
+              var lineTotal =
+                parseNordicNumber(
+                  match[4]
+                );
+
+              if (
+                !description ||
+                quantity === null ||
+                quantity <= 0 ||
+                unitPrice === null ||
+                unitPrice < 0 ||
+                lineTotal === null ||
+                lineTotal < 0
+              ) {
+                return;
+              }
+
+              rows.push({
+                line_number:
+                  rows.length + 1,
+
+                supplier_sku:
+                  null,
+
+                ean:
+                  null,
+
+                description:
+                  description,
+
+                quantity:
+                  quantity,
+
+                unit_price:
+                  unitPrice,
+
+                line_total:
+                  lineTotal,
+
+                list_unit_price:
+                  unitPrice,
+
+                discount_percent:
+                  0
+              });
+            }
+          );
+        }
+      );
+
+
+      /*
+       * Footer:
+       *
+       *   Shipping Excl. VAT Total DUE PAYMENT
+       *   35,00 1 600,05 1 600,05 USD 1 600,05
+       *
+       * "Rate 9,315230" er OTBs svenske regnskapskurs, IKKE NOK-kurs.
+       * Den skal derfor ikke brukes. Systemet henter i stedet historisk
+       * USD/NOK fra Norges Bank på fakturadatoen.
+       */
+      var footerMatch =
+        fullText.match(
+          /Shipping\s+Excl\.\s*VAT\s+Total\s+DUE\s+PAYMENT\s*\n?\s*([\d\s.]+,\d{2})\s+([\d\s.]+,\d{2})\s+([\d\s.]+,\d{2})\s+USD\s+([\d\s.]+,\d{2})/i
+        );
+
+
+      var shippingTotal =
+        footerMatch
+          ? parseNordicNumber(
+              footerMatch[1]
+            )
+          : 0;
+
+      var invoiceTotal =
+        footerMatch
+          ? parseNordicNumber(
+              footerMatch[2]
+            )
+          : null;
+
+      var duePayment =
+        footerMatch
+          ? parseNordicNumber(
+              footerMatch[4]
+            )
+          : null;
+
+
+      if (
+        shippingTotal !== null &&
+        shippingTotal > 0
+      ) {
+        costs.push({
+          cost_type:
+            "shipping",
+
+          description:
+            "Shipping",
+
+          amount:
+            shippingTotal,
+
+          allocation_method:
+            "by_value"
+        });
+      }
+
+
+      var goodsTotal =
+        rows.reduce(
+          function (
+            sum,
+            row
+          ) {
+            return (
+              sum +
+              num(
+                row.line_total
+              )
+            );
+          },
+          0
+        );
+
+
+      var computedTotal =
+        goodsTotal +
+        (
+          shippingTotal || 0
+        );
+
+
+      var difference =
+        invoiceTotal === null
+          ? null
+          : Math.abs(
+              computedTotal -
+              invoiceTotal
+            );
+
+
+      return {
+        parser:
+          "otb-europe-v1",
+
+        parser_label:
+          "OTB Europe AB · v1",
+
+        supplier_hint:
+          "OTB Europe AB",
+
+        invoice_number:
+          invoiceNoMatch[1],
+
+        invoice_date:
+          invoiceDateMatch[1],
+
+        due_date:
+          dueDateMatch
+            ? dueDateMatch[1]
+            : "",
+
+        currency:
+          "USD",
+
+        rows:
+          rows,
+
+        costs:
+          costs,
+
+        goods_total:
+          goodsTotal,
+
+        shipping_total:
+          shippingTotal || 0,
+
+        invoice_total:
+          invoiceTotal,
+
+        total_label:
+          "Excl. VAT",
+
+        vat_total:
+          0,
+
+        gross_total:
+          duePayment,
+
+        computed_total:
+          computedTotal,
+
+        difference:
+          difference,
+
+        raw_text:
+          fullText
+      };
+    }
+
+
     function parseSupplierPdf(
       pages
     ) {
@@ -9183,6 +9558,15 @@ parent.appendChild(productListSection.wrap);
 
       parsed =
         parseDiscGolfShopPdf(
+          pages
+        );
+
+      if (parsed) {
+        return parsed;
+      }
+
+      parsed =
+        parseOtbEuropePdf(
           pages
         );
 
@@ -10321,7 +10705,7 @@ parent.appendChild(productListSection.wrap);
       var intro =
         el(
           "div",
-          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs, Sune Sport, DiscFinder og DiscGolfShop støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
+          "PDF-en er lest lokalt i nettleseren. Latitude 64 / House of Discs, Sune Sport, DiscFinder, DiscGolfShop og OTB Europe støttes nå. Frakt kan legges på én faktura eller fordeles over flere fakturaer i samme fysiske forsendelse. Fakturadata og filnavn lagres, men selve PDF-filen arkiveres ikke ennå."
         );
 
       intro.className =
@@ -11550,7 +11934,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.10 · " +
+                "PDF-import via Admin v5.11 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -12098,7 +12482,7 @@ parent.appendChild(productListSection.wrap);
       var uploadInfo =
         el(
           "div",
-          "Last opp PDF. Latitude 64 / House of Discs, Sune Sport, DiscFinder og DiscGolfShop-formatet støttes automatisk. Ukjente formater stoppes før import."
+          "Last opp PDF. Latitude 64 / House of Discs, Sune Sport, DiscFinder, DiscGolfShop og OTB Europe-formatet støttes automatisk. Ukjente formater stoppes før import."
         );
 
       uploadInfo.className =
