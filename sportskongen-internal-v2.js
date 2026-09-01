@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.9.2 · Latitude beskrivelse begge rekkefølger"
+      "Admin v5.10 · Latitude uten EAN + fakturafilter"
     );
 
     var products =
@@ -5471,7 +5471,15 @@ parent.appendChild(productListSection.wrap);
       productsById: {},
       variantsById: {},
       pdfImport: null,
-      pdfJsPromise: null
+      pdfJsPromise: null,
+
+      /*
+       * Fakturalisten starter alltid med alle leverandører sortert etter
+       * fakturadato. Brukeren kan filtrere til én leverandør eller lukke
+       * selve listen uten at opplastingsfeltet forsvinner.
+       */
+      invoiceSupplierFilter: "",
+      invoiceListOpen: true
     };
 
     function num(value) {
@@ -6099,40 +6107,36 @@ parent.appendChild(productListSection.wrap);
           .trim();
 
       /*
-       * Latitude-PDF-er kan levere samme visuelle tabellrad i to
-       * forskjellige tekst-rekkefølger avhengig av PDF-generering/PDF.js:
+       * Permanent Latitude-normalisering.
        *
-       * A) dato først:
-       *   2026-02-17 2 pcs 124,50 30% 174,30117490 EAN: 733...
+       * Vi har nå sett flere generasjoner av samme Latitude-faktura:
        *
-       * B) artikkel først:
-       *   117490 EAN: 733... 2026-02-17 2 pcs 124,50 30% 174,30
+       * A) SKU + EAN + dato:
+       *   118078 EAN: 733... 2026-04-14 2 pcs 94,50 189,00
        *
-       * Vi normaliserer begge til samme gamle array-format:
-       *   [0] hele treffet
+       * B) SKU UTEN EAN + dato:
+       *   120648 2026-04-14 2 pcs 120,00 240,00
+       *
+       * C) dato først + SKU/EAN til slutt:
+       *   2026-02-17 2 pcs 124,50 30% 174,30 117490 EAN: 733...
+       *
+       * D) som C, men SKU kan ligge limt rett etter summen i PDF-tekstlaget.
+       *
+       * Rabattprosent er valgfri.
+       * EAN er valgfri.
+       *
+       * Alt normaliseres til samme format som resten av parseren forventer:
        *   [1] dato
        *   [2] antall
        *   [3] enhetspris
-       *   [4] linjesum etter rabatt
+       *   [4] faktisk linjesum
        *   [5] leverandørens artikkelnummer
-       *   [6] EAN
+       *   [6] EAN eller null
        */
-
-      var match =
-        compact.match(
-          /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})\s+(\d{5,})\s+EAN:\s*(\d{8,14})$/i
-        ) ||
-        compact.match(
-          /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
-        );
-
-      if (match) {
-        return match;
-      }
 
       var skuFirst =
         compact.match(
-          /^(\d{5,})\s+EAN:\s*(\d{8,14})\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})$/i
+          /^(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?\s+(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})$/i
         );
 
       if (skuFirst) {
@@ -6143,9 +6147,53 @@ parent.appendChild(productListSection.wrap);
           skuFirst[5],
           skuFirst[6],
           skuFirst[1],
-          skuFirst[2]
+          skuFirst[2] || null
         ];
       }
+
+
+      var dateFirst =
+        compact.match(
+          /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})\s+(\d{5,})(?:\s+EAN:\s*(\d{8,14}))?$/i
+        );
+
+      if (dateFirst) {
+        return [
+          dateFirst[0],
+          dateFirst[1],
+          dateFirst[2],
+          dateFirst[3],
+          dateFirst[4],
+          dateFirst[5],
+          dateFirst[6] || null
+        ];
+      }
+
+
+      /*
+       * Enkelte PDF-tekstlag limer SKU rett på linjesummen:
+       *   ... 174,30117490 EAN: ...
+       *
+       * Denne varianten brukes bare når EAN finnes, slik at skillet mellom
+       * beløp og artikkelnummer fortsatt er entydig.
+       */
+      var dateFirstJoined =
+        compact.match(
+          /^(\d{4}-\d{2}-\d{2})\s+(\d+(?:[.,]\d+)?)\s+pcs\s+([\d\s]+,\d{2})\s+(?:\d+(?:[.,]\d+)?\s*%\s+)?([\d\s]+,\d{2})(\d{5,})\s+EAN:\s*(\d{8,14})$/i
+        );
+
+      if (dateFirstJoined) {
+        return [
+          dateFirstJoined[0],
+          dateFirstJoined[1],
+          dateFirstJoined[2],
+          dateFirstJoined[3],
+          dateFirstJoined[4],
+          dateFirstJoined[5],
+          dateFirstJoined[6]
+        ];
+      }
+
 
       return null;
     }
@@ -7428,7 +7476,7 @@ parent.appendChild(productListSection.wrap);
             : "latitude64-v2",
 
         parser_label:
-          "Latitude 64 / House of Discs · v4",
+          "Latitude 64 / House of Discs · v5",
 
         supplier_hint:
           "Latitude 64",
@@ -11502,7 +11550,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.9.2 · " +
+                "PDF-import via Admin v5.10 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -11999,6 +12047,20 @@ parent.appendChild(productListSection.wrap);
     function renderInvoiceList() {
       clear(left);
 
+      var headingRow =
+        el("div");
+
+      headingRow.style.display =
+        "flex";
+      headingRow.style.alignItems =
+        "center";
+      headingRow.style.justifyContent =
+        "space-between";
+      headingRow.style.gap =
+        "8px";
+      headingRow.style.marginBottom =
+        "8px";
+
       var heading =
         el(
           "div",
@@ -12009,10 +12071,15 @@ parent.appendChild(productListSection.wrap);
         "900";
       heading.style.fontSize =
         "13px";
-      heading.style.marginBottom =
-        "8px";
 
-      left.appendChild(heading);
+      headingRow.appendChild(
+        heading
+      );
+
+      left.appendChild(
+        headingRow
+      );
+
 
       var uploadBox =
         el("div");
@@ -12036,12 +12103,14 @@ parent.appendChild(productListSection.wrap);
 
       uploadInfo.className =
         "sk-invoice-small";
+
       uploadBox.appendChild(
         uploadInfo
       );
 
       var fileInput =
         el("input");
+
       fileInput.type = "file";
       fileInput.accept =
         "application/pdf,.pdf";
@@ -12075,6 +12144,7 @@ parent.appendChild(productListSection.wrap);
       uploadBox.appendChild(
         uploadBtn
       );
+
       uploadBox.appendChild(
         fileInput
       );
@@ -12083,28 +12153,386 @@ parent.appendChild(productListSection.wrap);
         uploadBox
       );
 
-      var list = el("div");
+
+      /*
+       * ------------------------------------------------------------
+       * Fakturafilter
+       *
+       * Standard:
+       *   Alle leverandører, nyeste fakturadato først.
+       *
+       * Ved valg av leverandør:
+       *   Bare den leverandørens fakturaer, fortsatt nyeste først.
+       * ------------------------------------------------------------
+       */
+
+      var supplierNames = [];
+
+      state.summaries.forEach(
+        function (summary) {
+          var supplierName =
+            String(
+              summary.supplier_name ||
+              ""
+            ).trim();
+
+          if (
+            supplierName &&
+            supplierNames.indexOf(
+              supplierName
+            ) === -1
+          ) {
+            supplierNames.push(
+              supplierName
+            );
+          }
+        }
+      );
+
+      supplierNames.sort(
+        function (a, b) {
+          return a.localeCompare(
+            b,
+            "nb"
+          );
+        }
+      );
+
+
+      var filterBox =
+        el("div");
+
+      filterBox.style.marginTop =
+        "10px";
+      filterBox.style.padding =
+        "10px";
+      filterBox.style.border =
+        "1px solid #dbe3ee";
+      filterBox.style.borderRadius =
+        "12px";
+      filterBox.style.background =
+        "#fff";
+
+      var filterLabel =
+        el(
+          "div",
+          "Vis fakturaer"
+        );
+
+      filterLabel.style.fontSize =
+        "11px";
+      filterLabel.style.fontWeight =
+        "900";
+      filterLabel.style.marginBottom =
+        "6px";
+      filterLabel.style.color =
+        "#475569";
+
+      filterBox.appendChild(
+        filterLabel
+      );
+
+      var supplierSelect =
+        el("select");
+
+      supplierSelect.style.width =
+        "100%";
+      supplierSelect.style.boxSizing =
+        "border-box";
+      supplierSelect.style.minHeight =
+        "38px";
+      supplierSelect.style.border =
+        "1px solid #cbd5e1";
+      supplierSelect.style.borderRadius =
+        "9px";
+      supplierSelect.style.padding =
+        "7px 9px";
+      supplierSelect.style.background =
+        "#fff";
+      supplierSelect.style.fontWeight =
+        "700";
+
+
+      var allOption =
+        document.createElement(
+          "option"
+        );
+
+      allOption.value = "";
+      allOption.textContent =
+        "Alle leverandører · etter dato";
+
+      supplierSelect.appendChild(
+        allOption
+      );
+
+
+      supplierNames.forEach(
+        function (supplierName) {
+          var option =
+            document.createElement(
+              "option"
+            );
+
+          option.value =
+            supplierName;
+
+          option.textContent =
+            supplierName +
+            " · etter dato";
+
+          supplierSelect.appendChild(
+            option
+          );
+        }
+      );
+
+      supplierSelect.value =
+        state.invoiceSupplierFilter ||
+        "";
+
+      filterBox.appendChild(
+        supplierSelect
+      );
+
+
+      var visibleSummaries =
+        state.summaries
+          .filter(
+            function (summary) {
+              if (
+                !state.invoiceSupplierFilter
+              ) {
+                return true;
+              }
+
+              return (
+                String(
+                  summary.supplier_name ||
+                  ""
+                ) ===
+                state.invoiceSupplierFilter
+              );
+            }
+          )
+          .slice()
+          .sort(
+            function (a, b) {
+              var dateA =
+                String(
+                  a.invoice_date ||
+                  ""
+                );
+
+              var dateB =
+                String(
+                  b.invoice_date ||
+                  ""
+                );
+
+              if (
+                dateA !== dateB
+              ) {
+                return dateB.localeCompare(
+                  dateA
+                );
+              }
+
+              return String(
+                b.invoice_number ||
+                ""
+              ).localeCompare(
+                String(
+                  a.invoice_number ||
+                  ""
+                )
+              );
+            }
+          );
+
+
+      var toggleBtn =
+        createButton(
+          state.invoiceListOpen
+            ? (
+                "Skjul liste · " +
+                visibleSummaries.length
+              )
+            : (
+                "Vis liste · " +
+                visibleSummaries.length
+              )
+        );
+
+      toggleBtn.style.width =
+        "100%";
+      toggleBtn.style.marginTop =
+        "7px";
+
+      filterBox.appendChild(
+        toggleBtn
+      );
+
+      left.appendChild(
+        filterBox
+      );
+
+
+      supplierSelect.onchange =
+        function () {
+          state.invoiceSupplierFilter =
+            supplierSelect.value ||
+            "";
+
+          var filtered =
+            state.summaries
+              .filter(
+                function (summary) {
+                  if (
+                    !state.invoiceSupplierFilter
+                  ) {
+                    return true;
+                  }
+
+                  return (
+                    String(
+                      summary.supplier_name ||
+                      ""
+                    ) ===
+                    state.invoiceSupplierFilter
+                  );
+                }
+              )
+              .slice()
+              .sort(
+                function (a, b) {
+                  return String(
+                    b.invoice_date ||
+                    ""
+                  ).localeCompare(
+                    String(
+                      a.invoice_date ||
+                      ""
+                    )
+                  );
+                }
+              );
+
+          var selectedStillVisible =
+            filtered.some(
+              function (summary) {
+                return (
+                  summary.invoice_id ===
+                  state.selectedInvoiceId
+                );
+              }
+            );
+
+          if (
+            !selectedStillVisible
+          ) {
+            state.selectedInvoiceId =
+              filtered.length
+                ? filtered[0].invoice_id
+                : null;
+          }
+
+          renderInvoiceList();
+
+          if (
+            state.selectedInvoiceId
+          ) {
+            loadInvoiceDetails(
+              state.selectedInvoiceId
+            );
+          } else {
+            clear(right);
+
+            var emptyFiltered =
+              el(
+                "div",
+                "Ingen fakturaer for valgt leverandør."
+              );
+
+            emptyFiltered.className =
+              "sk-note";
+
+            right.appendChild(
+              emptyFiltered
+            );
+          }
+        };
+
+
+      toggleBtn.onclick =
+        function () {
+          state.invoiceListOpen =
+            !state.invoiceListOpen;
+
+          renderInvoiceList();
+        };
+
+
+      if (
+        !state.invoiceListOpen
+      ) {
+        var closedNote =
+          el(
+            "div",
+            visibleSummaries.length +
+              (
+                visibleSummaries.length === 1
+                  ? " faktura skjult."
+                  : " fakturaer skjult."
+              )
+          );
+
+        closedNote.className =
+          "sk-invoice-small";
+
+        closedNote.style.padding =
+          "9px 2px";
+
+        left.appendChild(
+          closedNote
+        );
+
+        return;
+      }
+
+
+      var list =
+        el("div");
+
       list.className =
         "sk-invoice-list";
 
-      if (!state.summaries.length) {
-        var empty = el(
-          "div",
-          "Ingen fakturaer."
-        );
+
+      if (
+        !visibleSummaries.length
+      ) {
+        var empty =
+          el(
+            "div",
+            "Ingen fakturaer."
+          );
 
         empty.className =
           "sk-warning";
 
-        list.appendChild(empty);
+        list.appendChild(
+          empty
+        );
       }
 
-      state.summaries.forEach(
+
+      visibleSummaries.forEach(
         function (summary) {
           var card =
             el("button");
 
           card.type = "button";
+
           card.className =
             "sk-invoice-card" +
             (
@@ -12114,11 +12542,13 @@ parent.appendChild(productListSection.wrap);
                 : ""
             );
 
+
           var top =
             el("div");
 
           top.className =
             "sk-invoice-card-top";
+
 
           var name =
             el(
@@ -12134,12 +12564,17 @@ parent.appendChild(productListSection.wrap);
                 )
             );
 
+
           var statusInfo =
             invoiceStatusLabel(
               summary.status
             );
 
-          top.appendChild(name);
+
+          top.appendChild(
+            name
+          );
+
           top.appendChild(
             statusBadge(
               statusInfo.label,
@@ -12147,7 +12582,10 @@ parent.appendChild(productListSection.wrap);
             )
           );
 
-          card.appendChild(top);
+          card.appendChild(
+            top
+          );
+
 
           var meta =
             el(
@@ -12176,13 +12614,17 @@ parent.appendChild(productListSection.wrap);
           meta.className =
             "sk-invoice-small";
 
-          card.appendChild(meta);
+          card.appendChild(
+            meta
+          );
+
 
           var total =
             Number(
               summary.total_lines ||
               0
             );
+
 
           var confirmed =
             Number(
@@ -12194,11 +12636,13 @@ parent.appendChild(productListSection.wrap);
               0
             );
 
+
           var progress =
             el("div");
 
           progress.className =
             "sk-invoice-progress";
+
 
           var fill =
             el("span");
@@ -12216,6 +12660,7 @@ parent.appendChild(productListSection.wrap);
             ) +
             "%";
 
+
           progress.appendChild(
             fill
           );
@@ -12223,6 +12668,7 @@ parent.appendChild(productListSection.wrap);
           card.appendChild(
             progress
           );
+
 
           card.onclick =
             function () {
@@ -12236,11 +12682,17 @@ parent.appendChild(productListSection.wrap);
               );
             };
 
-          list.appendChild(card);
+
+          list.appendChild(
+            card
+          );
         }
       );
 
-      left.appendChild(list);
+
+      left.appendChild(
+        list
+      );
     }
 
     function loadVariantsForProducts(
