@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.8 · DiscGolfShop PDF"
+      "Admin v5.8.1 · Negativ øreavrunding"
     );
 
     var products =
@@ -5754,6 +5754,10 @@ parent.appendChild(productListSection.wrap);
             " "
           )
           .replace(
+            /[−–—]/g,
+            "-"
+          )
+          .replace(
             /\s+/g,
             ""
           )
@@ -8145,7 +8149,7 @@ parent.appendChild(productListSection.wrap);
        * altså eks. MVA. Tekstlinjen under tall-linjen hører til samme vare.
        */
       var numberTailPattern =
-        /^(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})$/i;
+        /^(.+?)\s+([−–—-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([−–—-]?\d[\d\s.]*,\d{2})$/i;
 
       function isTableHeader(
         line
@@ -8269,23 +8273,6 @@ parent.appendChild(productListSection.wrap);
             pending.unit_price
           );
 
-        if (
-          !Number.isFinite(
-            quantity
-          ) ||
-          quantity <= 0 ||
-          !Number.isFinite(
-            unitPrice
-          ) ||
-          unitPrice < 0
-        ) {
-          return;
-        }
-
-        var netLineTotal =
-          unitPrice *
-          quantity;
-
         var combinedLower =
           description.toLowerCase();
 
@@ -8306,7 +8293,33 @@ parent.appendChild(productListSection.wrap);
           ) ||
           /avrunding/i.test(
             combinedLower
+          ) ||
+          /rounding/i.test(
+            combinedLower
           );
+
+        if (
+          !Number.isFinite(
+            quantity
+          ) ||
+          quantity <= 0 ||
+          !Number.isFinite(
+            unitPrice
+          ) ||
+          (
+            unitPrice < 0 &&
+            !(
+              isRounding &&
+              unitPrice >= -1
+            )
+          )
+        ) {
+          return;
+        }
+
+        var netLineTotal =
+          unitPrice *
+          quantity;
 
         if (
           isShipping ||
@@ -8539,7 +8552,7 @@ parent.appendChild(productListSection.wrap);
           fullLines.join(" ");
 
         var flatPattern =
-          /(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|Øreavrunding\b|Netto\b|Mva\b|Å betale\b|$))/gi;
+          /(.+?)\s+([−–—-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([−–—-]?\d[\d\s.]*,\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|Øreavrunding\b|Netto\b|Mva\b|Å betale\b|$))/gi;
 
         var flatMatch;
 
@@ -11121,7 +11134,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.8 · " +
+                "PDF-import via Admin v5.8.1 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -42708,3 +42721,11 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
+
+
+
+
+
+
+
+
