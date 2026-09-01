@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.9.1 · Latitude robust PDF-rekkefølge"
+      "Admin v5.9.2 · Latitude beskrivelse begge rekkefølger"
     );
 
     var products =
@@ -6481,7 +6481,73 @@ parent.appendChild(productListSection.wrap);
       (pages || []).forEach(
         function (page) {
           var inItems = false;
-          var pending = [];
+
+          /*
+           * Latitude-PDF-er finnes i minst to tekst-rekkefølger:
+           *
+           * 1) beskrivelse -> tallrad -> HS/COO
+           * 2) tallrad -> beskrivelse -> HS/COO
+           *
+           * Faktura 2008760 bruker nr. 2 selv om den visuelt ser lik ut.
+           * Vi støtter derfor begge uten å gjette.
+           */
+          var pendingDescription = [];
+          var openNumericMatch = null;
+
+          function finishLatitudeRow(
+            match,
+            descriptionParts
+          ) {
+            if (!match) {
+              return;
+            }
+
+            var description =
+              (descriptionParts || [])
+                .join(" ")
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim();
+
+            /*
+             * Importmotoren krever beskrivelse. Vi skal normalt alltid ha
+             * funnet den fra PDF-en. Fallbacken gjør likevel at en uvanlig
+             * tekststrøm ikke stopper hele fakturaen; SKU/EAN gjør fortsatt
+             * produktkoblingen mulig.
+             */
+            if (!description) {
+              description =
+                "Latitude vare " +
+                String(
+                  match[5] || ""
+                );
+            }
+
+            rows.push({
+              line_number:
+                rows.length + 1,
+              supplier_sku:
+                match[5],
+              ean:
+                match[6],
+              description:
+                description,
+              quantity:
+                parseNordicNumber(
+                  match[2]
+                ),
+              unit_price:
+                parseNordicNumber(
+                  match[3]
+                ),
+              line_total:
+                parseNordicNumber(
+                  match[4]
+                )
+            });
+          }
 
           (
             page.lines || []
@@ -6506,7 +6572,8 @@ parent.appendChild(productListSection.wrap);
                 /Artikel/i.test(line)
               ) {
                 inItems = true;
-                pending = [];
+                pendingDescription = [];
+                openNumericMatch = null;
                 return;
               }
 
@@ -6519,16 +6586,22 @@ parent.appendChild(productListSection.wrap);
                   line
                 )
               ) {
+                if (openNumericMatch) {
+                  finishLatitudeRow(
+                    openNumericMatch,
+                    pendingDescription
+                  );
+                }
+
                 inItems = false;
-                pending = [];
+                pendingDescription = [];
+                openNumericMatch = null;
                 return;
               }
 
               /*
-               * Ikke avslutt varetabellen på Frakt/Pall.
-               * På noen Latitude-PDF-er kommer disse beskrivelsene i
-               * tekststrømmen før den siste ordinære varens tallkolonner.
-               * De egne kostlinjene 90000/90002 leses separat nedenfor.
+               * Frakt/Pall er egne kostlinjer og skal aldri brukes som
+               * produktbeskrivelse. Selve 90000/90002-radene leses separat.
                */
               if (
                 /^Frakt$/i.test(
@@ -6549,6 +6622,20 @@ parent.appendChild(productListSection.wrap);
                   /HS Code:/i.test(line)
                 )
               ) {
+                /*
+                 * I tallrad-først-formatet markerer HS/COO slutten på
+                 * beskrivelsen til den åpne varen.
+                 */
+                if (openNumericMatch) {
+                  finishLatitudeRow(
+                    openNumericMatch,
+                    pendingDescription
+                  );
+
+                  openNumericMatch = null;
+                  pendingDescription = [];
+                }
+
                 return;
               }
 
@@ -6558,45 +6645,62 @@ parent.appendChild(productListSection.wrap);
                 );
 
               if (match) {
-                var description =
-                  pending
-                    .join(" ")
-                    .replace(
-                      /\s+/g,
-                      " "
-                    )
-                    .trim();
+                /*
+                 * Hvis forrige tallrad fortsatt er åpen, avslutt den først.
+                 * Dette er sikkerhetsnett for PDF-er uten egen HS/COO-linje.
+                 */
+                if (openNumericMatch) {
+                  finishLatitudeRow(
+                    openNumericMatch,
+                    pendingDescription
+                  );
 
-                rows.push({
-                  line_number:
-                    rows.length + 1,
-                  supplier_sku:
-                    match[5],
-                  ean:
-                    match[6],
-                  description:
-                    description,
-                  quantity:
-                    parseNordicNumber(
-                      match[2]
-                    ),
-                  unit_price:
-                    parseNordicNumber(
-                      match[3]
-                    ),
-                  line_total:
-                    parseNordicNumber(
-                      match[4]
-                    )
-                });
+                  openNumericMatch = null;
+                  pendingDescription = [];
+                }
 
-                pending = [];
+                /*
+                 * Har vi allerede tekst før tallraden, er dette det gamle
+                 * beskrivelse-først-formatet og raden kan lagres nå.
+                 */
+                if (
+                  pendingDescription.length > 0
+                ) {
+                  finishLatitudeRow(
+                    match,
+                    pendingDescription
+                  );
+
+                  pendingDescription = [];
+                  return;
+                }
+
+                /*
+                 * Ellers bruker PDF-en tallrad først. Vent på beskrivelsen
+                 * som kommer på neste linje(r).
+                 */
+                openNumericMatch =
+                  match;
+                pendingDescription = [];
                 return;
               }
 
-              pending.push(line);
+              pendingDescription.push(
+                line
+              );
             }
           );
+
+          /*
+           * Sikkerhetsnett for siste vare på siden dersom PDF-en ikke har
+           * HS/COO etter den.
+           */
+          if (openNumericMatch) {
+            finishLatitudeRow(
+              openNumericMatch,
+              pendingDescription
+            );
+          }
         }
       );
 
@@ -7324,7 +7428,7 @@ parent.appendChild(productListSection.wrap);
             : "latitude64-v2",
 
         parser_label:
-          "Latitude 64 / House of Discs · v3",
+          "Latitude 64 / House of Discs · v4",
 
         supplier_hint:
           "Latitude 64",
@@ -11398,7 +11502,7 @@ parent.appendChild(productListSection.wrap);
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.9.1 · " +
+                "PDF-import via Admin v5.9.2 · " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
