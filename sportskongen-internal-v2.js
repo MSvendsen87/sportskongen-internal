@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.13 · E-postkode + reell kost"
+      "Admin v5.14 · Quickbutik kosttest"
     );
 
     var products =
@@ -5677,7 +5677,8 @@ parent.appendChild(productListSection.wrap);
       invoiceSupplierFilter: "",
       invoiceListOpen: true,
 
-      costWritebackRunning: false
+      costWritebackRunning: false,
+      quickbutikCostTestRunning: false
     };
 
     function runLatestRealCostWriteback(
@@ -5840,6 +5841,164 @@ parent.appendChild(productListSection.wrap);
     }
 
 
+    function runChampionMako3QuickbutikDryRun(
+      button,
+      resultBox
+    ) {
+      if (
+        state.quickbutikCostTestRunning
+      ) {
+        return;
+      }
+
+      state.quickbutikCostTestRunning =
+        true;
+
+      var originalLabel =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        "Tester Quickbutik…";
+
+      if (resultBox) {
+        resultBox.style.display =
+          "block";
+        resultBox.textContent =
+          "Henter innlogget session og kjører dry-run. Ingen Quickbutik-priser endres.";
+      }
+
+      sb.auth.getSession()
+        .then(
+          function (sessionResult) {
+            var session =
+              sessionResult.data &&
+              sessionResult.data.session;
+
+            var token =
+              session &&
+              session.access_token;
+
+            if (!token) {
+              throw new Error(
+                "Fant ikke innlogget Supabase-session."
+              );
+            }
+
+            var url =
+              "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-purchase-prices" +
+              "?dryRun=true" +
+              "&quickbutikProductId=324" +
+              "&limit=20";
+
+            return fetch(
+              url,
+              {
+                method: "GET",
+                headers: {
+                  "Authorization":
+                    "Bearer " +
+                    token
+                }
+              }
+            );
+          }
+        )
+        .then(
+          function (response) {
+            return response
+              .json()
+              .then(
+                function (data) {
+                  return {
+                    ok:
+                      response.ok,
+                    status:
+                      response.status,
+                    data:
+                      data
+                  };
+                }
+              );
+          }
+        )
+        .then(
+          function (result) {
+            if (
+              !result.ok ||
+              !result.data ||
+              result.data.ok !== true
+            ) {
+              throw new Error(
+                "Worker-test feilet (" +
+                  String(
+                    result.status
+                  ) +
+                  "): " +
+                  JSON.stringify(
+                    result.data
+                  )
+              );
+            }
+
+            if (resultBox) {
+              resultBox.textContent =
+                JSON.stringify(
+                  result.data,
+                  null,
+                  2
+                );
+            }
+
+            alert(
+              "Dry-run ferdig. Ingen Quickbutik-priser er endret.\n\n" +
+              "Fant " +
+              String(
+                result.data.count ||
+                0
+              ) +
+              " kostmål for Quickbutik-produkt 324.\n\n" +
+              "Send meg resultatet i boksen før vi gjør en ekte oppdatering."
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            if (resultBox) {
+              resultBox.textContent =
+                "FEIL: " +
+                (
+                  error &&
+                  error.message
+                    ? error.message
+                    : String(error)
+                );
+            }
+
+            alert(
+              "Quickbutik-testen feilet: " +
+                (
+                  error &&
+                  error.message
+                    ? error.message
+                    : String(error)
+                )
+            );
+          }
+        )
+        .finally(
+          function () {
+            state.quickbutikCostTestRunning =
+              false;
+
+            button.disabled = false;
+            button.textContent =
+              originalLabel;
+          }
+        );
+    }
+
+
     function renderGlobalCostWritebackPanel() {
       var box =
         el("div");
@@ -5903,6 +6062,65 @@ parent.appendChild(productListSection.wrap);
 
       box.appendChild(
         button
+      );
+
+      var qbTestButton =
+        createButton(
+          "🧪 Test Quickbutik · Champion Mako3"
+        );
+
+      qbTestButton.style.marginLeft =
+        "8px";
+
+      var qbTestInfo =
+        el(
+          "div",
+          "Testen er kun dry-run. Den leser hvilke kostmål Worker-en vil sende for Quickbutik-produkt 324, men endrer ingenting."
+        );
+
+      qbTestInfo.className =
+        "sk-invoice-small";
+      qbTestInfo.style.marginTop =
+        "9px";
+
+      var qbResult =
+        el("pre");
+
+      qbResult.style.display =
+        "none";
+      qbResult.style.marginTop =
+        "9px";
+      qbResult.style.padding =
+        "10px";
+      qbResult.style.background =
+        "#111827";
+      qbResult.style.color =
+        "#f9fafb";
+      qbResult.style.borderRadius =
+        "10px";
+      qbResult.style.whiteSpace =
+        "pre-wrap";
+      qbResult.style.overflowX =
+        "auto";
+      qbResult.style.maxHeight =
+        "360px";
+
+      qbTestButton.onclick =
+        function () {
+          runChampionMako3QuickbutikDryRun(
+            qbTestButton,
+            qbResult
+          );
+        };
+
+      box.appendChild(
+        qbTestButton
+      );
+      box.appendChild(
+        qbTestInfo
+      );
+      box.appendChild(
+        qbResult
       );
 
       parent.insertBefore(
