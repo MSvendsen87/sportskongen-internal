@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.14 · Quickbutik kosttest"
+      "Admin v5.15 · Quickbutik ekte kosttest"
     );
 
     var products =
@@ -5678,7 +5678,8 @@ parent.appendChild(productListSection.wrap);
       invoiceListOpen: true,
 
       costWritebackRunning: false,
-      quickbutikCostTestRunning: false
+      quickbutikCostTestRunning: false,
+      quickbutikCostApplyRunning: false
     };
 
     function runLatestRealCostWriteback(
@@ -5999,6 +6000,158 @@ parent.appendChild(productListSection.wrap);
     }
 
 
+    function runChampionMako3QuickbutikApply(
+      button,
+      resultBox
+    ) {
+      if (
+        state.quickbutikCostApplyRunning
+      ) {
+        return;
+      }
+
+      var confirmed =
+        window.confirm(
+          "Dette er en EKTE Quickbutik-test.\n\n" +
+          "Kun Quickbutik-produkt 324 · Champion Mako3 blir forsøkt oppdatert.\n" +
+          "Forventet innkjøpspris eks. mva.: 119,52 kr.\n\n" +
+          "Lager, salgspris og andre produktfelter skal ikke endres.\n\n" +
+          "Vil du fortsette?"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      state.quickbutikCostApplyRunning =
+        true;
+
+      var originalLabel =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        "Oppdaterer Champion Mako3…";
+
+      if (resultBox) {
+        resultBox.style.display =
+          "block";
+        resultBox.textContent =
+          "Kjører ekte én-vare-test mot Quickbutik. Venter på write + verifisering…";
+      }
+
+      sb.auth.getSession()
+        .then(
+          function (sessionResult) {
+            var session =
+              sessionResult.data &&
+              sessionResult.data.session;
+
+            var token =
+              session &&
+              session.access_token;
+
+            if (!token) {
+              throw new Error(
+                "Fant ikke innlogget Supabase-session."
+              );
+            }
+
+            var url =
+              "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-purchase-prices" +
+              "?dryRun=false" +
+              "&quickbutikProductId=324" +
+              "&limit=20";
+
+            return fetch(
+              url,
+              {
+                method: "GET",
+                headers: {
+                  "Authorization":
+                    "Bearer " +
+                    token
+                }
+              }
+            );
+          }
+        )
+        .then(
+          function (response) {
+            return response
+              .json()
+              .then(
+                function (data) {
+                  return {
+                    ok:
+                      response.ok,
+                    status:
+                      response.status,
+                    data:
+                      data
+                  };
+                }
+              );
+          }
+        )
+        .then(
+          function (result) {
+            if (resultBox) {
+              resultBox.textContent =
+                JSON.stringify(
+                  result.data,
+                  null,
+                  2
+                );
+            }
+
+            if (
+              !result.ok ||
+              !result.data ||
+              result.data.ok !== true
+            ) {
+              throw new Error(
+                "Quickbutik svarte ikke med godkjent/verifisert oppdatering (" +
+                  String(
+                    result.status
+                  ) +
+                  "). Se resultatboksen."
+              );
+            }
+
+            alert(
+              "Champion Mako3 ble sendt til Quickbutik og Worker-en bekreftet oppdateringen.\n\n" +
+              "Åpne nå produkt 324 i Quickbutik og kontroller at innkjøpspris eks. mva. står som 119,52 kr.\n\n" +
+              "Ikke kjør full synk før vi har bekreftet dette manuelt."
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            alert(
+              "Den ekte Quickbutik-testen feilet: " +
+                (
+                  error &&
+                  error.message
+                    ? error.message
+                    : String(error)
+                )
+            );
+          }
+        )
+        .finally(
+          function () {
+            state.quickbutikCostApplyRunning =
+              false;
+
+            button.disabled = false;
+            button.textContent =
+              originalLabel;
+          }
+        );
+    }
+
+
     function renderGlobalCostWritebackPanel() {
       var box =
         el("div");
@@ -6119,6 +6272,27 @@ parent.appendChild(productListSection.wrap);
       box.appendChild(
         qbTestInfo
       );
+
+      var qbApplyButton =
+        createPrimaryButton(
+          "✅ Ekte test · Champion Mako3 → 119,52"
+        );
+
+      qbApplyButton.style.marginTop =
+        "8px";
+
+      qbApplyButton.onclick =
+        function () {
+          runChampionMako3QuickbutikApply(
+            qbApplyButton,
+            qbResult
+          );
+        };
+
+      box.appendChild(
+        qbApplyButton
+      );
+
       box.appendChild(
         qbResult
       );
