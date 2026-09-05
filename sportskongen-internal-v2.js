@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.16 · Vektet kost baseline"
+      "Admin v5.17 · Full Quickbutik kostsynk"
     );
 
     var products =
@@ -5679,7 +5679,8 @@ parent.appendChild(productListSection.wrap);
 
       costWritebackRunning: false,
       quickbutikCostTestRunning: false,
-      quickbutikCostApplyRunning: false
+      quickbutikCostApplyRunning: false,
+      quickbutikFullSyncRunning: false
     };
 
     function runWeightedCostBootstrap(
@@ -6119,6 +6120,370 @@ parent.appendChild(productListSection.wrap);
     }
 
 
+    function runFullQuickbutikPurchasePriceSync(
+      button,
+      resultBox
+    ) {
+      if (
+        state.quickbutikFullSyncRunning
+      ) {
+        return;
+      }
+
+      var confirmed =
+        window.confirm(
+          "Dette kjører FULL SYNK av alle gjenstående dokumenterte vektede innkjøpspriser til Quickbutik.\n\n" +
+          "Kun purchase_price (innkjøpspris eks. mva.) sendes.\n" +
+          "Lager, salgspris, synlighet og andre produktfelter endres ikke.\n\n" +
+          "Synken går i små batcher og stopper automatisk hvis Quickbutik eller Sportskongen returnerer feil.\n\n" +
+          "Vil du fortsette?"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      state.quickbutikFullSyncRunning =
+        true;
+
+      var originalLabel =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        "Starter full Quickbutik-synk…";
+
+      if (resultBox) {
+        resultBox.style.display =
+          "block";
+        resultBox.textContent =
+          "Starter full kostsynk. Henter innlogget session…";
+      }
+
+      var totalMarked =
+        0;
+
+      var totalRequested =
+        0;
+
+      var batchNumber =
+        0;
+
+      var latestSummary =
+        null;
+
+      var accessToken =
+        null;
+
+
+      function updateProgress(
+        message
+      ) {
+        if (resultBox) {
+          resultBox.textContent =
+            message;
+        }
+      }
+
+
+      function sleep(
+        ms
+      ) {
+        return new Promise(
+          function (resolve) {
+            setTimeout(
+              resolve,
+              ms
+            );
+          }
+        );
+      }
+
+
+      function runNextBatch() {
+        batchNumber += 1;
+
+        if (
+          batchNumber > 100
+        ) {
+          throw new Error(
+            "Sikkerhetsstopp: mer enn 100 batcher. Synken ble stoppet for kontroll."
+          );
+        }
+
+        button.textContent =
+          "Synker batch " +
+          String(
+            batchNumber
+          ) +
+          "…";
+
+        updateProgress(
+          "Batch " +
+            String(
+              batchNumber
+            ) +
+            " kjører.\n\n" +
+            "Totalt sendt så langt: " +
+            String(
+              totalRequested
+            ) +
+            "\n" +
+            "Totalt markert synket: " +
+            String(
+              totalMarked
+            ) +
+            (
+              latestSummary
+                ? "\nGjenstår ifølge siste svar: " +
+                  String(
+                    latestSummary.needs_sync
+                  )
+                : ""
+            )
+        );
+
+        var url =
+          "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-purchase-prices" +
+          "?dryRun=false" +
+          "&limit=20";
+
+        return fetch(
+          url,
+          {
+            method: "GET",
+            headers: {
+              "Authorization":
+                "Bearer " +
+                accessToken
+            }
+          }
+        )
+          .then(
+            function (response) {
+              return response
+                .json()
+                .then(
+                  function (data) {
+                    return {
+                      ok:
+                        response.ok,
+                      status:
+                        response.status,
+                      data:
+                        data
+                    };
+                  }
+                );
+            }
+          )
+          .then(
+            function (result) {
+              if (
+                !result.ok ||
+                !result.data ||
+                result.data.ok !== true
+              ) {
+                throw new Error(
+                  "Batch " +
+                    String(
+                      batchNumber
+                    ) +
+                    " feilet (" +
+                    String(
+                      result.status
+                    ) +
+                    "): " +
+                    JSON.stringify(
+                      result.data
+                    )
+                );
+              }
+
+              var requested =
+                Number(
+                  result.data.requested ||
+                  0
+                );
+
+              var marked =
+                Number(
+                  result.data.marked_synced ||
+                  0
+                );
+
+              totalRequested +=
+                requested;
+
+              totalMarked +=
+                marked;
+
+              latestSummary =
+                result.data.summary ||
+                latestSummary;
+
+              if (
+                requested === 0
+              ) {
+                return {
+                  done:
+                    true
+                };
+              }
+
+              if (
+                latestSummary &&
+                Number(
+                  latestSummary.needs_sync ||
+                  0
+                ) === 0
+              ) {
+                return {
+                  done:
+                    true
+                };
+              }
+
+              return sleep(
+                350
+              ).then(
+                function () {
+                  return runNextBatch();
+                }
+              );
+            }
+          );
+      }
+
+
+      sb.auth.getSession()
+        .then(
+          function (sessionResult) {
+            var session =
+              sessionResult.data &&
+              sessionResult.data.session;
+
+            accessToken =
+              session &&
+              session.access_token;
+
+            if (!accessToken) {
+              throw new Error(
+                "Fant ikke innlogget Supabase-session."
+              );
+            }
+
+            return runNextBatch();
+          }
+        )
+        .then(
+          function () {
+            var remaining =
+              latestSummary
+                ? Number(
+                    latestSummary.needs_sync ||
+                    0
+                  )
+                : null;
+
+            updateProgress(
+              "FULL SYNK FERDIG.\n\n" +
+              "Batcher: " +
+              String(
+                batchNumber
+              ) +
+              "\n" +
+              "Kostmål sendt: " +
+              String(
+                totalRequested
+              ) +
+              "\n" +
+              "Kostmål markert synket: " +
+              String(
+                totalMarked
+              ) +
+              "\n" +
+              "Gjenstår: " +
+              String(
+                remaining === null
+                  ? "ukjent"
+                  : remaining
+              ) +
+              "\n\n" +
+              "Lagerantall og salgspriser er ikke endret."
+            );
+
+            alert(
+              "Full Quickbutik-kostsynk er ferdig.\n\n" +
+              "Kostmål markert synket: " +
+              String(
+                totalMarked
+              ) +
+              "\n" +
+              "Gjenstår: " +
+              String(
+                remaining === null
+                  ? "ukjent"
+                  : remaining
+              ) +
+              "\n\n" +
+              "Send meg resultatet før vi rydder bort testknappene."
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            updateProgress(
+              "SYNK STOPPET.\n\n" +
+              "Batch: " +
+              String(
+                batchNumber
+              ) +
+              "\n" +
+              "Sendt før stopp: " +
+              String(
+                totalRequested
+              ) +
+              "\n" +
+              "Markert synket før stopp: " +
+              String(
+                totalMarked
+              ) +
+              "\n\n" +
+              (
+                error &&
+                error.message
+                  ? error.message
+                  : String(error)
+              )
+            );
+
+            alert(
+              "Full Quickbutik-synk ble stoppet.\n\n" +
+              (
+                error &&
+                error.message
+                  ? error.message
+                  : String(error)
+              ) +
+              "\n\n" +
+              "Allerede vellykkede batcher er bevart. Ikke start på nytt før vi har kontrollert feilen."
+            );
+          }
+        )
+        .finally(
+          function () {
+            state.quickbutikFullSyncRunning =
+              false;
+
+            button.disabled = false;
+            button.textContent =
+              originalLabel;
+          }
+        );
+    }
+
+
     function renderGlobalCostWritebackPanel() {
       var box =
         el("div");
@@ -6260,6 +6625,78 @@ parent.appendChild(productListSection.wrap);
 
       box.appendChild(
         qbResult
+      );
+
+      var fullSyncDivider =
+        el("div");
+
+      fullSyncDivider.style.height =
+        "1px";
+      fullSyncDivider.style.background =
+        "#bbf7d0";
+      fullSyncDivider.style.margin =
+        "14px 0 10px";
+
+      box.appendChild(
+        fullSyncDivider
+      );
+
+      var fullSyncInfo =
+        el(
+          "div",
+          "Når Champion Mako3-testen er bekreftet riktig kan du synke alle gjenstående vektede kostpriser. Synken går sekvensielt i batcher på 20 og stopper ved første feil."
+        );
+
+      fullSyncInfo.className =
+        "sk-invoice-small";
+      fullSyncInfo.style.marginBottom =
+        "8px";
+
+      box.appendChild(
+        fullSyncInfo
+      );
+
+      var fullSyncButton =
+        createPrimaryButton(
+          "🚀 Synk alle gjenstående kostpriser til Quickbutik"
+        );
+
+      var fullSyncResult =
+        el("pre");
+
+      fullSyncResult.style.display =
+        "none";
+      fullSyncResult.style.marginTop =
+        "9px";
+      fullSyncResult.style.padding =
+        "10px";
+      fullSyncResult.style.background =
+        "#111827";
+      fullSyncResult.style.color =
+        "#f9fafb";
+      fullSyncResult.style.borderRadius =
+        "10px";
+      fullSyncResult.style.whiteSpace =
+        "pre-wrap";
+      fullSyncResult.style.overflowX =
+        "auto";
+      fullSyncResult.style.maxHeight =
+        "360px";
+
+      fullSyncButton.onclick =
+        function () {
+          runFullQuickbutikPurchasePriceSync(
+            fullSyncButton,
+            fullSyncResult
+          );
+        };
+
+      box.appendChild(
+        fullSyncButton
+      );
+
+      box.appendChild(
+        fullSyncResult
       );
 
       parent.insertBefore(
