@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.17 · Full Quickbutik kostsynk"
+      "Admin v5.18 · Én knapp · Oppdater faktura"
     );
 
     var products =
@@ -6706,7 +6706,11 @@ parent.appendChild(productListSection.wrap);
     }
 
 
-    renderGlobalCostWritebackPanel();
+    /*
+     * Historisk baseline og full Quickbutik-synk er ferdig.
+     * Test-/baseline-panelet rendres derfor ikke lenger.
+     * Fremover brukes kun "Oppdater faktura" på den enkelte faktura.
+     */
 
 
     function num(value) {
@@ -14897,6 +14901,545 @@ parent.appendChild(productListSection.wrap);
       );
     }
 
+    function syncPendingQuickbutikPurchasePricesForInvoice() {
+      var totalRequested = 0;
+      var totalMarked = 0;
+      var batchNumber = 0;
+      var latestSummary = null;
+      var accessToken = null;
+
+
+      function sleep(ms) {
+        return new Promise(
+          function (resolve) {
+            setTimeout(
+              resolve,
+              ms
+            );
+          }
+        );
+      }
+
+
+      function runBatch() {
+        batchNumber += 1;
+
+        if (batchNumber > 100) {
+          throw new Error(
+            "Sikkerhetsstopp: mer enn 100 Quickbutik-batcher."
+          );
+        }
+
+        var url =
+          "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-purchase-prices" +
+          "?dryRun=false" +
+          "&limit=20";
+
+        return fetch(
+          url,
+          {
+            method: "GET",
+            headers: {
+              "Authorization":
+                "Bearer " +
+                accessToken
+            }
+          }
+        )
+          .then(
+            function (response) {
+              return response
+                .json()
+                .then(
+                  function (data) {
+                    return {
+                      ok:
+                        response.ok,
+                      status:
+                        response.status,
+                      data:
+                        data
+                    };
+                  }
+                );
+            }
+          )
+          .then(
+            function (result) {
+              if (
+                !result.ok ||
+                !result.data ||
+                result.data.ok !== true
+              ) {
+                throw new Error(
+                  "Quickbutik-synk feilet (" +
+                    String(
+                      result.status
+                    ) +
+                    "): " +
+                    JSON.stringify(
+                      result.data
+                    )
+                );
+              }
+
+              var requested =
+                Number(
+                  result.data.requested ||
+                  0
+                );
+
+              var marked =
+                Number(
+                  result.data.marked_synced ||
+                  0
+                );
+
+              totalRequested +=
+                requested;
+
+              totalMarked +=
+                marked;
+
+              latestSummary =
+                result.data.summary ||
+                latestSummary;
+
+              if (
+                requested === 0
+              ) {
+                return;
+              }
+
+              if (
+                latestSummary &&
+                Number(
+                  latestSummary.needs_sync ||
+                  0
+                ) === 0
+              ) {
+                return;
+              }
+
+              return sleep(
+                300
+              ).then(
+                runBatch
+              );
+            }
+          );
+      }
+
+
+      return sb.auth.getSession()
+        .then(
+          function (sessionResult) {
+            var session =
+              sessionResult.data &&
+              sessionResult.data.session;
+
+            accessToken =
+              session &&
+              session.access_token;
+
+            if (!accessToken) {
+              throw new Error(
+                "Fant ikke innlogget Supabase-session."
+              );
+            }
+
+            return runBatch();
+          }
+        )
+        .then(
+          function () {
+            return {
+              batches:
+                batchNumber,
+
+              requested:
+                totalRequested,
+
+              marked_synced:
+                totalMarked,
+
+              remaining:
+                latestSummary
+                  ? Number(
+                      latestSummary.needs_sync ||
+                      0
+                    )
+                  : 0
+            };
+          }
+        );
+    }
+
+
+    function updateInvoiceEndToEnd(
+      summary,
+      button
+    ) {
+      if (
+        !summary ||
+        !summary.invoice_id
+      ) {
+        return;
+      }
+
+      var invoiceNumber =
+        String(
+          summary.invoice_number ||
+          ""
+        );
+
+      var confirmed =
+        window.confirm(
+          "Oppdatere faktura " +
+            invoiceNumber +
+            "?\n\n" +
+            "Dette gjør hele jobben:\n" +
+            "• lagrer/oppdaterer dokumentert kost fra fakturaen\n" +
+            "• beregner moving weighted average per produkt/variant\n" +
+            "• oppdaterer intern innkjøpspris\n" +
+            "• synker endrede innkjøpspriser til Quickbutik\n\n" +
+            "Lagerantall og salgspris endres ikke."
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      var originalLabel =
+        button.textContent;
+
+      button.disabled = true;
+      button.textContent =
+        "Oppdaterer faktura…";
+
+      var finalizeRow = null;
+      var shipmentResult = null;
+      var previewRows = [];
+      var applyRow = null;
+      var quickbutikResult = null;
+
+
+      function finalizeCost() {
+        button.textContent =
+          "1/4 · Lagrer kost…";
+
+        return sb.rpc(
+          "internal_supplier_invoice_finalize_cost_only",
+          {
+            p_invoice_id:
+              summary.invoice_id
+          }
+        )
+          .then(
+            function (result) {
+              if (result.error) {
+                throw result.error;
+              }
+
+              finalizeRow =
+                result.data &&
+                result.data[0]
+                  ? result.data[0]
+                  : null;
+
+              return refreshSharedShipmentForInvoice(
+                summary.invoice_id
+              );
+            }
+          )
+          .then(
+            function (result) {
+              shipmentResult =
+                result || {
+                  linked: false,
+                  refreshed_invoices: 0,
+                  skipped_invoices: 0
+                };
+
+              if (
+                shipmentResult.linked &&
+                Number(
+                  shipmentResult.skipped_invoices ||
+                  0
+                ) > 0
+              ) {
+                throw new Error(
+                  "Denne fakturaen inngår i en felles forsendelse, men " +
+                    String(
+                      shipmentResult.skipped_invoices
+                    ) +
+                    " tilknyttet faktura(er) er ikke ferdigstilt ennå. Ferdigstill/kontroller alle fakturaene i samme forsendelse før kostprisen oppdateres."
+                );
+              }
+            }
+          );
+      }
+
+
+      function previewWeightedUpdate() {
+        button.textContent =
+          "2/4 · Kontrollerer vekting…";
+
+        return sb.rpc(
+          "internal_preview_invoice_weighted_update",
+          {
+            p_invoice_id:
+              summary.invoice_id
+          }
+        )
+          .then(
+            function (result) {
+              if (result.error) {
+                throw result.error;
+              }
+
+              previewRows =
+                Array.isArray(
+                  result.data
+                )
+                  ? result.data
+                  : [];
+
+              if (!previewRows.length) {
+                throw new Error(
+                  "Fant ingen kostlinjer som kan beregnes for denne fakturaen."
+                );
+              }
+
+              var variantProblems =
+                previewRows.filter(
+                  function (row) {
+                    return row
+                      .requires_variant_distribution ===
+                      true;
+                  }
+                );
+
+              if (
+                variantProblems.length > 0
+              ) {
+                throw new Error(
+                  String(
+                    variantProblems.length
+                  ) +
+                    " kostlinje(r) gjelder produkter med varianter uten konkret variantfordeling. Fordel disse på riktige varianter før du trykker Oppdater faktura."
+                );
+              }
+
+              var historical =
+                previewRows.find(
+                  function (row) {
+                    return String(
+                      row.readiness_status ||
+                      ""
+                    ).indexOf(
+                      "Historisk faktura"
+                    ) >= 0;
+                  }
+                );
+
+              if (historical) {
+                throw new Error(
+                  "Denne fakturaen er allerede omfattet av den historiske baseline og skal ikke behandles som et nytt mottak."
+                );
+              }
+            }
+          );
+      }
+
+
+      function applyWeightedUpdate() {
+        var allApplied =
+          previewRows.length > 0 &&
+          previewRows.every(
+            function (row) {
+              return row.already_applied === true;
+            }
+          );
+
+        if (allApplied) {
+          return Promise.resolve();
+        }
+
+        button.textContent =
+          "3/4 · Beregner ny kost…";
+
+        return sb.rpc(
+          "internal_apply_invoice_weighted_update",
+          {
+            p_invoice_id:
+              summary.invoice_id
+          }
+        )
+          .then(
+            function (result) {
+              if (result.error) {
+                throw result.error;
+              }
+
+              applyRow =
+                result.data &&
+                result.data[0]
+                  ? result.data[0]
+                  : null;
+            }
+          );
+      }
+
+
+      function syncQuickbutik() {
+        button.textContent =
+          "4/4 · Synker Quickbutik…";
+
+        return syncPendingQuickbutikPurchasePricesForInvoice()
+          .then(
+            function (result) {
+              quickbutikResult =
+                result;
+
+              if (
+                Number(
+                  result.remaining ||
+                  0
+                ) > 0
+              ) {
+                throw new Error(
+                  "Quickbutik-synken stoppet før alt var ferdig. " +
+                    String(
+                      result.remaining
+                    ) +
+                    " kostmål gjenstår."
+                );
+              }
+            }
+          );
+      }
+
+
+      finalizeCost()
+        .then(
+          previewWeightedUpdate
+        )
+        .then(
+          applyWeightedUpdate
+        )
+        .then(
+          syncQuickbutik
+        )
+        .then(
+          function () {
+            var message =
+              "Faktura " +
+              invoiceNumber +
+              " er oppdatert.\n\n";
+
+            if (finalizeRow) {
+              message +=
+                "Dokumentert kost: " +
+                fmtMoneyNok(
+                  finalizeRow.total_real_cost_nok
+                ) +
+                "\n";
+            }
+
+            if (shipmentResult &&
+                shipmentResult.linked) {
+              message +=
+                "Felles forsendelse: " +
+                String(
+                  shipmentResult.refreshed_invoices ||
+                  0
+                ) +
+                " faktura(er) beregnet på nytt\n";
+            }
+
+            if (applyRow) {
+              message +=
+                "Produkter oppdatert: " +
+                String(
+                  applyRow.products_updated ||
+                  0
+                ) +
+                "\n" +
+                "Varianter oppdatert: " +
+                String(
+                  applyRow.variants_updated ||
+                  0
+                ) +
+                "\n" +
+                "Parent-produkter beregnet på nytt: " +
+                String(
+                  applyRow.parent_products_recalculated ||
+                  0
+                ) +
+                "\n";
+
+              if (
+                Number(
+                  applyRow.warning_stock_below_received ||
+                  0
+                ) > 0
+              ) {
+                message +=
+                  "Advarsel: " +
+                  String(
+                    applyRow.warning_stock_below_received
+                  ) +
+                  " linje(r) hadde dagens lager lavere enn mottatt antall.\n";
+              }
+            }
+
+            if (quickbutikResult) {
+              message +=
+                "Quickbutik kostmål synket: " +
+                String(
+                  quickbutikResult.marked_synced ||
+                  0
+                ) +
+                "\n";
+            }
+
+            message +=
+              "\nLagerantall og salgspris er ikke endret.";
+
+            alert(
+              message
+            );
+
+            refreshAll(
+              summary.invoice_id
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            alert(
+              "Oppdater faktura stoppet:\n\n" +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                ) +
+                "\n\nIngen lagerantall er endret. Hvis intern kost allerede ble oppdatert før en Quickbutik-feil, kan du trykke Oppdater faktura på nytt; beregningen kjøres ikke dobbelt."
+            );
+          }
+        )
+        .finally(
+          function () {
+            button.disabled = false;
+            button.textContent =
+              originalLabel;
+          }
+        );
+    }
+
+
     function renderInvoiceActions(
       host,
       summary
@@ -15006,188 +15549,74 @@ parent.appendChild(productListSection.wrap);
         );
       }
 
+      var invoiceDate =
+        String(
+          summary.invoice_date ||
+          ""
+        );
+
+      var historicalBaselineInvoice =
+        summary.status === "costed" &&
+        invoiceDate &&
+        invoiceDate <= "2026-08-30";
+
+
       if (
         Number(
           summary.remaining_review_lines ||
           0
-        ) === 0
+        ) === 0 &&
+        !historicalBaselineInvoice
       ) {
-        var finalize =
+        var updateInvoice =
           createPrimaryButton(
-            summary.status === "costed"
-              ? "Oppdater lagret kostpris"
-              : "Ferdigstill kostpris"
+            "✅ Oppdater faktura"
           );
 
-        finalize.onclick =
+        updateInvoice.onclick =
           function () {
-            var message =
-              summary.status === "costed"
-                ? "Beregne og lagre kosthistorikken på nytt fra denne fakturaen? Lagerantall blir ikke endret."
-                : "Ferdigstille fakturaen som kostgrunnlag? Reell innkjøpspris lagres med fakturadato. Lagerantall blir ikke endret.";
-
-            if (
-              !window.confirm(
-                message
-              )
-            ) {
-              return;
-            }
-
-            finalize.disabled =
-              true;
-            finalize.textContent =
-              "Lagrer kost…";
-
-            sb.rpc(
-              "internal_supplier_invoice_finalize_cost_only",
-              {
-                p_invoice_id:
-                  summary.invoice_id
-              }
-            )
-              .then(
-                function (result) {
-                  if (result.error) {
-                    throw result.error;
-                  }
-
-                  var row =
-                    result.data &&
-                    result.data[0]
-                      ? result.data[0]
-                      : null;
-
-                  var baseMessage =
-                    row
-                      ? (
-                          "Kostpris lagret fra " +
-                          String(
-                            row.tracked_lines ||
-                            0
-                          ) +
-                          " linjer" +
-                          (
-                            Number(
-                              row.ignored_lines ||
-                              0
-                            ) > 0
-                              ? " · " +
-                                String(
-                                  row.ignored_lines
-                                ) +
-                                " utelatt"
-                              : ""
-                          ) +
-                          ". Total dokumentert kost på denne fakturaen: " +
-                          fmtMoneyNok(
-                            row.total_real_cost_nok
-                          ) +
-                          "."
-                        )
-                      : "Kosthistorikken ble lagret.";
-
-                  refreshSharedShipmentForInvoice(
-                    summary.invoice_id
-                  )
-                    .then(
-                      function (
-                        shipmentResult
-                      ) {
-                        var sharedMessage =
-                          shipmentResult.linked
-                            ? (
-                                " Felles forsendelse ble beregnet på nytt: " +
-                                String(
-                                  shipmentResult
-                                    .refreshed_invoices
-                                ) +
-                                " ferdigstilte fakturaer oppdatert" +
-                                (
-                                  shipmentResult
-                                    .skipped_invoices > 0
-                                    ? " · " +
-                                      String(
-                                        shipmentResult
-                                          .skipped_invoices
-                                      ) +
-                                      " faktura(er) venter fortsatt på ferdigstilling"
-                                    : ""
-                                ) +
-                                "."
-                              )
-                            : "";
-
-                        alert(
-                          baseMessage +
-                            sharedMessage +
-                            " Lagerantall er ikke endret."
-                        );
-
-                        refreshAll(
-                          summary.invoice_id
-                        );
-                      }
-                    )
-                    .catch(
-                      function (
-                        shipmentError
-                      ) {
-                        alert(
-                          baseMessage +
-                            " Kostprisen på denne fakturaen er lagret, men felles forsendelse kunne ikke oppdateres: " +
-                            skReadableError(
-                              shipmentError &&
-                              shipmentError.message
-                                ? shipmentError.message
-                                : shipmentError
-                            ) +
-                            ". Lagerantall er ikke endret."
-                        );
-
-                        refreshAll(
-                          summary.invoice_id
-                        );
-                      }
-                    );
-                }
-              )
-              .catch(
-                function (error) {
-                  finalize.disabled =
-                    false;
-                  finalize.textContent =
-                    summary.status ===
-                    "costed"
-                      ? "Oppdater lagret kostpris"
-                      : "Ferdigstill kostpris";
-
-                  alert(
-                    "Kunne ikke lagre kosthistorikken: " +
-                      skReadableError(
-                        error &&
-                        error.message
-                          ? error.message
-                          : error
-                      )
-                  );
-                }
-              );
+            updateInvoiceEndToEnd(
+              summary,
+              updateInvoice
+            );
           };
 
         actions.appendChild(
-          finalize
+          updateInvoice
         );
       }
 
-      /*
-       * Midlertidig slått av:
-       * Den gamle fakturaknappen brukte "seneste faktura"-kost og skal ikke
-       * kunne kjøres etter at vi gikk over til moving weighted average.
-       *
-       * Ny én-knapps "Oppdater faktura" kobles inn når full baseline og
-       * Quickbutik-synk er validert.
-       */
+
+      if (
+        historicalBaselineInvoice
+      ) {
+        var baselineDone =
+          el(
+            "span",
+            "Historisk kost ferdig"
+          );
+
+        baselineDone.style.display =
+          "inline-flex";
+        baselineDone.style.alignItems =
+          "center";
+        baselineDone.style.padding =
+          "8px 10px";
+        baselineDone.style.borderRadius =
+          "999px";
+        baselineDone.style.background =
+          "#dcfce7";
+        baselineDone.style.color =
+          "#166534";
+        baselineDone.style.fontWeight =
+          "800";
+        baselineDone.style.fontSize =
+          "12px";
+
+        actions.appendChild(
+          baselineDone
+        );
+      }
 
 
       var refresh =
@@ -17703,7 +18132,7 @@ parent.appendChild(productListSection.wrap);
         el(
           "div",
           summary.status === "costed"
-            ? "Kosthistorikken fra denne fakturaen er lagret. Den gamle kostknappen er midlertidig fjernet mens vi går over til moving weighted average. Ingen lagerantall er endret."
+            ? "Kosthistorikken fra denne fakturaen er lagret. Nye fakturaer etter historisk baseline oppdateres med «Oppdater faktura», som beregner moving weighted average og synker endret innkjøpspris til Quickbutik. Ingen lagerantall endres."
             : "Kontroller kost og DB/DG. Trykk «Ferdigstill kostpris» øverst når fakturaen skal lagres i kosthistorikken. Ingen lagerantall blir endret."
         );
 
@@ -45162,3 +45591,4 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
+
