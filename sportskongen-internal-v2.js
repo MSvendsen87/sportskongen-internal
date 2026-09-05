@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.11 · OTB Europe PDF"
+      "Admin v5.12 · Reell kost → produktregister"
     );
 
     var products =
@@ -5440,7 +5440,7 @@ parent.appendChild(productListSection.wrap);
 
     var info = el(
       "div",
-      "Last opp PDF, kontroller produktkoblinger og ferdigstill reell kostpris. Fakturaantall brukes kun til kostberegning og fordeling av frakt/tillegg. Lagerantall endres aldri fra denne siden."
+      "Last opp PDF, kontroller produktkoblinger og ferdigstill reell kostpris. Når kostgrunnlaget er lagret kan dokumentert kost skrives tilbake som innkjøpspris på produkter og varianter. Lagerantall endres aldri fra denne siden."
     );
     info.className = "sk-note";
     parent.appendChild(info);
@@ -5479,8 +5479,245 @@ parent.appendChild(productListSection.wrap);
        * selve listen uten at opplastingsfeltet forsvinner.
        */
       invoiceSupplierFilter: "",
-      invoiceListOpen: true
+      invoiceListOpen: true,
+
+      costWritebackRunning: false
     };
+
+    function runLatestRealCostWriteback(
+      triggerInvoiceId,
+      triggerInvoiceNumber,
+      button
+    ) {
+      if (
+        state.costWritebackRunning
+      ) {
+        return;
+      }
+
+      var isGlobal =
+        !triggerInvoiceId;
+
+      var confirmText =
+        isGlobal
+          ? (
+              "Oppdatere innkjøpsprisene i produktregisteret fra seneste dokumenterte reelle kost på tvers av alle ferdigstilte fakturaer?\n\n" +
+              "Dette oppdaterer produkt- og variantkost i NOK. Lagerantall endres ikke. En eldre faktura kan ikke overskrive en nyere dokumentert kost."
+            )
+          : (
+              "Oppdatere innkjøpsprisene etter faktura " +
+              String(
+                triggerInvoiceNumber ||
+                ""
+              ) +
+              "?\n\n" +
+              "Systemet bruker fortsatt seneste dokumenterte fakturadato på tvers av alle fakturaer, slik at en gammel faktura ikke kan overskrive en nyere kost. Lagerantall endres ikke."
+            );
+
+      if (
+        !window.confirm(
+          confirmText
+        )
+      ) {
+        return;
+      }
+
+      state.costWritebackRunning =
+        true;
+
+      var originalLabel =
+        button
+          ? button.textContent
+          : "";
+
+      if (button) {
+        button.disabled = true;
+        button.textContent =
+          "Oppdaterer innkjøpspriser…";
+      }
+
+      sb.rpc(
+        "internal_apply_latest_real_costs",
+        {
+          p_trigger_invoice_id:
+            triggerInvoiceId ||
+            null
+        }
+      )
+        .then(
+          function (result) {
+            if (result.error) {
+              throw result.error;
+            }
+
+            var row =
+              result.data &&
+              result.data[0]
+                ? result.data[0]
+                : null;
+
+            if (!row) {
+              throw new Error(
+                "Kostoppdateringen returnerte ikke resultat."
+              );
+            }
+
+            var manualCount =
+              Number(
+                row.parent_products_manual_review ||
+                0
+              );
+
+            var message =
+              "Innkjøpsprisene er oppdatert fra dokumentert reell kost.\n\n" +
+              "Produkter oppdatert: " +
+              String(
+                row.products_updated ||
+                0
+              ) +
+              " av " +
+              String(
+                row.products_considered ||
+                0
+              ) +
+              "\n" +
+              "Varianter oppdatert: " +
+              String(
+                row.variants_updated ||
+                0
+              ) +
+              " av " +
+              String(
+                row.variants_considered ||
+                0
+              );
+
+            if (
+              manualCount > 0
+            ) {
+              message +=
+                "\n\n" +
+                String(
+                  manualCount
+                ) +
+                " parent-produkt(er) ble beholdt uendret fordi variantene har forskjellige dokumenterte kostpriser. Variantkostene er oppdatert.";
+            }
+
+            message +=
+              "\n\nLagerantall er ikke endret.";
+
+            alert(
+              message
+            );
+
+            refreshAll(
+              triggerInvoiceId ||
+              state.selectedInvoiceId
+            );
+          }
+        )
+        .catch(
+          function (error) {
+            alert(
+              "Kunne ikke oppdatere innkjøpsprisene: " +
+                skReadableError(
+                  error &&
+                  error.message
+                    ? error.message
+                    : error
+                )
+            );
+          }
+        )
+        .finally(
+          function () {
+            state.costWritebackRunning =
+              false;
+
+            if (button) {
+              button.disabled = false;
+              button.textContent =
+                originalLabel;
+            }
+          }
+        );
+    }
+
+
+    function renderGlobalCostWritebackPanel() {
+      var box =
+        el("div");
+
+      box.style.marginTop =
+        "12px";
+      box.style.padding =
+        "13px 14px";
+      box.style.border =
+        "1px solid #bbf7d0";
+      box.style.borderRadius =
+        "12px";
+      box.style.background =
+        "#f0fdf4";
+
+      var title =
+        el(
+          "div",
+          "💰 Oppdater innkjøpsprisene"
+        );
+
+      title.style.fontWeight =
+        "900";
+      title.style.fontSize =
+        "14px";
+
+      box.appendChild(
+        title
+      );
+
+      var sub =
+        el(
+          "div",
+          "Skriver seneste dokumenterte reelle kost fra ferdigstilte fakturaer til produkt- og variantregisteret. Kan brukes én gang etter innlesing av historiske 2026-fakturaer og deretter etter hver ny faktura. Lagerantall endres ikke."
+        );
+
+      sub.className =
+        "sk-invoice-small";
+      sub.style.marginTop =
+        "4px";
+      sub.style.marginBottom =
+        "10px";
+
+      box.appendChild(
+        sub
+      );
+
+      var button =
+        createPrimaryButton(
+          "↻ Oppdater alle innkjøpspriser"
+        );
+
+      button.onclick =
+        function () {
+          runLatestRealCostWriteback(
+            null,
+            null,
+            button
+          );
+        };
+
+      box.appendChild(
+        button
+      );
+
+      parent.insertBefore(
+        box,
+        layout
+      );
+    }
+
+
+    renderGlobalCostWritebackPanel();
+
 
     function num(value) {
       var parsed = Number(value);
@@ -13953,6 +14190,30 @@ parent.appendChild(productListSection.wrap);
         );
       }
 
+      if (
+        summary.status ===
+        "costed"
+      ) {
+        var writeBack =
+          createButton(
+            "💰 Oppdater innkjøpspriser"
+          );
+
+        writeBack.onclick =
+          function () {
+            runLatestRealCostWriteback(
+              summary.invoice_id,
+              summary.invoice_number,
+              writeBack
+            );
+          };
+
+        actions.appendChild(
+          writeBack
+        );
+      }
+
+
       var refresh =
         createButton("Oppdater");
 
@@ -16466,7 +16727,7 @@ parent.appendChild(productListSection.wrap);
         el(
           "div",
           summary.status === "costed"
-            ? "Kosthistorikken fra denne fakturaen er lagret. Gjeldende reell innkjøpspris per vare bestemmes av den nyeste fakturadatoen på tvers av alle registrerte fakturaer."
+            ? "Kosthistorikken fra denne fakturaen er lagret. Gjeldende reell innkjøpspris per vare bestemmes av den nyeste fakturadatoen på tvers av alle registrerte fakturaer. Trykk «Oppdater innkjøpspriser» når denne kosthistorikken skal skrives til produktregisteret."
             : "Kontroller kost og DB/DG. Trykk «Ferdigstill kostpris» øverst når fakturaen skal lagres i kosthistorikken. Ingen lagerantall blir endret."
         );
 
@@ -43925,11 +44186,3 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
-
-
-
-
-
-
-
-
