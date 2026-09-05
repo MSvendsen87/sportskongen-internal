@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.12 · Reell kost → produktregister"
+      "Admin v5.13 · E-postkode + reell kost"
     );
 
     var products =
@@ -2235,7 +2235,7 @@
   function renderLogin(sb) {
     var app = renderShell(
       "Intern Sportskongen-portal",
-      "Du må logge inn for å bruke denne siden."
+      "Logg inn med e-post og engangskoden du får på e-post."
     );
 
     var form = el("div");
@@ -2250,6 +2250,7 @@
     var input = el("input");
     input.type = "email";
     input.placeholder = "Din e-postadresse";
+    input.autocomplete = "email";
     input.style.width = "100%";
     input.style.padding = "12px";
     input.style.border = "1px solid #d1d5db";
@@ -2257,44 +2258,239 @@
     input.style.boxSizing = "border-box";
     input.style.fontSize = "15px";
 
-    var button = createPrimaryButton("Send innloggingslenke");
-    button.style.marginTop = "12px";
+    var sendButton =
+      createPrimaryButton(
+        "Send innloggingskode"
+      );
+    sendButton.style.marginTop = "12px";
 
-    var note = el("p", "Kun godkjente interne admin-brukere får tilgang.");
+    var codeBox = el("div");
+    codeBox.style.display = "none";
+    codeBox.style.marginTop = "18px";
+    codeBox.style.padding = "14px";
+    codeBox.style.border = "1px solid #bbf7d0";
+    codeBox.style.background = "#f0fdf4";
+    codeBox.style.borderRadius = "12px";
+
+    var codeLabel =
+      el(
+        "label",
+        "Kode fra e-posten"
+      );
+    codeLabel.style.display = "block";
+    codeLabel.style.fontWeight = "700";
+    codeLabel.style.marginBottom = "6px";
+
+    var codeInput = el("input");
+    codeInput.type = "text";
+    codeInput.placeholder = "Skriv inn koden";
+    codeInput.autocomplete = "one-time-code";
+    codeInput.inputMode = "numeric";
+    codeInput.maxLength = 12;
+    codeInput.style.width = "100%";
+    codeInput.style.padding = "12px";
+    codeInput.style.border = "1px solid #86efac";
+    codeInput.style.borderRadius = "10px";
+    codeInput.style.boxSizing = "border-box";
+    codeInput.style.fontSize = "18px";
+    codeInput.style.fontWeight = "800";
+    codeInput.style.letterSpacing = "0.12em";
+
+    var verifyButton =
+      createPrimaryButton(
+        "Logg inn med kode"
+      );
+    verifyButton.style.marginTop = "10px";
+
+    var codeStatus = el("p", "");
+    codeStatus.style.margin =
+      "10px 0 0";
+    codeStatus.style.color =
+      "#166534";
+    codeStatus.style.fontSize =
+      "13px";
+
+    var note = el(
+      "p",
+      "Samme innlogging som Min Bag. Du får en engangskode på e-post. Kun godkjente interne admin-brukere får tilgang til adminportalen."
+    );
     note.style.marginTop = "12px";
     note.style.color = "#6b7280";
     note.style.fontSize = "14px";
 
+    codeBox.appendChild(codeLabel);
+    codeBox.appendChild(codeInput);
+    codeBox.appendChild(verifyButton);
+    codeBox.appendChild(codeStatus);
+
     form.appendChild(label);
     form.appendChild(input);
-    form.appendChild(button);
+    form.appendChild(sendButton);
+    form.appendChild(codeBox);
     form.appendChild(note);
     app.appendChild(form);
 
-    button.onclick = function () {
-      var email = input.value.trim();
+    var sentEmail = "";
+
+    function sendCode() {
+      var email =
+        input.value.trim();
 
       if (!email) {
-        alert("Skriv inn e-postadressen din først.");
+        alert(
+          "Skriv inn e-postadressen din først."
+        );
         return;
       }
 
+      sentEmail = email;
+
+      sendButton.disabled = true;
+      sendButton.textContent =
+        "Sender kode…";
+
       sb.auth.signInWithOtp({
-        email: email,
-        options: {
-          emailRedirectTo:
-            window.location.origin +
-            window.location.pathname
-        }
+        email: email
       }).then(function (result) {
         if (result.error) {
-          alert("Kunne ikke sende innloggingslenke: " + result.error.message);
+          alert(
+            "Kunne ikke sende innloggingskode: " +
+              result.error.message
+          );
           return;
         }
 
-        alert("Innloggingslenke er sendt til e-post.");
+        codeBox.style.display =
+          "block";
+
+        codeStatus.textContent =
+          "Kode sendt til " +
+          email +
+          ". Skriv inn koden over.";
+
+        sendButton.textContent =
+          "Send ny kode";
+
+        codeInput.focus();
+      }).catch(function (error) {
+        alert(
+          "Kunne ikke sende innloggingskode: " +
+            (
+              error &&
+              error.message
+                ? error.message
+                : String(error)
+            )
+        );
+      }).finally(function () {
+        sendButton.disabled = false;
+
+        if (
+          sendButton.textContent ===
+          "Sender kode…"
+        ) {
+          sendButton.textContent =
+            "Send innloggingskode";
+        }
       });
-    };
+    }
+
+    function verifyCode() {
+      var code =
+        codeInput.value
+          .trim()
+          .replace(
+            /[^0-9A-Za-z]/g,
+            ""
+          );
+
+      if (!sentEmail) {
+        alert(
+          "Send en kode til e-posten din først."
+        );
+        return;
+      }
+
+      if (!code) {
+        alert(
+          "Skriv inn koden fra e-posten."
+        );
+        return;
+      }
+
+      verifyButton.disabled = true;
+      verifyButton.textContent =
+        "Logger inn…";
+
+      sb.auth.verifyOtp({
+        email: sentEmail,
+        token: code,
+        type: "email"
+      }).then(function (result) {
+        if (result.error) {
+          alert(
+            "Koden kunne ikke bekreftes: " +
+              result.error.message
+          );
+          return;
+        }
+
+        if (
+          !result.data ||
+          !result.data.session
+        ) {
+          alert(
+            "Koden ble godkjent, men ingen innlogget session ble opprettet. Prøv på nytt."
+          );
+          return;
+        }
+
+        codeStatus.textContent =
+          "Innlogging godkjent. Åpner adminportalen…";
+
+        window.location.reload();
+      }).catch(function (error) {
+        alert(
+          "Koden kunne ikke bekreftes: " +
+            (
+              error &&
+              error.message
+                ? error.message
+                : String(error)
+            )
+        );
+      }).finally(function () {
+        verifyButton.disabled = false;
+        verifyButton.textContent =
+          "Logg inn med kode";
+      });
+    }
+
+    sendButton.onclick =
+      sendCode;
+
+    verifyButton.onclick =
+      verifyCode;
+
+    input.addEventListener(
+      "keydown",
+      function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          sendCode();
+        }
+      }
+    );
+
+    codeInput.addEventListener(
+      "keydown",
+      function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          verifyCode();
+        }
+      }
+    );
   }
 
   function addUserBar(app, sb, user) {
