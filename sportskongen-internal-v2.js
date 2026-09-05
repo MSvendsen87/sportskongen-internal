@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.15 · Quickbutik ekte kosttest"
+      "Admin v5.16 · Vektet kost baseline"
     );
 
     var products =
@@ -5682,9 +5682,7 @@ parent.appendChild(productListSection.wrap);
       quickbutikCostApplyRunning: false
     };
 
-    function runLatestRealCostWriteback(
-      triggerInvoiceId,
-      triggerInvoiceNumber,
+    function runWeightedCostBootstrap(
       button
     ) {
       if (
@@ -5693,30 +5691,17 @@ parent.appendChild(productListSection.wrap);
         return;
       }
 
-      var isGlobal =
-        !triggerInvoiceId;
+      var confirmed =
+        window.confirm(
+          "Oppdatere intern innkjøpspris fra HISTORISK VEKTET kost?\n\n" +
+          "Dette bruker alle dokumenterte 2026-fakturaer og mengdevekter landed cost.\n\n" +
+          "For produkter med varianter oppdateres variantkostene separat. Parent-kost beregnes fra variantene / historisk produktkost.\n\n" +
+          "Lagerantall endres ikke.\n\n" +
+          "Quickbutik oppdateres IKKE i dette steget.\n\n" +
+          "Vil du fortsette?"
+        );
 
-      var confirmText =
-        isGlobal
-          ? (
-              "Oppdatere innkjøpsprisene i produktregisteret fra seneste dokumenterte reelle kost på tvers av alle ferdigstilte fakturaer?\n\n" +
-              "Dette oppdaterer produkt- og variantkost i NOK. Lagerantall endres ikke. En eldre faktura kan ikke overskrive en nyere dokumentert kost."
-            )
-          : (
-              "Oppdatere innkjøpsprisene etter faktura " +
-              String(
-                triggerInvoiceNumber ||
-                ""
-              ) +
-              "?\n\n" +
-              "Systemet bruker fortsatt seneste dokumenterte fakturadato på tvers av alle fakturaer, slik at en gammel faktura ikke kan overskrive en nyere kost. Lagerantall endres ikke."
-            );
-
-      if (
-        !window.confirm(
-          confirmText
-        )
-      ) {
+      if (!confirmed) {
         return;
       }
 
@@ -5731,16 +5716,11 @@ parent.appendChild(productListSection.wrap);
       if (button) {
         button.disabled = true;
         button.textContent =
-          "Oppdaterer innkjøpspriser…";
+          "Oppdaterer vektede kostpriser…";
       }
 
       sb.rpc(
-        "internal_apply_latest_real_costs",
-        {
-          p_trigger_invoice_id:
-            triggerInvoiceId ||
-            null
-        }
+        "internal_apply_weighted_cost_bootstrap"
       )
         .then(
           function (result) {
@@ -5756,18 +5736,12 @@ parent.appendChild(productListSection.wrap);
 
             if (!row) {
               throw new Error(
-                "Kostoppdateringen returnerte ikke resultat."
+                "Den vektede kostoppdateringen returnerte ikke resultat."
               );
             }
 
-            var manualCount =
-              Number(
-                row.parent_products_manual_review ||
-                0
-              );
-
             var message =
-              "Innkjøpsprisene er oppdatert fra dokumentert reell kost.\n\n" +
+              "Vektet innkjøpspris er oppdatert i internregisteret.\n\n" +
               "Produkter oppdatert: " +
               String(
                 row.products_updated ||
@@ -5788,28 +5762,22 @@ parent.appendChild(productListSection.wrap);
               String(
                 row.variants_considered ||
                 0
-              );
-
-            if (
-              manualCount > 0
-            ) {
-              message +=
-                "\n\n" +
-                String(
-                  manualCount
-                ) +
-                " parent-produkt(er) ble beholdt uendret fordi variantene har forskjellige dokumenterte kostpriser. Variantkostene er oppdatert.";
-            }
-
-            message +=
-              "\n\nLagerantall er ikke endret.";
+              ) +
+              "\n\n" +
+              "Seneste dokumenterte fakturadato: " +
+              String(
+                row.latest_documented_invoice_date ||
+                "ukjent"
+              ) +
+              "\n\n" +
+              "Lagerantall er ikke endret.\n" +
+              "Quickbutik er ikke oppdatert ennå.";
 
             alert(
               message
             );
 
             refreshAll(
-              triggerInvoiceId ||
               state.selectedInvoiceId
             );
           }
@@ -5817,7 +5785,7 @@ parent.appendChild(productListSection.wrap);
         .catch(
           function (error) {
             alert(
-              "Kunne ikke oppdatere innkjøpsprisene: " +
+              "Kunne ikke oppdatere vektede innkjøpspriser: " +
                 skReadableError(
                   error &&
                   error.message
@@ -5840,7 +5808,6 @@ parent.appendChild(productListSection.wrap);
           }
         );
     }
-
 
     function runChampionMako3QuickbutikDryRun(
       button,
@@ -6014,7 +5981,7 @@ parent.appendChild(productListSection.wrap);
         window.confirm(
           "Dette er en EKTE Quickbutik-test.\n\n" +
           "Kun Quickbutik-produkt 324 · Champion Mako3 blir forsøkt oppdatert.\n" +
-          "Forventet innkjøpspris eks. mva.: 119,52 kr.\n\n" +
+          "Forventet innkjøpspris eks. mva.: 118,26 kr.\n\n" +
           "Lager, salgspris og andre produktfelter skal ikke endres.\n\n" +
           "Vil du fortsette?"
         );
@@ -6121,7 +6088,7 @@ parent.appendChild(productListSection.wrap);
 
             alert(
               "Champion Mako3 ble sendt til Quickbutik og Worker-en bekreftet oppdateringen.\n\n" +
-              "Åpne nå produkt 324 i Quickbutik og kontroller at innkjøpspris eks. mva. står som 119,52 kr.\n\n" +
+              "Åpne nå produkt 324 i Quickbutik og kontroller at innkjøpspris eks. mva. står som 118,26 kr.\n\n" +
               "Ikke kjør full synk før vi har bekreftet dette manuelt."
             );
           }
@@ -6185,7 +6152,7 @@ parent.appendChild(productListSection.wrap);
       var sub =
         el(
           "div",
-          "Skriver seneste dokumenterte reelle kost fra ferdigstilte fakturaer til produkt- og variantregisteret. Kan brukes én gang etter innlesing av historiske 2026-fakturaer og deretter etter hver ny faktura. Lagerantall endres ikke."
+          "Førstegangsjobb: skriver historisk MENGDEVEKTET reell kost fra alle dokumenterte 2026-fakturaer til produkt- og variantregisteret. Lagerantall endres ikke, og Quickbutik oppdateres ikke i dette steget."
         );
 
       sub.className =
@@ -6201,14 +6168,12 @@ parent.appendChild(productListSection.wrap);
 
       var button =
         createPrimaryButton(
-          "↻ Oppdater alle innkjøpspriser"
+          "↻ Oppdater intern kost · vektet baseline"
         );
 
       button.onclick =
         function () {
-          runLatestRealCostWriteback(
-            null,
-            null,
+          runWeightedCostBootstrap(
             button
           );
         };
@@ -6275,7 +6240,7 @@ parent.appendChild(productListSection.wrap);
 
       var qbApplyButton =
         createPrimaryButton(
-          "✅ Ekte test · Champion Mako3 → 119,52"
+          "✅ Ekte test · Champion Mako3 → 118,26"
         );
 
       qbApplyButton.style.marginTop =
@@ -14778,28 +14743,14 @@ parent.appendChild(productListSection.wrap);
         );
       }
 
-      if (
-        summary.status ===
-        "costed"
-      ) {
-        var writeBack =
-          createButton(
-            "💰 Oppdater innkjøpspriser"
-          );
-
-        writeBack.onclick =
-          function () {
-            runLatestRealCostWriteback(
-              summary.invoice_id,
-              summary.invoice_number,
-              writeBack
-            );
-          };
-
-        actions.appendChild(
-          writeBack
-        );
-      }
+      /*
+       * Midlertidig slått av:
+       * Den gamle fakturaknappen brukte "seneste faktura"-kost og skal ikke
+       * kunne kjøres etter at vi gikk over til moving weighted average.
+       *
+       * Ny én-knapps "Oppdater faktura" kobles inn når full baseline og
+       * Quickbutik-synk er validert.
+       */
 
 
       var refresh =
@@ -17315,7 +17266,7 @@ parent.appendChild(productListSection.wrap);
         el(
           "div",
           summary.status === "costed"
-            ? "Kosthistorikken fra denne fakturaen er lagret. Gjeldende reell innkjøpspris per vare bestemmes av den nyeste fakturadatoen på tvers av alle registrerte fakturaer. Trykk «Oppdater innkjøpspriser» når denne kosthistorikken skal skrives til produktregisteret."
+            ? "Kosthistorikken fra denne fakturaen er lagret. Den gamle kostknappen er midlertidig fjernet mens vi går over til moving weighted average. Ingen lagerantall er endret."
             : "Kontroller kost og DB/DG. Trykk «Ferdigstill kostpris» øverst når fakturaen skal lagres i kosthistorikken. Ingen lagerantall blir endret."
         );
 
