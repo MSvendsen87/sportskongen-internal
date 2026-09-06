@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden i Mission Control. Start med det som krever handling, og bruk hurtigvalgene for resten.",
-      "Arbeidsforside"
+      "Varetelling ny arbeidsflate"
     );
 
     var products =
@@ -21037,1676 +21037,5409 @@ addTable(addonsSection.body, [
   updateSummary();
 }
 
-  function renderStockCountsManager(parent, data, sb) {
-  // ============================================================
-  // KAPITTEL 1 – Tittel
-  // ============================================================
-
-  var h2 = el("h2", "Varetelling");
-  h2.style.marginTop = "0";
-  parent.appendChild(h2);
-
-  var intro = el("p", "Opprett, tell og følg opp varetellinger direkte fra internportalen.");
-  intro.style.color = "#6b7280";
-  parent.appendChild(intro);
-
-    // ============================================================
-  // KAPITTEL 2 – Opprett ny varetelling
-  // ============================================================
-
-  var createSection = createCollapsibleSection(
-    "➕ Ny varetelling",
-    "Velg om du vil telle alle produkter, en intern hovedkategori, en Quickbutik-kategori, en leverandør eller et merke.",
-    false
-  );
-
-  var formGrid = el("div");
-  formGrid.style.display = "grid";
-  formGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
-  formGrid.style.gap = "12px";
-
-  var titleInput = el("input");
-  titleInput.type = "text";
-  titleInput.placeholder = "F.eks. Varetelling juni 2026";
-
-  var scopeSelect = el("select");
-  addOption(scopeSelect, "all", "Alle fysiske produkter");
-  addOption(scopeSelect, "inventory_main_group", "Hovedkategori");
-  addOption(scopeSelect, "category", "Quickbutik-kategori");
-  addOption(scopeSelect, "supplier", "Leverandør");
-  addOption(scopeSelect, "brand", "Merke");
-  addOption(scopeSelect, "manual", "Manuell / tom telling");
-
-  var valueSelect = el("select");
-  addOption(valueSelect, "", "Ikke nødvendig");
-
-  var notesInput = el("input");
-  notesInput.type = "text";
-  notesInput.placeholder = "Valgfritt notat";
-
-  addField(formGrid, "Tittel", titleInput);
-  addField(formGrid, "Type telling", scopeSelect);
-  addField(formGrid, "Utvalg", valueSelect);
-  addField(formGrid, "Notat", notesInput);
-
-  createSection.body.appendChild(formGrid);
-
-  var createHelp = el("div");
-  createHelp.className = "sk-note";
-  createHelp.style.marginTop = "12px";
-  createHelp.textContent =
-    "Anbefalt bruk: Tell etter Hovedkategori for praktisk varetelling i butikk/lager. Quickbutik-kategori brukes bare hvis du vil telle nøyaktig slik produktene ligger kategorisert i nettbutikken.";
-  createSection.body.appendChild(createHelp);
-
-  var createBtn = createPrimaryButton("Opprett varetelling");
-  createBtn.style.marginTop = "10px";
-  createSection.body.appendChild(createBtn);
-
-  parent.appendChild(createSection.wrap);
-
-  var inventoryMainGroups = [
-    "Discer",
-    "Sekker og bager",
-    "Tilbehør",
-    "Dartutstyr",
-    "Golfballer",
-    "Golfhansker",
-    "Kurver",
-    "Annet"
-  ];
-
-  function uniqueValues(key) {
-    var map = {};
-    var list = [];
-
-    (data.products || []).forEach(function (p) {
-      var value = p[key];
-
-      if (value !== null && value !== undefined && String(value).trim() !== "") {
-        value = String(value).trim();
-
-        if (!map[value]) {
-          map[value] = true;
-          list.push(value);
-        }
-      }
-    });
-
-    list.sort(function (a, b) {
-      return a.localeCompare(b, "no");
-    });
-
-    return list;
-  }
-
-  function refreshValueSelect() {
-    clear(valueSelect);
-
-    var scope = scopeSelect.value;
-
-    if (scope === "all" || scope === "manual") {
-      addOption(valueSelect, "", "Ikke nødvendig");
-      valueSelect.disabled = true;
-      return;
-    }
-
-    valueSelect.disabled = false;
-
-    addOption(valueSelect, "", "Velg");
-
-    if (scope === "inventory_main_group") {
-      inventoryMainGroups.forEach(function (value) {
-        addOption(valueSelect, value, value);
-      });
-      return;
-    }
-
-    var key = "category";
-
-    if (scope === "supplier") {
-      key = "supplier_name";
-    }
-
-    if (scope === "brand") {
-      key = "brand";
-    }
-
-    uniqueValues(key).forEach(function (value) {
-      addOption(valueSelect, value, value);
-    });
-  }
-
-  scopeSelect.onchange = refreshValueSelect;
-  refreshValueSelect();
-
-  createBtn.onclick = function () {
-    var title = titleInput.value.trim();
-    var scope = scopeSelect.value;
-    var value = valueSelect.value || null;
-
-    if (!title) {
-      alert("Skriv inn tittel på varetellingen.");
-      return;
-    }
-
-    if (
-      (
-        scope === "category" ||
-        scope === "supplier" ||
-        scope === "brand" ||
-        scope === "inventory_main_group"
-      ) &&
-      !value
-    ) {
-      alert("Velg utvalg først.");
-      return;
-    }
-
-    createBtn.disabled = true;
-    createBtn.textContent = "Oppretter...";
-
-    sb.rpc("internal_create_stock_count", {
-      p_title: title,
-      p_scope_type: scope,
-      p_scope_value: value,
-      p_notes: notesInput.value.trim() || null
-    }).then(function (result) {
-      createBtn.disabled = false;
-      createBtn.textContent = "Opprett varetelling";
-
-      if (result.error) {
-        alert("Kunne ikke opprette varetelling: " + result.error.message);
-        return;
-      }
-
-      var created = result.data && result.data[0];
-
-      if (created) {
-        localStorage.setItem("sk_internal_active_tab", "stock");
-        localStorage.setItem("sk_internal_selected_stock_count_id", created.stock_count_id);
-
-        alert(
-          "Varetelling opprettet: " +
-          created.count_number +
-          "\nLinjer: " +
-          created.line_count
-        );
-      } else {
-        alert("Varetelling opprettet.");
-      }
-
-      window.location.reload();
-    });
-  };
-  // ============================================================
-  // KAPITTEL 3 – Velg varetelling
-  // ============================================================
-
-  var detailSection = createCollapsibleSection(
-    "🧮 Tell varer",
-    "Velg en varetelling, søk etter varer og registrer opptalt antall.",
-    true
-  );
-
-  var countSelect = el("select");
-countSelect.style.marginBottom = "12px";
-
-addOption(countSelect, "", "Velg varetelling");
-
-(data.stockCounts || []).forEach(function (count) {
-  var statusIcon = count.status === "locked" ? "🔒" : "🔓";
-  var qbIcon = count.quickbutik_updated_at ? "✅ QB" : "⚠️ ikke QB";
-
-  var counted = Number(count.counted_line_count || 0);
-  var total = Number(count.line_count || 0);
-
-  var label =
-    statusIcon +
-    " " +
-    count.count_number +
-    " – " +
-    count.title +
-    " (" +
-    counted +
-    "/" +
-    total +
-    " telt, " +
-    qbIcon +
-    ")";
-
-  addOption(countSelect, count.id, label);
-});
-
-addField(detailSection.body, "Varetelling", countSelect);
-
-// ============================================================
-// STATUS / LÅSING – rett under valgt varetelling
-// ============================================================
-
-var stockStatusBox = el("div");
-stockStatusBox.style.margin = "12px 0";
-stockStatusBox.style.padding = "12px";
-stockStatusBox.style.border = "1px solid #e5e7eb";
-stockStatusBox.style.borderRadius = "12px";
-stockStatusBox.style.background = "#f9fafb";
-
-detailSection.body.appendChild(stockStatusBox);
-
-// ============================================================
-// RAPPORTSNARVEI – tydelig tilgjengelig før varelisten
-// ============================================================
-
-var reportShortcutBox = el("div");
-reportShortcutBox.style.margin = "14px 0";
-reportShortcutBox.style.padding = "14px";
-reportShortcutBox.style.border = "1px solid #d1d5db";
-reportShortcutBox.style.borderRadius = "14px";
-reportShortcutBox.style.background = "#ffffff";
-reportShortcutBox.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
-
-var reportShortcutTitle = el("div", "📄 Rapport og PDF");
-reportShortcutTitle.style.fontWeight = "900";
-reportShortcutTitle.style.marginBottom = "4px";
-
-var reportShortcutText = el("p", "Kopier en kort oppsummering av varetellingen eller lagre rapporten som PDF.");
-reportShortcutText.style.marginTop = "0";
-reportShortcutText.style.marginBottom = "10px";
-reportShortcutText.style.color = "#6b7280";
-
-var reportShortcutButtons = el("div");
-reportShortcutButtons.style.display = "flex";
-reportShortcutButtons.style.gap = "10px";
-reportShortcutButtons.style.flexWrap = "wrap";
-
-var shortcutCopyReportBtn = createButton("Kopier rapportoppsummering");
-var shortcutPdfReportBtn = createPrimaryButton("Last ned PDF");
-
-reportShortcutButtons.appendChild(shortcutCopyReportBtn);
-reportShortcutButtons.appendChild(shortcutPdfReportBtn);
-reportShortcutBox.appendChild(reportShortcutTitle);
-reportShortcutBox.appendChild(reportShortcutText);
-reportShortcutBox.appendChild(reportShortcutButtons);
-detailSection.body.appendChild(reportShortcutBox);
-
-// ============================================================
-// SØK OG FILTER – rett over varelisten
-// ============================================================
-
-var filterBox = el("div");
-filterBox.style.margin = "14px 0";
-filterBox.style.padding = "14px";
-filterBox.style.border = "1px solid #e5e7eb";
-filterBox.style.borderRadius = "12px";
-filterBox.style.background = "#f9fafb";
-
-var filterTitle = el("div", "🔎 Søk og filter");
-filterTitle.style.fontWeight = "900";
-filterTitle.style.marginBottom = "10px";
-
-filterBox.appendChild(filterTitle);
-
-var searchInput = el("input");
-searchInput.type = "text";
-searchInput.placeholder = "Søk produkt, variant, merke, kategori, SKU...";
-addField(filterBox, "Søk i varer", searchInput);
-
-var countFilterSelect = el("select");
-addOption(countFilterSelect, "all", "Alle varer");
-addOption(countFilterSelect, "not_counted", "Kun ikke telt");
-addOption(countFilterSelect, "counted", "Kun telt");
-
-addField(filterBox, "Vis", countFilterSelect);
-
-var hideZeroWrap = el("label");
-hideZeroWrap.style.display = "flex";
-hideZeroWrap.style.alignItems = "center";
-hideZeroWrap.style.gap = "8px";
-hideZeroWrap.style.marginBottom = "12px";
-hideZeroWrap.style.fontWeight = "700";
-
-var hideZeroCheckbox = el("input");
-hideZeroCheckbox.type = "checkbox";
-
-hideZeroWrap.appendChild(hideZeroCheckbox);
-hideZeroWrap.appendChild(el("span", "Skjul varer med 0 på forventet lager"));
-
-filterBox.appendChild(hideZeroWrap);
-
-detailSection.body.appendChild(filterBox);
-
-// ============================================================
-// BATCH-LAGRING – rett over varelisten
-// ============================================================
-
-var pendingStockChanges = {};
-
-var batchActionBox = el("div");
-batchActionBox.style.display = "flex";
-batchActionBox.style.gap = "10px";
-batchActionBox.style.flexWrap = "wrap";
-batchActionBox.style.alignItems = "center";
-batchActionBox.style.marginBottom = "14px";
-batchActionBox.style.padding = "12px";
-batchActionBox.style.border = "1px solid #e5e7eb";
-batchActionBox.style.borderRadius = "12px";
-batchActionBox.style.background = "#f9fafb";
-
-var saveChangedBtn = createPrimaryButton("Lagre endrede linjer");
-var resetChangedBtn = createButton("Nullstill endringer");
-
-var batchInfo = el("div", "Ingen ulagrede endringer.");
-batchInfo.style.color = "#6b7280";
-batchInfo.style.fontSize = "13px";
-
-batchActionBox.appendChild(saveChangedBtn);
-batchActionBox.appendChild(resetChangedBtn);
-batchActionBox.appendChild(batchInfo);
-
-detailSection.body.appendChild(batchActionBox);
-
-// ============================================================
-// SAMMENDRAG + VARELISTE
-// ============================================================
-
-var detailSummary = el("div");
-detailSummary.style.margin = "10px 0";
-detailSummary.style.color = "#6b7280";
-detailSection.body.appendChild(detailSummary);
-
-var detailTarget = el("div");
-detailSection.body.appendChild(detailTarget);
-
-parent.appendChild(detailSection.wrap);
-
-
-  function selectedStockCount() {
-    var found = null;
-
-    (data.stockCounts || []).forEach(function (count) {
-      if (count.id === countSelect.value) {
-        found = count;
-      }
-    });
-
-    return found;
-  }
-
-    function renderStockStatusBox() {
-  clear(stockStatusBox);
-
-  var count = selectedStockCount();
-
-  if (!count) {
-    stockStatusBox.textContent = "Velg en varetelling for å låse eller åpne den.";
-    return;
-  }
-
-  var title = el("div");
-  title.style.fontWeight = "900";
-  title.style.marginBottom = "6px";
-
-  var text = el("div");
-  text.style.color = "#6b7280";
-  text.style.marginBottom = "10px";
-
-  var actionBtn;
-
-  if (count.status === "locked") {
-    stockStatusBox.style.background = "#ecfdf5";
-    stockStatusBox.style.borderColor = "#bbf7d0";
-
-    title.textContent = "🔒 Varetellingen er låst";
-    text.textContent = "Tellefeltene er låst. For å åpne igjen må du bevisst skrive ÅPNE.";
-
-    actionBtn = createButton("Åpne varetelling igjen");
-
-    actionBtn.onclick = function () {
-      var confirmText = prompt(
-        "Denne varetellingen er låst.\n\nSkriv ÅPNE for å åpne den igjen:"
-      );
-
-      if (confirmText !== "ÅPNE") {
-        alert("Varetellingen ble ikke åpnet. Du må skrive nøyaktig ÅPNE.");
-        return;
-      }
-
-      actionBtn.disabled = true;
-      actionBtn.textContent = "Åpner...";
-
-      sb.rpc("internal_set_stock_count_status", {
-        p_stock_count_id: count.id,
-        p_action: "unlock",
-        p_confirm_text: confirmText
-      }).then(function (result) {
-        actionBtn.disabled = false;
-        actionBtn.textContent = "Åpne varetelling igjen";
-
-        if (result.error) {
-          alert("Kunne ikke åpne varetellingen: " + result.error.message);
-          return;
-        }
-
-        localStorage.setItem("sk_internal_active_tab", "stock");
-        localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
-
-        alert("Varetellingen er åpnet igjen.");
-        window.location.reload();
-      });
-    };
-  } else {
-    stockStatusBox.style.background = "#fff7ed";
-    stockStatusBox.style.borderColor = "#fed7aa";
-
-    title.textContent = "🔓 Varetellingen er åpen";
-    text.textContent = "Når tellingen er ferdig bør den låses, slik at den ikke endres ved et uhell.";
-
-    actionBtn = createPrimaryButton("Lås varetelling");
-
-    actionBtn.onclick = function () {
-      var confirmText = prompt(
-        "Dette låser varetellingen og hindrer videre endringer.\n\nSkriv LÅS for å bekrefte:"
-      );
-
-      if (confirmText !== "LÅS") {
-        alert("Varetellingen ble ikke låst. Du må skrive nøyaktig LÅS.");
-        return;
-      }
-
-      actionBtn.disabled = true;
-      actionBtn.textContent = "Låser...";
-
-      sb.rpc("internal_set_stock_count_status", {
-        p_stock_count_id: count.id,
-        p_action: "lock",
-        p_confirm_text: confirmText
-      }).then(function (result) {
-        actionBtn.disabled = false;
-        actionBtn.textContent = "Lås varetelling";
-
-        if (result.error) {
-          alert("Kunne ikke låse varetellingen: " + result.error.message);
-          return;
-        }
-
-        localStorage.setItem("sk_internal_active_tab", "stock");
-        localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
-
-        alert("Varetellingen er låst.");
-        window.location.reload();
-      });
-    };
-  }
-
-  stockStatusBox.appendChild(title);
-stockStatusBox.appendChild(text);
-stockStatusBox.appendChild(actionBtn);
-
-if (count.status === "locked") {
-  var qbBox = el("div");
-qbBox.style.marginTop = "16px";
-qbBox.style.padding = "16px";
-qbBox.style.border = "1px solid #d1d5db";
-qbBox.style.borderRadius = "14px";
-qbBox.style.background = "#ffffff";
-qbBox.style.boxShadow = "0 4px 14px rgba(0,0,0,0.04)";
-
-  var qbTitle = el("div", "🔄 Quickbutik lageroppdatering");
-qbTitle.style.fontWeight = "900";
-qbTitle.style.fontSize = "16px";
-qbTitle.style.marginBottom = "4px";
-
-  var qbText = el("p", "Forhåndsvis først. Når varetellingen er låst og kontrollert, kan lageret oppdateres i Quickbutik.");
-qbText.style.marginTop = "0";
-qbText.style.marginBottom = "12px";
-qbText.style.color = "#6b7280";
-qbText.style.lineHeight = "1.5";
-
-  var qbStatus = el("div");
-qbStatus.style.marginTop = "10px";
-qbStatus.style.marginBottom = "12px";
-qbStatus.style.padding = "12px";
-qbStatus.style.borderRadius = "12px";
-qbStatus.style.border = "1px solid #e5e7eb";
-
-if (count.quickbutik_updated_at) {
-  var updatedDate = new Date(count.quickbutik_updated_at);
-  var updatedText = isNaN(updatedDate.getTime())
-    ? count.quickbutik_updated_at
-    : updatedDate.toLocaleString("no-NO");
-
-  qbStatus.style.background = "#ecfdf5";
-  qbStatus.style.borderColor = "#86efac";
-  qbStatus.style.color = "#14532d";
-
-  qbStatus.textContent =
-    "✅ Quickbutik oppdatert" +
-    "\nOppdatert: " + updatedText +
-    "\nBatcher: " + (count.quickbutik_update_batches || 0) +
-    "\nOppdateringer: " + (count.quickbutik_update_count || 0) +
-    "\nHoppet over: " + (count.quickbutik_update_skipped || 0);
-} else {
-  qbStatus.style.background = "#fffbeb";
-  qbStatus.style.borderColor = "#fde68a";
-  qbStatus.style.color = "#78350f";
-
-  qbStatus.textContent =
-    "⚠️ Ikke oppdatert mot Quickbutik ennå" +
-    "\nNår varetellingen er låst og kontrollert, kan lageret oppdateres herfra.";
-}
-
-qbStatus.style.whiteSpace = "pre-line";
-qbStatus.style.fontWeight = "700";
-
-  var previewBtn = createButton("Forhåndsvis Quickbutik-oppdatering");
-  var previewResult = el("pre");
-  var applyBtn = createPrimaryButton(
-  count.quickbutik_updated_at
-    ? "Kjør Quickbutik-oppdatering på nytt"
-    : "Oppdater Quickbutik-lager"
-);
-
-if (count.quickbutik_updated_at) {
-  applyBtn.style.background = "#92400e";
-  applyBtn.style.borderColor = "#92400e";
-  applyBtn.style.color = "#fff";
-}
-applyBtn.style.marginLeft = "8px";
-
-  previewResult.style.display = "none";
-  previewResult.style.marginTop = "10px";
-  previewResult.style.padding = "12px";
-  previewResult.style.background = "#111827";
-  previewResult.style.color = "#f9fafb";
-  previewResult.style.borderRadius = "10px";
-  previewResult.style.overflowX = "auto";
-  previewResult.style.whiteSpace = "pre-wrap";
-  previewResult.style.fontSize = "13px";
-
-  previewBtn.onclick = function () {
-    previewBtn.disabled = true;
-    previewBtn.textContent = "Henter forhåndsvisning...";
-    previewResult.style.display = "none";
-
-    sb.auth.getSession().then(function (sessionResult) {
-      var session = sessionResult.data && sessionResult.data.session;
-      var token = session && session.access_token;
-
-      if (!token) {
-        throw new Error("Fant ikke innlogget Supabase-session.");
-      }
-
-      var url =
-        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/preview-stock-count-quickbutik" +
-        "?stock_count_id=" +
-        encodeURIComponent(count.id);
-
-      return fetch(url, {
-        method: "GET",
-        headers: {
-          "Authorization": "Bearer " + token
-        }
-      });
-    }).then(function (response) {
-      return response.json();
-    }).then(function (data) {
-      previewBtn.disabled = false;
-      previewBtn.textContent = "Forhåndsvis Quickbutik-oppdatering";
-
-      previewResult.style.display = "block";
-      previewResult.textContent = JSON.stringify(data, null, 2);
-    }).catch(function (error) {
-      previewBtn.disabled = false;
-      previewBtn.textContent = "Forhåndsvis Quickbutik-oppdatering";
-
-      previewResult.style.display = "block";
-      previewResult.textContent = "Feil: " + (error.message || String(error));
-    });
-  };
-
- applyBtn.onclick = function () {
-  var alreadyUpdated = !!count.quickbutik_updated_at;
-
-  var requiredConfirmText = alreadyUpdated
-    ? "OPPDATER QUICKBUTIK PÅ NYTT"
-    : "OPPDATER QUICKBUTIK";
-
-  var confirmMessage =
-    "Dette vil oppdatere lageret i Quickbutik basert på denne låste varetellingen.\n\n" +
-    "Dette bør kun gjøres når varetellingen er ferdig kontrollert.\n\n";
-
-  if (alreadyUpdated) {
-    confirmMessage +=
-      "ADVARSEL: Denne varetellingen er allerede markert som Quickbutik-oppdatert.\n\n" +
-      "Oppdatert: " + count.quickbutik_updated_at + "\n" +
-      "Antall oppdatert sist: " + (count.quickbutik_update_count || 0) + "\n" +
-      "Hoppet over sist: " + (count.quickbutik_update_skipped || 0) + "\n\n" +
-      "Hvis du likevel vil kjøre den på nytt, skriv " + requiredConfirmText + ":";
-  } else {
-    confirmMessage +=
-      "Skriv " + requiredConfirmText + " for å bekrefte:";
-  }
-
-  var confirmText = prompt(confirmMessage);
-
-  if (confirmText !== requiredConfirmText) {
-    alert("Quickbutik ble ikke oppdatert. Du må skrive nøyaktig " + requiredConfirmText + ".");
-    return;
-  }
-
-  var batchLimit = 25;
-  var offset = 0;
-  var batches = 0;
-  var totalUpdates = 0;
-  var totalSkipped = 0;
-  var lastResult = null;
-  var maxBatches = 500;
-
-  applyBtn.disabled = true;
-  previewBtn.disabled = true;
-  applyBtn.textContent = "Oppdaterer Quickbutik...";
-  previewResult.style.display = "block";
-  previewResult.textContent = "Starter oppdatering...";
-
-  sb.auth.getSession().then(function (sessionResult) {
-    var session = sessionResult.data && sessionResult.data.session;
-    var token = session && session.access_token;
-
-    if (!token) {
-      throw new Error("Fant ikke innlogget Supabase-session.");
-    }
-
-    function runBatch() {
-      batches += 1;
-
-      if (batches > maxBatches) {
-        throw new Error("Stoppet fordi maks antall batcher ble nådd. Kontroller tellingen før du prøver igjen.");
-      }
-
-      previewResult.textContent =
-        "Oppdaterer Quickbutik..." +
-        "\nBatch: " + batches +
-        "\nOffset: " + offset +
-        "\nOppdatert så langt: " + totalUpdates +
-        "\nHoppet over så langt: " + totalSkipped;
-
-      var url =
-        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/apply-stock-count-quickbutik" +
-        "?stock_count_id=" +
-        encodeURIComponent(count.id) +
-        "&limit=" +
-        encodeURIComponent(batchLimit) +
-        "&offset=" +
-        encodeURIComponent(offset) +
-        "&dryRun=false" +
-        "&confirm_text=" +
-        encodeURIComponent(confirmText);
-
-      return fetch(url, {
-        method: "GET",
-        headers: {
-          "Authorization": "Bearer " + token
-        }
-      }).then(function (response) {
-        return response.json();
-      }).then(function (data) {
-        lastResult = data;
-
-        if (!data.ok) {
-          throw new Error(data.error || JSON.stringify(data));
-        }
-
-        totalUpdates += Number(data.quickbutik_updates || 0);
-        totalSkipped += Number(data.skipped || 0);
-
-        previewResult.textContent =
-          "Batch ferdig." +
-          "\nBatch: " + batches +
-          "\nOppdatert i denne batchen: " + Number(data.quickbutik_updates || 0) +
-          "\nHoppet over i denne batchen: " + Number(data.skipped || 0) +
-          "\nTotalt oppdatert: " + totalUpdates +
-          "\nTotalt hoppet over: " + totalSkipped +
-          "\nHar flere: " + (data.has_more ? "ja" : "nei") +
-          "\n\nSiste svar:\n" +
-          JSON.stringify(data, null, 2);
-
-        if (data.has_more) {
-          offset = Number(data.next_offset || (offset + batchLimit));
-
-          return new Promise(function (resolve) {
-            setTimeout(function () {
-              resolve(runBatch());
-            }, 600);
-          });
-        }
-
-        return data;
-      });
-    }
-
-    return runBatch();
-    }).then(function () {
-    previewResult.textContent =
-      "Quickbutik-oppdatering ferdig ✅" +
-      "\nMarkerer varetellingen som oppdatert..." +
-      "\nBatcher kjørt: " + batches +
-      "\nTotalt oppdatert: " + totalUpdates +
-      "\nTotalt hoppet over: " + totalSkipped;
-
-    return sb.rpc("internal_mark_stock_count_quickbutik_updated", {
-      p_stock_count_id: count.id,
-      p_batches: batches,
-      p_update_count: totalUpdates,
-      p_skipped_count: totalSkipped,
-      p_note: "Oppdatert fra internportal mot Quickbutik. Siste batch-svar: " + JSON.stringify(lastResult)
-    });
-  }).then(function (markResult) {
-    applyBtn.disabled = false;
-    previewBtn.disabled = false;
-    applyBtn.textContent = count.quickbutik_updated_at
-  ? "Kjør Quickbutik-oppdatering på nytt"
-  : "Oppdater Quickbutik-lager";
-
-    if (markResult.error) {
-      throw new Error("Quickbutik ble oppdatert, men varetellingen ble ikke markert som oppdatert: " + markResult.error.message);
-    }
-
-    previewResult.textContent =
-      "Quickbutik-oppdatering ferdig ✅" +
-      "\nVaretellingen er markert som Quickbutik-oppdatert ✅" +
-      "\nBatcher kjørt: " + batches +
-      "\nTotalt oppdatert: " + totalUpdates +
-      "\nTotalt hoppet over: " + totalSkipped +
-      "\n\nMarkering:\n" +
-      JSON.stringify(markResult.data, null, 2) +
-      "\n\nSiste Quickbutik-svar:\n" +
-      JSON.stringify(lastResult, null, 2);
-
-    alert(
-      "Quickbutik er oppdatert.\n\n" +
-      "Varetellingen er markert som oppdatert.\n\n" +
-      "Batcher kjørt: " +
-      batches +
-      "\nOppdateringer: " +
-      totalUpdates +
-      "\nHoppet over: " +
-      totalSkipped
+  function renderStockCountsManager(
+    parent,
+    data,
+    sb
+  ) {
+    createPageHeader(
+      parent,
+      "Varetelling",
+      "Pågående tellinger først, historikk separat og selve tellingen i ett ryddig arbeidsområde.",
+      "Varer og lager"
     );
 
-    localStorage.setItem("sk_internal_active_tab", "stock");
-  }).catch(function (error) {
-    applyBtn.disabled = false;
-    previewBtn.disabled = false;
-    applyBtn.textContent = count.quickbutik_updated_at
-  ? "Kjør Quickbutik-oppdatering på nytt"
-  : "Oppdater Quickbutik-lager";
 
-    previewResult.textContent =
-      "Feil under Quickbutik-oppdatering:\n" +
-      (error.message || String(error)) +
-      "\n\nTotalt oppdatert før stopp: " +
-      totalUpdates +
-      "\nTotalt hoppet over før stopp: " +
-      totalSkipped;
+    var counts =
+      (
+        data.stockCounts ||
+        []
+      )
+        .slice()
+        .sort(
+          function (a, b) {
+            return (
+              new Date(
+                b.created_at ||
+                0
+              ).getTime() -
+              new Date(
+                a.created_at ||
+                0
+              ).getTime()
+            );
+          }
+        );
 
-    alert("Oppdateringen stoppet: " + (error.message || String(error)));
-  });
-};
+    var items =
+      data.stockCountItems ||
+      [];
 
-var qbButtonRow = el("div");
-qbButtonRow.style.display = "flex";
-qbButtonRow.style.gap = "10px";
-qbButtonRow.style.flexWrap = "wrap";
-qbButtonRow.style.marginTop = "12px";
+    var selectedCountId =
+      localStorage.getItem(
+        "sk_internal_selected_stock_count_id"
+      ) || null;
 
-qbButtonRow.appendChild(previewBtn);
-qbButtonRow.appendChild(applyBtn);
+    var pendingStockChanges =
+      {};
 
-qbBox.appendChild(qbTitle);
-qbBox.appendChild(qbText);
-qbBox.appendChild(qbStatus);
-qbBox.appendChild(qbButtonRow);
-qbBox.appendChild(previewResult);
+    var countingFilterTouched =
+      false;
 
-  stockStatusBox.appendChild(qbBox);
-}
-}
 
-    function getPendingStockChangeIds() {
-  return Object.keys(pendingStockChanges);
-}
+    function isOpenCount(
+      count
+    ) {
+      return (
+        count.status ===
+          "draft" ||
+        count.status ===
+          "in_progress"
+      );
+    }
 
-function updateBatchButtons() {
-  var ids = getPendingStockChangeIds();
-  var count = selectedStockCount();
 
-  saveChangedBtn.textContent = "Lagre endrede linjer (" + ids.length + ")";
-  saveChangedBtn.disabled = ids.length === 0 || (count && count.status === "locked");
+    function isLockedCount(
+      count
+    ) {
+      return (
+        count.status ===
+        "locked"
+      );
+    }
 
-  resetChangedBtn.disabled = ids.length === 0;
 
-  if (count && count.status === "locked") {
-    batchInfo.textContent = "Varetellingen er låst. Åpne den igjen for å lagre endringer.";
-    return;
-  }
+    function isFinishedCount(
+      count
+    ) {
+      return (
+        count.status ===
+          "applied" ||
+        count.status ===
+          "cancelled" ||
+        !!count.quickbutik_updated_at
+      );
+    }
 
-  batchInfo.textContent =
-    ids.length === 0
-      ? "Ingen ulagrede endringer."
-      : ids.length + " linje(r) har ulagrede endringer.";
-}
 
-resetChangedBtn.onclick = function () {
-  var ids = getPendingStockChangeIds();
+    function stockStatusLabel(
+      status
+    ) {
+      if (
+        status === "draft"
+      ) {
+        return "Utkast";
+      }
 
-  if (!ids.length) {
-    return;
-  }
+      if (
+        status === "in_progress"
+      ) {
+        return "Pågår";
+      }
 
-  if (!confirm("Vil du nullstille ulagrede endringer?")) {
-    return;
-  }
+      if (
+        status === "locked"
+      ) {
+        return "Låst";
+      }
 
-  pendingStockChanges = {};
-  renderStockCountDetails();
-  renderStockReport();
-  updateBatchButtons();
-};
+      if (
+        status === "cancelled"
+      ) {
+        return "Kansellert";
+      }
 
-saveChangedBtn.onclick = function () {
-  var count = selectedStockCount();
+      if (
+        status === "applied"
+      ) {
+        return "Utført";
+      }
 
-  if (!count) {
-    alert("Velg en varetelling først.");
-    return;
-  }
+      return (
+        status || "-"
+      );
+    }
 
-  if (count.status === "locked") {
-    alert("Denne varetellingen er låst. Åpne den igjen først hvis du må gjøre endringer.");
-    return;
-  }
 
-  var ids = getPendingStockChangeIds();
+    function stockStatusTone(
+      count
+    ) {
+      if (
+        count.status ===
+        "in_progress"
+      ) {
+        return "warning";
+      }
 
-  if (!ids.length) {
-    alert("Ingen endringer å lagre.");
-    return;
-  }
+      if (
+        count.status ===
+          "locked" &&
+        !count.quickbutik_updated_at
+      ) {
+        return "warning";
+      }
 
-  var invalid = ids.some(function (id) {
-    return pendingStockChanges[id].counted_quantity === "";
-  });
+      if (
+        count.status ===
+          "cancelled"
+      ) {
+        return "danger";
+      }
 
-  if (invalid) {
-    alert("Alle endrede linjer må ha opptalt antall før lagring.");
-    return;
-  }
+      return "ok";
+    }
 
-  saveChangedBtn.disabled = true;
-  resetChangedBtn.disabled = true;
-  saveChangedBtn.textContent = "Lagrer " + ids.length + " linje(r)...";
 
-  var chain = Promise.resolve();
+    function countProgress(
+      count
+    ) {
+      var total =
+        Number(
+          count.line_count ||
+          0
+        );
 
-  ids.forEach(function (id) {
-    chain = chain.then(function () {
-      var change = pendingStockChanges[id];
+      var counted =
+        Number(
+          count.counted_line_count ||
+          0
+        );
 
-      return sb.rpc("internal_update_stock_count_item", {
-        p_item_id: change.item_id,
-        p_counted_quantity: Number(change.counted_quantity),
-        p_notes: change.notes || null
-      }).then(function (result) {
-        if (result.error) {
-          throw new Error(result.error.message);
+      if (
+        total <= 0
+      ) {
+        return 0;
+      }
+
+      return Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            (
+              counted /
+              total
+            ) *
+            100
+          )
+        )
+      );
+    }
+
+
+    function scopeLabel(
+      count
+    ) {
+      var type =
+        count.scope_type ||
+        "";
+
+      var value =
+        count.scope_value ||
+        "";
+
+      if (
+        type === "all"
+      ) {
+        return "Alle fysiske produkter";
+      }
+
+      if (
+        type ===
+        "inventory_main_group"
+      ) {
+        return (
+          "Hovedkategori" +
+          (
+            value
+              ? (
+                  " · " +
+                  value
+                )
+              : ""
+          )
+        );
+      }
+
+      if (
+        type === "category"
+      ) {
+        return (
+          "Quickbutik-kategori" +
+          (
+            value
+              ? (
+                  " · " +
+                  value
+                )
+              : ""
+          )
+        );
+      }
+
+      if (
+        type === "supplier"
+      ) {
+        return (
+          "Leverandør" +
+          (
+            value
+              ? (
+                  " · " +
+                  value
+                )
+              : ""
+          )
+        );
+      }
+
+      if (
+        type === "brand"
+      ) {
+        return (
+          "Merke" +
+          (
+            value
+              ? (
+                  " · " +
+                  value
+                )
+              : ""
+          )
+        );
+      }
+
+      if (
+        type === "manual"
+      ) {
+        return "Manuell telling";
+      }
+
+      return (
+        value ||
+        type ||
+        "-"
+      );
+    }
+
+
+    function countItems(
+      countId
+    ) {
+      return items.filter(
+        function (item) {
+          return (
+            item.stock_count_id ===
+            countId
+          );
         }
-      });
-    });
-  });
+      );
+    }
 
-  chain.then(function () {
-    pendingStockChanges = {};
 
-    localStorage.setItem("sk_internal_active_tab", "stock");
-    localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
+    function selectedCount() {
+      return (
+        counts.find(
+          function (count) {
+            return (
+              count.id ===
+              selectedCountId
+            );
+          }
+        ) ||
+        null
+      );
+    }
 
-    alert("Endringer lagret.");
-    window.location.reload();
-  }).catch(function (error) {
-    saveChangedBtn.disabled = false;
-    resetChangedBtn.disabled = false;
-    updateBatchButtons();
 
-    alert("Kunne ikke lagre alle endringer: " + (error.message || String(error)));
-  });
-};
+    function recomputeCountSummary(
+      countId
+    ) {
+      var count =
+        counts.find(
+          function (row) {
+            return (
+              row.id ===
+              countId
+            );
+          }
+        );
 
-  function getItemsForSelectedCount() {
-    var list = [];
-    var query = String(searchInput.value || "").toLowerCase().trim();
-
-    (data.stockCountItems || []).forEach(function (item) {
-  if (item.stock_count_id !== countSelect.value) {
-    return;
-  }
-
-  var isCounted =
-    item.counted_quantity !== null &&
-    item.counted_quantity !== undefined;
-
-  if (countFilterSelect.value === "not_counted" && isCounted) {
-    return;
-  }
-
-  if (countFilterSelect.value === "counted" && !isCounted) {
-    return;
-  }
-
-  if (hideZeroCheckbox.checked && Number(item.expected_quantity || 0) === 0) {
-    return;
-  }
-
-  var haystack = [
-  item.name,
-  item.brand,
-  item.category,
-  item.supplier_name,
-  item.quickbutik_sku,
-  item.quickbutik_product_id,
-  item.quickbutik_variant_id,
-  item.quickbutik_variant_sku,
-  item.variant_name,
-  item.option_1_name,
-  item.option_1_value,
-  item.option_2_name,
-  item.option_2_value,
-  item.option_3_name,
-  item.option_3_value
-].map(function (value) {
-  return String(value || "").toLowerCase();
-}).join(" ");
-
-      if (query && haystack.indexOf(query) < 0) {
+      if (!count) {
         return;
       }
 
-      list.push(item);
-    });
+      var rows =
+        countItems(
+          countId
+        );
 
-    list.sort(function (a, b) {
-      return String(a.name || "").localeCompare(String(b.name || ""), "no");
-    });
+      count.line_count =
+        rows.length;
 
-    return list;
-  }
+      count.counted_line_count =
+        rows.filter(
+          function (item) {
+            return (
+              item.counted_quantity !==
+                null &&
+              item.counted_quantity !==
+                undefined
+            );
+          }
+        ).length;
 
-  function renderStockCountDetails() {
-    clear(detailTarget);
+      count.expected_quantity_total =
+        rows.reduce(
+          function (
+            sum,
+            item
+          ) {
+            return (
+              sum +
+              Number(
+                item.expected_quantity ||
+                0
+              )
+            );
+          },
+          0
+        );
 
-    var count = selectedStockCount();
+      count.counted_quantity_total =
+        rows.reduce(
+          function (
+            sum,
+            item
+          ) {
+            return (
+              sum +
+              Number(
+                item.counted_quantity ||
+                0
+              )
+            );
+          },
+          0
+        );
 
-    if (!count) {
-      detailSummary.textContent = "Velg en varetelling først.";
-      return;
+      count.difference_quantity_total =
+        rows.reduce(
+          function (
+            sum,
+            item
+          ) {
+            return (
+              sum +
+              Number(
+                item.difference_quantity ||
+                0
+              )
+            );
+          },
+          0
+        );
+
+      count.difference_value_ex_vat_total =
+        rows.reduce(
+          function (
+            sum,
+            item
+          ) {
+            return (
+              sum +
+              Number(
+                item.difference_value_ex_vat ||
+                0
+              )
+            );
+          },
+          0
+        );
     }
 
-    localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
 
-    detailSummary.textContent =
-      "Status: " +
-      count.status +
-      " · Linjer: " +
-      count.line_count +
-      " · Telt: " +
-      count.counted_line_count +
-      " · Avvik stk: " +
-      money(count.difference_quantity_total) +
-      " · Avvik verdi eks. mva: " +
-      money(count.difference_value_ex_vat_total) +
-      " kr";
+    if (
+      selectedCountId &&
+      !selectedCount()
+    ) {
+      selectedCountId =
+        null;
 
-    var rows = getItemsForSelectedCount();
-
-    if (!rows.length) {
-      var empty = el("p", "Ingen varelinjer funnet.");
-      empty.style.color = "#6b7280";
-      detailTarget.appendChild(empty);
-      return;
+      localStorage.removeItem(
+        "sk_internal_selected_stock_count_id"
+      );
     }
 
-    var wrap = el("div");
-    wrap.style.overflowX = "auto";
-    wrap.style.border = "1px solid #e5e7eb";
-    wrap.style.borderRadius = "14px";
 
-    var table = el("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    table.style.fontSize = "14px";
+    if (!selectedCountId) {
+      var firstOpen =
+        counts.find(
+          isOpenCount
+        );
 
-    var thead = el("thead");
-    var headTr = el("tr");
+      var firstLocked =
+        counts.find(
+          function (count) {
+            return (
+              isLockedCount(
+                count
+              ) &&
+              !count
+                .quickbutik_updated_at
+            );
+          }
+        );
 
-    [
-  "Produkt",
-  "Variant / SKU",
-  "Merke",
-  "Kategori",
-  "Forventet",
-  "Opptalt",
-  "Avvik",
-  "Verdiavvik eks.",
-  "Notat",
-  "Lagre"
-].forEach(function (label) {
-      var th = el("th", label);
-      th.style.textAlign = "left";
-      th.style.padding = "10px";
-      th.style.borderBottom = "1px solid #e5e7eb";
-      th.style.background = "#f9fafb";
-      th.style.whiteSpace = "nowrap";
-      headTr.appendChild(th);
-    });
+      var fallback =
+        firstOpen ||
+        firstLocked ||
+        counts[0] ||
+        null;
 
-    thead.appendChild(headTr);
-    table.appendChild(thead);
-
-    var tbody = el("tbody");
-
-    rows.forEach(function (item) {
-      var tr = el("tr");
-
-      var diff = Number(item.difference_quantity || 0);
-
-      if (item.counted_quantity !== null && item.counted_quantity !== undefined && diff !== 0) {
-        tr.style.background = "#fee2e2";
+      if (fallback) {
+        selectedCountId =
+          fallback.id;
       }
+    }
 
-      function tdText(text, right) {
-        var td = el("td", text);
-        td.style.padding = "10px";
-        td.style.borderBottom = "1px solid #f3f4f6";
-        td.style.whiteSpace = "nowrap";
 
-        if (right) {
-          td.style.textAlign = "right";
+    var openCounts =
+      counts.filter(
+        isOpenCount
+      );
+
+    var lockedCounts =
+      counts.filter(
+        function (count) {
+          return (
+            isLockedCount(
+              count
+            ) &&
+            !count
+              .quickbutik_updated_at
+          );
         }
+      );
 
-        return td;
+    var finishedCounts =
+      counts.filter(
+        isFinishedCount
+      );
+
+
+    addProStatGrid(
+      parent,
+      [
+        {
+          label:
+            "Pågående",
+          value:
+            String(
+              openCounts.length
+            ),
+          tone:
+            openCounts.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Låst / til kontroll",
+          value:
+            String(
+              lockedCounts.length
+            ),
+          tone:
+            lockedCounts.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Historikk",
+          value:
+            String(
+              finishedCounts.length
+            ),
+          tone:
+            "ok"
+        },
+        {
+          label:
+            "Totalt",
+          value:
+            String(
+              counts.length
+            ),
+          tone:
+            "ok"
+        }
+      ]
+    );
+
+
+    // ============================================================
+    // TOPP: PÅGÅENDE / LÅSTE TELLINGER
+    // ============================================================
+
+    var currentSection =
+      createCollapsibleSection(
+        "▶ Pågående varetellinger",
+        "Fortsett en åpen telling, eller åpne en låst telling som venter på kontroll / Quickbutik.",
+        true
+      );
+
+    var currentHost =
+      el("div");
+
+    currentSection.body.appendChild(
+      currentHost
+    );
+
+    parent.appendChild(
+      currentSection.wrap
+    );
+
+
+    function createCountBadge(
+      count
+    ) {
+      var badge =
+        el(
+          "span",
+          stockStatusLabel(
+            count.status
+          )
+        );
+
+      badge.style.display =
+        "inline-flex";
+      badge.style.padding =
+        "5px 8px";
+      badge.style.borderRadius =
+        "999px";
+      badge.style.fontSize =
+        "12px";
+      badge.style.fontWeight =
+        "900";
+
+      if (
+        count.status ===
+        "in_progress"
+      ) {
+        badge.style.background =
+          "#fef3c7";
+        badge.style.color =
+          "#92400e";
+      } else if (
+        count.status ===
+        "locked"
+      ) {
+        badge.style.background =
+          "#dbeafe";
+        badge.style.color =
+          "#1e40af";
+      } else if (
+        count.status ===
+        "cancelled"
+      ) {
+        badge.style.background =
+          "#fee2e2";
+        badge.style.color =
+          "#991b1b";
+      } else {
+        badge.style.background =
+          "#dcfce7";
+        badge.style.color =
+          "#166534";
       }
 
-      var countedInput = el("input");
-      countedInput.type = "number";
-      countedInput.min = "0";
-      countedInput.step = "1";
-      countedInput.value =
-        item.counted_quantity === null || item.counted_quantity === undefined
-          ? ""
-          : item.counted_quantity;
+      return badge;
+    }
 
-      countedInput.style.width = "90px";
-      countedInput.style.padding = "8px";
-      countedInput.style.border = "1px solid #d1d5db";
-      countedInput.style.borderRadius = "8px";
 
-      var noteInput = el("input");
-      noteInput.type = "text";
-      noteInput.value = item.notes || "";
-      noteInput.placeholder = "Valgfritt";
-      noteInput.style.width = "160px";
-      noteInput.style.padding = "8px";
-      noteInput.style.border = "1px solid #d1d5db";
-      noteInput.style.borderRadius = "8px";
+    function createProgressBar(
+      count
+    ) {
+      var wrap =
+        el("div");
 
-if (pendingStockChanges[item.id]) {
-  countedInput.value = pendingStockChanges[item.id].counted_quantity;
-  noteInput.value = pendingStockChanges[item.id].notes || "";
-  tr.style.outline = "2px solid #f59e0b";
-  tr.style.outlineOffset = "-2px";
-}
+      wrap.style.marginTop =
+        "10px";
 
-function markRowChanged() {
-  pendingStockChanges[item.id] = {
-    item_id: item.id,
-    counted_quantity: countedInput.value,
-    notes: noteInput.value.trim() || null
-  };
+      var meta =
+        el(
+          "div",
+          String(
+            count.counted_line_count ||
+            0
+          ) +
+            " / " +
+            String(
+              count.line_count ||
+              0
+            ) +
+            " linjer telt · " +
+            String(
+              countProgress(
+                count
+              )
+            ) +
+            "%"
+        );
 
-  tr.style.outline = "2px solid #f59e0b";
-  tr.style.outlineOffset = "-2px";
+      meta.style.fontSize =
+        "12px";
+      meta.style.color =
+        "#64748b";
+      meta.style.marginBottom =
+        "5px";
 
-  updateBatchButtons();
-}
+      var track =
+        el("div");
 
-countedInput.oninput = markRowChanged;
-noteInput.oninput = markRowChanged;
+      track.style.height =
+        "8px";
+      track.style.borderRadius =
+        "999px";
+      track.style.background =
+        "#e5e7eb";
+      track.style.overflow =
+        "hidden";
 
-      var saveBtn = createButton("Lagre");
-      var isLocked = count.status === "locked";
+      var bar =
+        el("div");
 
-if (isLocked) {
-  countedInput.disabled = true;
-  noteInput.disabled = true;
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Låst";
-}
+      bar.style.height =
+        "100%";
+      bar.style.width =
+        String(
+          countProgress(
+            count
+          )
+        ) +
+        "%";
 
-      saveBtn.onclick = function () {
-        if (count.status === "locked") {
-  alert("Denne varetellingen er låst. Åpne den igjen først hvis du må gjøre endringer.");
-  return;
-}
-        if (countedInput.value === "") {
-          alert("Skriv inn opptalt antall først.");
+      bar.style.background =
+        countProgress(
+          count
+        ) >= 100
+          ? "#16a34a"
+          : "#111827";
+
+      track.appendChild(
+        bar
+      );
+
+      wrap.appendChild(
+        meta
+      );
+
+      wrap.appendChild(
+        track
+      );
+
+      return wrap;
+    }
+
+
+    function selectCount(
+      countId,
+      destination
+    ) {
+      if (
+        Object.keys(
+          pendingStockChanges
+        ).length
+      ) {
+        var discard =
+          window.confirm(
+            "Du har ulagrede endringer i tellingen.\n\nBytte varetelling og forkaste de ulagrede endringene?"
+          );
+
+        if (!discard) {
           return;
         }
 
-        saveBtn.disabled = true;
-        saveBtn.textContent = "Lagrer...";
+        pendingStockChanges =
+          {};
+      }
 
-        sb.rpc("internal_update_stock_count_item", {
-          p_item_id: item.id,
-          p_counted_quantity: Number(countedInput.value),
-          p_notes: noteInput.value.trim() || null
-        }).then(function (result) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = "Lagre";
+      selectedCountId =
+        countId;
 
-          if (result.error) {
-            alert("Kunne ikke lagre opptalt antall: " + result.error.message);
+      localStorage.setItem(
+        "sk_internal_selected_stock_count_id",
+        countId
+      );
+
+      countingFilterTouched =
+        false;
+
+      renderCurrentCounts();
+      renderWorkspace();
+      renderReport();
+      renderHistory();
+
+      var target =
+        destination ===
+        "report"
+          ? reportSection.wrap
+          : workspaceSection.wrap;
+
+      setTimeout(
+        function () {
+          target.scrollIntoView({
+            behavior:
+              "smooth",
+            block:
+              "start"
+          });
+        },
+        30
+      );
+    }
+
+
+    function renderCurrentCounts() {
+      clear(
+        currentHost
+      );
+
+      var relevant =
+        openCounts.concat(
+          lockedCounts
+        );
+
+      if (!relevant.length) {
+        var empty =
+          el(
+            "div",
+            "Ingen åpne eller låste varetellinger akkurat nå."
+          );
+
+        empty.className =
+          "sk-note";
+
+        currentHost.appendChild(
+          empty
+        );
+
+        return;
+      }
+
+
+      var grid =
+        el("div");
+
+      grid.style.display =
+        "grid";
+      grid.style.gridTemplateColumns =
+        "repeat(auto-fit, minmax(280px, 1fr))";
+      grid.style.gap =
+        "12px";
+
+
+      relevant.forEach(
+        function (count) {
+          var card =
+            el("div");
+
+          card.style.border =
+            count.id ===
+            selectedCountId
+              ? "2px solid #111827"
+              : "1px solid #e5e7eb";
+
+          card.style.borderRadius =
+            "14px";
+          card.style.padding =
+            "14px";
+          card.style.background =
+            "#fff";
+
+
+          var top =
+            el("div");
+
+          top.style.display =
+            "flex";
+          top.style.alignItems =
+            "flex-start";
+          top.style.justifyContent =
+            "space-between";
+          top.style.gap =
+            "10px";
+
+
+          var left =
+            el("div");
+
+          var title =
+            el(
+              "div",
+              count.title ||
+              count.count_number ||
+              "Varetelling"
+            );
+
+          title.style.fontWeight =
+            "900";
+          title.style.fontSize =
+            "16px";
+
+          var meta =
+            el(
+              "div",
+              [
+                count.count_number ||
+                  "",
+                formatDateNorwegian(
+                  count.created_at
+                ),
+                scopeLabel(
+                  count
+                )
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            );
+
+          meta.style.marginTop =
+            "3px";
+          meta.style.color =
+            "#64748b";
+          meta.style.fontSize =
+            "12px";
+
+          left.appendChild(
+            title
+          );
+
+          left.appendChild(
+            meta
+          );
+
+
+          top.appendChild(
+            left
+          );
+
+          top.appendChild(
+            createCountBadge(
+              count
+            )
+          );
+
+          card.appendChild(
+            top
+          );
+
+          card.appendChild(
+            createProgressBar(
+              count
+            )
+          );
+
+
+          var small =
+            el(
+              "div",
+              "Avvik: " +
+                money(
+                  count
+                    .difference_quantity_total
+                ) +
+                " stk · " +
+                money(
+                  count
+                    .difference_value_ex_vat_total
+                ) +
+                " kr eks. MVA"
+            );
+
+          small.style.marginTop =
+            "8px";
+          small.style.color =
+            "#64748b";
+          small.style.fontSize =
+            "12px";
+
+          card.appendChild(
+            small
+          );
+
+
+          var actions =
+            el("div");
+
+          actions.style.display =
+            "flex";
+          actions.style.gap =
+            "8px";
+          actions.style.flexWrap =
+            "wrap";
+          actions.style.marginTop =
+            "12px";
+
+
+          var openButton =
+            createPrimaryButton(
+              isOpenCount(
+                count
+              )
+                ? "Fortsett telling"
+                : "Åpne / kontroller"
+            );
+
+          openButton.onclick =
+            function () {
+              selectCount(
+                count.id,
+                "workspace"
+              );
+            };
+
+          actions.appendChild(
+            openButton
+          );
+
+
+          var reportButton =
+            createButton(
+              "Rapport"
+            );
+
+          reportButton.onclick =
+            function () {
+              selectCount(
+                count.id,
+                "report"
+              );
+            };
+
+          actions.appendChild(
+            reportButton
+          );
+
+          card.appendChild(
+            actions
+          );
+
+          grid.appendChild(
+            card
+          );
+        }
+      );
+
+      currentHost.appendChild(
+        grid
+      );
+    }
+
+
+    // ============================================================
+    // NY VARETELLING
+    // ============================================================
+
+    var createSection =
+      createCollapsibleSection(
+        "➕ Ny varetelling",
+        "Opprett bare når du skal starte en ny telling. Hovedkategori er anbefalt for praktisk telling.",
+        false
+      );
+
+
+    var formGrid =
+      el("div");
+
+    formGrid.style.display =
+      "grid";
+    formGrid.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(220px, 1fr))";
+    formGrid.style.gap =
+      "12px";
+
+
+    var titleInput =
+      el("input");
+
+    titleInput.type =
+      "text";
+
+    titleInput.value =
+      "Varetelling " +
+      new Date()
+        .toLocaleDateString(
+          "no-NO"
+        );
+
+
+    var scopeSelect =
+      el("select");
+
+    addOption(
+      scopeSelect,
+      "inventory_main_group",
+      "Hovedkategori"
+    );
+
+    addOption(
+      scopeSelect,
+      "all",
+      "Alle fysiske produkter"
+    );
+
+    addOption(
+      scopeSelect,
+      "category",
+      "Quickbutik-kategori"
+    );
+
+    addOption(
+      scopeSelect,
+      "supplier",
+      "Leverandør"
+    );
+
+    addOption(
+      scopeSelect,
+      "brand",
+      "Merke"
+    );
+
+    addOption(
+      scopeSelect,
+      "manual",
+      "Manuell / tom telling"
+    );
+
+
+    var valueSelect =
+      el("select");
+
+    var notesInput =
+      el("input");
+
+    notesInput.type =
+      "text";
+    notesInput.placeholder =
+      "Valgfritt notat";
+
+
+    addField(
+      formGrid,
+      "Tittel",
+      titleInput
+    );
+
+    addField(
+      formGrid,
+      "Hva skal telles?",
+      scopeSelect
+    );
+
+    addField(
+      formGrid,
+      "Utvalg",
+      valueSelect
+    );
+
+    addField(
+      formGrid,
+      "Notat",
+      notesInput
+    );
+
+    createSection.body.appendChild(
+      formGrid
+    );
+
+
+    var createHelp =
+      el(
+        "div",
+        "Tips: Hovedkategori gir som regel en mer håndterbar telling enn «Alle fysiske produkter»."
+      );
+
+    createHelp.className =
+      "sk-note";
+
+    createHelp.style.marginTop =
+      "12px";
+
+    createSection.body.appendChild(
+      createHelp
+    );
+
+
+    var createBtn =
+      createPrimaryButton(
+        "Opprett varetelling"
+      );
+
+    createBtn.style.marginTop =
+      "10px";
+
+    createSection.body.appendChild(
+      createBtn
+    );
+
+    parent.appendChild(
+      createSection.wrap
+    );
+
+
+    var inventoryMainGroups = [
+      "Discer",
+      "Sekker og bager",
+      "Tilbehør",
+      "Dartutstyr",
+      "Golfballer",
+      "Golfhansker",
+      "Kurver",
+      "Annet"
+    ];
+
+
+    function uniqueValues(
+      key
+    ) {
+      var map = {};
+      var list = [];
+
+      (
+        data.products ||
+        []
+      ).forEach(
+        function (product) {
+          var value =
+            product[key];
+
+          if (
+            value !== null &&
+            value !== undefined &&
+            String(value).trim() !==
+              ""
+          ) {
+            value =
+              String(value)
+                .trim();
+
+            if (!map[value]) {
+              map[value] =
+                true;
+
+              list.push(
+                value
+              );
+            }
+          }
+        }
+      );
+
+      list.sort(
+        function (a, b) {
+          return a.localeCompare(
+            b,
+            "no"
+          );
+        }
+      );
+
+      return list;
+    }
+
+
+    function refreshValueSelect() {
+      clear(
+        valueSelect
+      );
+
+      var scope =
+        scopeSelect.value;
+
+      if (
+        scope === "all" ||
+        scope === "manual"
+      ) {
+        addOption(
+          valueSelect,
+          "",
+          "Ikke nødvendig"
+        );
+
+        valueSelect.disabled =
+          true;
+
+        return;
+      }
+
+      valueSelect.disabled =
+        false;
+
+      addOption(
+        valueSelect,
+        "",
+        "Velg"
+      );
+
+
+      if (
+        scope ===
+        "inventory_main_group"
+      ) {
+        inventoryMainGroups.forEach(
+          function (value) {
+            addOption(
+              valueSelect,
+              value,
+              value
+            );
+          }
+        );
+
+        return;
+      }
+
+
+      var key =
+        "category";
+
+      if (
+        scope === "supplier"
+      ) {
+        key =
+          "supplier_name";
+      }
+
+      if (
+        scope === "brand"
+      ) {
+        key =
+          "brand";
+      }
+
+
+      uniqueValues(
+        key
+      ).forEach(
+        function (value) {
+          addOption(
+            valueSelect,
+            value,
+            value
+          );
+        }
+      );
+    }
+
+
+    scopeSelect.onchange =
+      refreshValueSelect;
+
+    refreshValueSelect();
+
+
+    createBtn.onclick =
+      function () {
+        var title =
+          titleInput.value
+            .trim();
+
+        var scope =
+          scopeSelect.value;
+
+        var value =
+          valueSelect.value ||
+          null;
+
+
+        if (!title) {
+          alert(
+            "Skriv inn tittel på varetellingen."
+          );
+
+          return;
+        }
+
+
+        if (
+          (
+            scope ===
+              "category" ||
+            scope ===
+              "supplier" ||
+            scope ===
+              "brand" ||
+            scope ===
+              "inventory_main_group"
+          ) &&
+          !value
+        ) {
+          alert(
+            "Velg utvalg først."
+          );
+
+          return;
+        }
+
+
+        createBtn.disabled =
+          true;
+
+        createBtn.textContent =
+          "Oppretter…";
+
+
+        sb.rpc(
+          "internal_create_stock_count",
+          {
+            p_title:
+              title,
+
+            p_scope_type:
+              scope,
+
+            p_scope_value:
+              value,
+
+            p_notes:
+              notesInput.value
+                .trim() ||
+              null
+          }
+        )
+          .then(
+            function (result) {
+              if (
+                result.error
+              ) {
+                throw result.error;
+              }
+
+
+              var created =
+                result.data &&
+                result.data[0];
+
+
+              if (
+                created &&
+                created
+                  .stock_count_id
+              ) {
+                localStorage.setItem(
+                  "sk_internal_selected_stock_count_id",
+                  created
+                    .stock_count_id
+                );
+              }
+
+              localStorage.setItem(
+                "sk_internal_active_tab",
+                "stock"
+              );
+
+              window.location.reload();
+            }
+          )
+          .catch(
+            function (error) {
+              createBtn.disabled =
+                false;
+
+              createBtn.textContent =
+                "Opprett varetelling";
+
+              alert(
+                "Kunne ikke opprette varetelling: " +
+                  (
+                    error.message ||
+                    String(
+                      error
+                    )
+                  )
+              );
+            }
+          );
+      };
+
+
+    // ============================================================
+    // ARBEIDSOMRÅDE
+    // ============================================================
+
+    var workspaceSection =
+      createCollapsibleSection(
+        "🧮 Valgt varetelling",
+        "Tell varer, lagre endringer og lås tellingen når du er ferdig.",
+        true
+      );
+
+
+    var workspaceHost =
+      el("div");
+
+    workspaceSection.body.appendChild(
+      workspaceHost
+    );
+
+    parent.appendChild(
+      workspaceSection.wrap
+    );
+
+
+    function cleanVariantText(
+      item
+    ) {
+      var parts = [];
+
+
+      function addPart(
+        value
+      ) {
+        value =
+          String(
+            value ||
+            ""
+          )
+            .trim();
+
+        if (!value) {
+          return;
+        }
+
+        value =
+          value
+            .replace(
+              /\bvariant\s*\d+\b/gi,
+              ""
+            )
+            .replace(
+              /^[\s\-–—|/·:]+/g,
+              ""
+            )
+            .replace(
+              /[\s\-–—|/·:]+$/g,
+              ""
+            )
+            .trim();
+
+        if (
+          value &&
+          parts.indexOf(
+            value
+          ) === -1
+        ) {
+          parts.push(
+            value
+          );
+        }
+      }
+
+
+      function escapeRegex(
+        value
+      ) {
+        return String(
+          value ||
+          ""
+        ).replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+      }
+
+
+      function removeProductName(
+        value,
+        productName
+      ) {
+        value =
+          String(
+            value ||
+            ""
+          )
+            .trim();
+
+        productName =
+          String(
+            productName ||
+            ""
+          )
+            .trim();
+
+        if (
+          !value ||
+          !productName
+        ) {
+          return value;
+        }
+
+        var regex =
+          new RegExp(
+            escapeRegex(
+              productName
+            ),
+            "gi"
+          );
+
+        return value
+          .replace(
+            regex,
+            ""
+          )
+          .replace(
+            /\bvariant\s*\d+\b/gi,
+            ""
+          )
+          .replace(
+            /^[\s\-–—|/·:]+/g,
+            ""
+          )
+          .replace(
+            /[\s\-–—|/·:]+$/g,
+            ""
+          )
+          .replace(
+            /\s{2,}/g,
+            " "
+          )
+          .trim();
+      }
+
+
+      addPart(
+        item.option_1_value
+      );
+
+      addPart(
+        item.option_2_value
+      );
+
+      addPart(
+        item.option_3_value
+      );
+
+
+      if (
+        parts.length === 0 &&
+        item.quickbutik_variant_sku
+      ) {
+        var cleanedSku =
+          removeProductName(
+            item
+              .quickbutik_variant_sku,
+            item.name
+          );
+
+        cleanedSku =
+          cleanedSku
+            .replace(
+              /\s+-\s+/g,
+              " / "
+            )
+            .replace(
+              /\s+–\s+/g,
+              " / "
+            )
+            .replace(
+              /\s+—\s+/g,
+              " / "
+            )
+            .replace(
+              /\s{2,}/g,
+              " "
+            )
+            .trim();
+
+        addPart(
+          cleanedSku
+        );
+      }
+
+
+      if (
+        parts.length === 0 &&
+        item.variant_name
+      ) {
+        addPart(
+          item.variant_name
+        );
+      }
+
+
+      return (
+        parts.length
+          ? parts.join(
+              " / "
+            )
+          : "-"
+      );
+    }
+
+
+    function visibleItems(
+      count,
+      searchValue,
+      filterValue,
+      hideZero
+    ) {
+      var query =
+        String(
+          searchValue ||
+          ""
+        )
+          .toLowerCase()
+          .trim();
+
+
+      return countItems(
+        count.id
+      )
+        .filter(
+          function (item) {
+            var isCounted =
+              item.counted_quantity !==
+                null &&
+              item.counted_quantity !==
+                undefined;
+
+
+            if (
+              filterValue ===
+                "not_counted" &&
+              isCounted
+            ) {
+              return false;
+            }
+
+
+            if (
+              filterValue ===
+                "counted" &&
+              !isCounted
+            ) {
+              return false;
+            }
+
+
+            if (
+              filterValue ===
+                "differences" &&
+              (
+                !isCounted ||
+                Number(
+                  item.difference_quantity ||
+                  0
+                ) === 0
+              )
+            ) {
+              return false;
+            }
+
+
+            if (
+              hideZero &&
+              Number(
+                item.expected_quantity ||
+                0
+              ) === 0
+            ) {
+              return false;
+            }
+
+
+            if (!query) {
+              return true;
+            }
+
+
+            var haystack = [
+              item.name,
+              item.brand,
+              item.category,
+              item.supplier_name,
+              item.quickbutik_sku,
+              item.quickbutik_product_id,
+              item.quickbutik_variant_id,
+              item.quickbutik_variant_sku,
+              item.variant_name,
+              item.option_1_value,
+              item.option_2_value,
+              item.option_3_value
+            ]
+              .map(
+                function (value) {
+                  return String(
+                    value ||
+                    ""
+                  ).toLowerCase();
+                }
+              )
+              .join(" ");
+
+
+            return (
+              haystack.indexOf(
+                query
+              ) >= 0
+            );
+          }
+        )
+        .sort(
+          function (a, b) {
+            return String(
+              a.name ||
+              ""
+            ).localeCompare(
+              String(
+                b.name ||
+                ""
+              ),
+              "no"
+            );
+          }
+        );
+    }
+
+
+    function renderQuickbutikPanel(
+      host,
+      count
+    ) {
+      if (
+        count.status !==
+        "locked"
+      ) {
+        return;
+      }
+
+
+      var section =
+        createCollapsibleSection(
+          "🔄 Quickbutik lageroppdatering",
+          count.quickbutik_updated_at
+            ? "Denne tellingen er allerede brukt mot Quickbutik. Ny kjøring krever ekstra bekreftelse."
+            : "Forhåndsvis først. Kjør oppdatering først når tellingen er ferdig kontrollert.",
+          false
+        );
+
+
+      var status =
+        el("div");
+
+      status.style.padding =
+        "12px";
+      status.style.borderRadius =
+        "10px";
+      status.style.marginBottom =
+        "10px";
+      status.style.whiteSpace =
+        "pre-line";
+      status.style.fontWeight =
+        "700";
+
+
+      if (
+        count.quickbutik_updated_at
+      ) {
+        status.style.background =
+          "#ecfdf5";
+        status.style.color =
+          "#14532d";
+        status.style.border =
+          "1px solid #86efac";
+
+        status.textContent =
+          "✅ Quickbutik oppdatert\n" +
+          "Dato: " +
+          formatAdminDateTime(
+            count
+              .quickbutik_updated_at
+          ) +
+          "\nOppdateringer: " +
+          String(
+            count
+              .quickbutik_update_count ||
+            0
+          ) +
+          "\nHoppet over: " +
+          String(
+            count
+              .quickbutik_update_skipped ||
+            0
+          );
+      } else {
+        status.style.background =
+          "#fffbeb";
+        status.style.color =
+          "#78350f";
+        status.style.border =
+          "1px solid #fde68a";
+
+        status.textContent =
+          "⚠️ Ikke oppdatert mot Quickbutik ennå.";
+      }
+
+
+      section.body.appendChild(
+        status
+      );
+
+
+      var buttonRow =
+        el("div");
+
+      buttonRow.style.display =
+        "flex";
+      buttonRow.style.gap =
+        "8px";
+      buttonRow.style.flexWrap =
+        "wrap";
+
+
+      var previewButton =
+        createButton(
+          "Forhåndsvis"
+        );
+
+      var applyButton =
+        createPrimaryButton(
+          count.quickbutik_updated_at
+            ? "Kjør på nytt"
+            : "Oppdater Quickbutik-lager"
+        );
+
+      var resultBox =
+        el("pre");
+
+      resultBox.style.display =
+        "none";
+      resultBox.style.marginTop =
+        "10px";
+      resultBox.style.padding =
+        "12px";
+      resultBox.style.background =
+        "#111827";
+      resultBox.style.color =
+        "#f9fafb";
+      resultBox.style.borderRadius =
+        "10px";
+      resultBox.style.whiteSpace =
+        "pre-wrap";
+      resultBox.style.overflowX =
+        "auto";
+      resultBox.style.fontSize =
+        "12px";
+
+
+      previewButton.onclick =
+        function () {
+          previewButton.disabled =
+            true;
+
+          previewButton.textContent =
+            "Henter…";
+
+          resultBox.style.display =
+            "block";
+
+          resultBox.textContent =
+            "Henter forhåndsvisning…";
+
+
+          sb.auth
+            .getSession()
+            .then(
+              function (
+                sessionResult
+              ) {
+                var session =
+                  sessionResult
+                    .data &&
+                  sessionResult
+                    .data
+                    .session;
+
+                var token =
+                  session &&
+                  session
+                    .access_token;
+
+
+                if (!token) {
+                  throw new Error(
+                    "Fant ikke innlogget Supabase-session."
+                  );
+                }
+
+
+                return fetch(
+                  "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/preview-stock-count-quickbutik" +
+                    "?stock_count_id=" +
+                    encodeURIComponent(
+                      count.id
+                    ),
+                  {
+                    method:
+                      "GET",
+                    headers: {
+                      "Authorization":
+                        "Bearer " +
+                        token
+                    }
+                  }
+                );
+              }
+            )
+            .then(
+              function (
+                response
+              ) {
+                return response
+                  .json();
+              }
+            )
+            .then(
+              function (
+                result
+              ) {
+                resultBox.textContent =
+                  JSON.stringify(
+                    result,
+                    null,
+                    2
+                  );
+              }
+            )
+            .catch(
+              function (
+                error
+              ) {
+                resultBox.textContent =
+                  "Feil: " +
+                  (
+                    error.message ||
+                    String(
+                      error
+                    )
+                  );
+              }
+            )
+            .finally(
+              function () {
+                previewButton.disabled =
+                  false;
+
+                previewButton.textContent =
+                  "Forhåndsvis";
+              }
+            );
+        };
+
+
+      applyButton.onclick =
+        function () {
+          var alreadyUpdated =
+            !!count
+              .quickbutik_updated_at;
+
+          var required =
+            alreadyUpdated
+              ? "OPPDATER QUICKBUTIK PÅ NYTT"
+              : "OPPDATER QUICKBUTIK";
+
+          var confirmText =
+            prompt(
+              (
+                alreadyUpdated
+                  ? "Denne tellingen er allerede brukt mot Quickbutik.\n\n"
+                  : ""
+              ) +
+                "Dette oppdaterer lageret i Quickbutik fra den låste tellingen.\n\nSkriv " +
+                required +
+                " for å bekrefte:"
+            );
+
+
+          if (
+            confirmText !==
+            required
+          ) {
             return;
           }
 
-          localStorage.setItem("sk_internal_active_tab", "stock");
-          localStorage.setItem("sk_internal_selected_stock_count_id", count.id);
 
-          window.location.reload();
-        });
-      };
+          var batchLimit =
+            25;
 
-      var countedTd = el("td");
-      countedTd.style.padding = "10px";
-      countedTd.style.borderBottom = "1px solid #f3f4f6";
-      countedTd.appendChild(countedInput);
+          var offset =
+            0;
 
-      var noteTd = el("td");
-      noteTd.style.padding = "10px";
-      noteTd.style.borderBottom = "1px solid #f3f4f6";
-      noteTd.appendChild(noteInput);
+          var batches =
+            0;
 
-      var saveTd = el("td");
-      saveTd.style.padding = "10px";
-      saveTd.style.borderBottom = "1px solid #f3f4f6";
-      saveTd.appendChild(saveBtn);
+          var updates =
+            0;
 
-  var variantText = "-";
+          var skipped =
+            0;
 
-function cleanVariantText(item) {
-  var parts = [];
+          var lastResult =
+            null;
 
-  function addPart(value) {
-    value = String(value || "").trim();
 
-    if (!value) {
-      return;
-    }
+          applyButton.disabled =
+            true;
 
-    // Fjern "Variant 1", "Variant 2" osv.
-    value = value.replace(/\bvariant\s*\d+\b/gi, "").trim();
+          previewButton.disabled =
+            true;
 
-    // Rydd separatorer i starten/slutten
-    value = value
-      .replace(/^[\s\-–—|/·:]+/g, "")
-      .replace(/[\s\-–—|/·:]+$/g, "")
-      .trim();
+          resultBox.style.display =
+            "block";
 
-    if (!value) {
-      return;
-    }
+          resultBox.textContent =
+            "Starter Quickbutik-oppdatering…";
 
-    if (parts.indexOf(value) === -1) {
-      parts.push(value);
-    }
-  }
 
-  function escapeRegex(value) {
-    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
+          sb.auth
+            .getSession()
+            .then(
+              function (
+                sessionResult
+              ) {
+                var session =
+                  sessionResult
+                    .data &&
+                  sessionResult
+                    .data
+                    .session;
 
-  function removeProductName(value, productName) {
-    value = String(value || "").trim();
-    productName = String(productName || "").trim();
+                var token =
+                  session &&
+                  session
+                    .access_token;
 
-    if (!value || !productName) {
-      return value;
-    }
 
-    var regex = new RegExp(escapeRegex(productName), "gi");
+                if (!token) {
+                  throw new Error(
+                    "Fant ikke innlogget Supabase-session."
+                  );
+                }
 
-    return value
-      .replace(regex, "")
-      .replace(/\bvariant\s*\d+\b/gi, "")
-      .replace(/^[\s\-–—|/·:]+/g, "")
-      .replace(/[\s\-–—|/·:]+$/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-  }
 
-  // Hvis Quickbutik faktisk gir valgverdier, bruk disse først
-  addPart(item.option_1_value);
-  addPart(item.option_2_value);
-  addPart(item.option_3_value);
+                function runBatch() {
+                  batches +=
+                    1;
 
-  // Hvis ikke, hent nyttig tekst fra SKU
-  if (parts.length === 0 && item.quickbutik_variant_sku) {
-    var cleanedSku = removeProductName(item.quickbutik_variant_sku, item.name);
 
-    // Gjør tekst litt penere, men behold f.eks. "173-175g" intakt
-    cleanedSku = cleanedSku
-      .replace(/\s+-\s+/g, " / ")
-      .replace(/\s+–\s+/g, " / ")
-      .replace(/\s+—\s+/g, " / ")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+                  if (
+                    batches > 500
+                  ) {
+                    throw new Error(
+                      "Sikkerhetsstopp: for mange batcher."
+                    );
+                  }
 
-    addPart(cleanedSku);
-  }
 
-  // Bruk variant_name kun hvis den ikke bare er "Variant 1"
-  if (parts.length === 0 && item.variant_name) {
-    addPart(item.variant_name);
-  }
+                  resultBox.textContent =
+                    "Oppdaterer Quickbutik…" +
+                    "\nBatch " +
+                    String(
+                      batches
+                    ) +
+                    "\nOppdatert: " +
+                    String(
+                      updates
+                    ) +
+                    "\nHoppet over: " +
+                    String(
+                      skipped
+                    );
 
-  return parts.length ? parts.join(" / ") : "-";
-}
 
-if (item.count_level === "variant") {
-  variantText = cleanVariantText(item);
-}
+                  var url =
+                    "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/apply-stock-count-quickbutik" +
+                    "?stock_count_id=" +
+                    encodeURIComponent(
+                      count.id
+                    ) +
+                    "&limit=" +
+                    String(
+                      batchLimit
+                    ) +
+                    "&offset=" +
+                    String(
+                      offset
+                    ) +
+                    "&dryRun=false" +
+                    "&confirm_text=" +
+                    encodeURIComponent(
+                      confirmText
+                    );
 
-tr.appendChild(tdText(item.name || "-", false));
-tr.appendChild(tdText(variantText, false));
-tr.appendChild(tdText(item.brand || "-", false));
-tr.appendChild(tdText(item.category || "-", false));
-tr.appendChild(tdText(money(item.expected_quantity), true));
-tr.appendChild(countedTd);
-tr.appendChild(tdText(money(item.difference_quantity), true));
-tr.appendChild(tdText(money(item.difference_value_ex_vat) + " kr", true));
-tr.appendChild(noteTd);
-tr.appendChild(saveTd);
 
-      tbody.appendChild(tr);
-    });
+                  return fetch(
+                    url,
+                    {
+                      method:
+                        "GET",
+                      headers: {
+                        "Authorization":
+                          "Bearer " +
+                          token
+                      }
+                    }
+                  )
+                    .then(
+                      function (
+                        response
+                      ) {
+                        return response
+                          .json();
+                      }
+                    )
+                    .then(
+                      function (
+                        result
+                      ) {
+                        lastResult =
+                          result;
 
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    detailTarget.appendChild(wrap);
 
-        updateBatchButtons();
-  }
+                        if (!result.ok) {
+                          throw new Error(
+                            result.error ||
+                            JSON.stringify(
+                              result
+                            )
+                          );
+                        }
 
-  function refreshStockCountView() {
-  renderStockStatusBox();
-  renderStockCountDetails();
-  renderStockReport();
-}
 
-countSelect.onchange = refreshStockCountView;
-searchInput.oninput = renderStockCountDetails;
-countFilterSelect.onchange = renderStockCountDetails;
-hideZeroCheckbox.onchange = renderStockCountDetails;
+                        updates +=
+                          Number(
+                            result
+                              .quickbutik_updates ||
+                            0
+                          );
 
-  var savedStockCountId = localStorage.getItem("sk_internal_selected_stock_count_id");
+                        skipped +=
+                          Number(
+                            result
+                              .skipped ||
+                            0
+                          );
 
-  if (savedStockCountId) {
-    countSelect.value = savedStockCountId;
-  }
 
-  renderStockStatusBox();
-renderStockCountDetails();
+                        if (
+                          result
+                            .has_more
+                        ) {
+                          offset =
+                            Number(
+                              result
+                                .next_offset ||
+                              (
+                                offset +
+                                batchLimit
+                              )
+                            );
 
-  // ============================================================
-  // KAPITTEL 4 – Rapport og avvik
-  // ============================================================
+                          return new Promise(
+                            function (
+                              resolve
+                            ) {
+                              setTimeout(
+                                function () {
+                                  resolve(
+                                    runBatch()
+                                  );
+                                },
+                                450
+                              );
+                            }
+                          );
+                        }
 
-  var reportSection = createCollapsibleSection(
-    "📈 Rapport og avvik",
-    "Se oppsummering av varetellingen og avvik gruppert på kategori, leverandør eller merke.",
-    true
-  );
 
-  var reportControls = el("div");
-  reportControls.style.display = "grid";
-  reportControls.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
-  reportControls.style.gap = "12px";
-  reportControls.style.alignItems = "end";
+                        return result;
+                      }
+                    );
+                }
 
-  var reportGroupSelect = el("select");
-  addOption(reportGroupSelect, "category", "Grupper på kategori");
-  addOption(reportGroupSelect, "supplier_name", "Grupper på leverandør");
-  addOption(reportGroupSelect, "brand", "Grupper på merke");
 
-  addField(reportControls, "Rapportvisning", reportGroupSelect);
+                return runBatch();
+              }
+            )
+            .then(
+              function () {
+                return sb.rpc(
+                  "internal_mark_stock_count_quickbutik_updated",
+                  {
+                    p_stock_count_id:
+                      count.id,
 
-  var onlyDiffWrap = el("label");
-  onlyDiffWrap.style.display = "flex";
-  onlyDiffWrap.style.alignItems = "center";
-  onlyDiffWrap.style.gap = "8px";
-  onlyDiffWrap.style.marginBottom = "12px";
-  onlyDiffWrap.style.fontWeight = "700";
+                    p_batches:
+                      batches,
 
-  var onlyDiffCheckbox = el("input");
-  onlyDiffCheckbox.type = "checkbox";
-  onlyDiffCheckbox.checked = true;
+                    p_update_count:
+                      updates,
 
-  onlyDiffWrap.appendChild(onlyDiffCheckbox);
-  onlyDiffWrap.appendChild(el("span", "Vis kun avvik"));
+                    p_skipped_count:
+                      skipped,
 
-  reportControls.appendChild(onlyDiffWrap);
+                    p_note:
+                      "Oppdatert fra Mission Control. Siste batch: " +
+                      JSON.stringify(
+                        lastResult
+                      )
+                  }
+                );
+              }
+            )
+            .then(
+              function (
+                markResult
+              ) {
+                if (
+                  markResult.error
+                ) {
+                  throw markResult
+                    .error;
+                }
 
-  var copyReportBtn = shortcutCopyReportBtn;
-  var pdfReportBtn = shortcutPdfReportBtn;
 
-  reportSection.body.appendChild(reportControls);
+                resultBox.textContent =
+                  "✅ Quickbutik-oppdatering ferdig." +
+                  "\nBatcher: " +
+                  String(
+                    batches
+                  ) +
+                  "\nOppdatert: " +
+                  String(
+                    updates
+                  ) +
+                  "\nHoppet over: " +
+                  String(
+                    skipped
+                  );
 
-  var reportTarget = el("div");
-  reportTarget.style.marginTop = "14px";
-  reportSection.body.appendChild(reportTarget);
 
-  parent.appendChild(reportSection.wrap);
+                alert(
+                  "Quickbutik er oppdatert.\n\nOppdatert: " +
+                    String(
+                      updates
+                    ) +
+                    "\nHoppet over: " +
+                    String(
+                      skipped
+                    )
+                );
 
-  function getAllItemsForSelectedCount() {
-    var list = [];
 
-    (data.stockCountItems || []).forEach(function (item) {
-      if (item.stock_count_id === countSelect.value) {
-        list.push(item);
-      }
-    });
+                localStorage.setItem(
+                  "sk_internal_selected_stock_count_id",
+                  count.id
+                );
 
-    return list;
-  }
+                window.location.reload();
+              }
+            )
+            .catch(
+              function (
+                error
+              ) {
+                resultBox.textContent =
+                  "Oppdateringen stoppet:\n" +
+                  (
+                    error.message ||
+                    String(
+                      error
+                    )
+                  ) +
+                  "\n\nOppdatert før stopp: " +
+                  String(
+                    updates
+                  );
 
-  function getStockReportData() {
-    var count = selectedStockCount();
-    var allRows = getAllItemsForSelectedCount();
-    var rows = allRows.slice();
+                alert(
+                  "Quickbutik-oppdateringen stoppet: " +
+                    (
+                      error.message ||
+                      String(
+                        error
+                      )
+                    )
+                );
+              }
+            )
+            .finally(
+              function () {
+                applyButton.disabled =
+                  false;
 
-    if (onlyDiffCheckbox.checked) {
-      rows = rows.filter(function (item) {
-        return Number(item.difference_quantity || 0) !== 0;
-      });
-    }
-
-    var totals = {
-      line_count: allRows.length,
-      counted_line_count: 0,
-      expected_quantity: 0,
-      counted_quantity: 0,
-      difference_quantity: 0,
-      difference_value_ex_vat: 0
-    };
-
-    allRows.forEach(function (item) {
-      totals.expected_quantity += Number(item.expected_quantity || 0);
-      totals.counted_quantity += Number(item.counted_quantity || 0);
-      totals.difference_quantity += Number(item.difference_quantity || 0);
-      totals.difference_value_ex_vat += Number(item.difference_value_ex_vat || 0);
-
-      if (item.counted_quantity !== null && item.counted_quantity !== undefined) {
-        totals.counted_line_count += 1;
-      }
-    });
-
-    var groupKey = reportGroupSelect.value;
-    var grouped = {};
-
-    allRows.forEach(function (item) {
-      var groupName = item[groupKey] || "Ukjent";
-
-      if (!grouped[groupName]) {
-        grouped[groupName] = {
-          name: groupName,
-          line_count: 0,
-          counted_line_count: 0,
-          expected_quantity: 0,
-          counted_quantity: 0,
-          difference_quantity: 0,
-          difference_value_ex_vat: 0
+                previewButton.disabled =
+                  false;
+              }
+            );
         };
+
+
+      buttonRow.appendChild(
+        previewButton
+      );
+
+      buttonRow.appendChild(
+        applyButton
+      );
+
+      section.body.appendChild(
+        buttonRow
+      );
+
+      section.body.appendChild(
+        resultBox
+      );
+
+      host.appendChild(
+        section.wrap
+      );
+    }
+
+
+    function renderWorkspace() {
+      clear(
+        workspaceHost
+      );
+
+
+      var count =
+        selectedCount();
+
+
+      if (!count) {
+        var empty =
+          el(
+            "div",
+            "Velg en pågående telling eller åpne en telling fra historikken."
+          );
+
+        empty.className =
+          "sk-note";
+
+        workspaceHost.appendChild(
+          empty
+        );
+
+        return;
       }
 
-      grouped[groupName].line_count += 1;
-      grouped[groupName].expected_quantity += Number(item.expected_quantity || 0);
-      grouped[groupName].counted_quantity += Number(item.counted_quantity || 0);
-      grouped[groupName].difference_quantity += Number(item.difference_quantity || 0);
-      grouped[groupName].difference_value_ex_vat += Number(item.difference_value_ex_vat || 0);
 
-      if (item.counted_quantity !== null && item.counted_quantity !== undefined) {
-        grouped[groupName].counted_line_count += 1;
+      var header =
+        el("div");
+
+      header.style.display =
+        "flex";
+      header.style.justifyContent =
+        "space-between";
+      header.style.alignItems =
+        "flex-start";
+      header.style.gap =
+        "12px";
+      header.style.flexWrap =
+        "wrap";
+      header.style.marginBottom =
+        "12px";
+
+
+      var left =
+        el("div");
+
+      var title =
+        el(
+          "h3",
+          count.title ||
+          count.count_number
+        );
+
+      title.style.margin =
+        "0";
+
+      var meta =
+        el(
+          "div",
+          [
+            count.count_number ||
+              "",
+            formatDateNorwegian(
+              count.created_at
+            ),
+            scopeLabel(
+              count
+            )
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        );
+
+      meta.style.marginTop =
+        "4px";
+      meta.style.color =
+        "#64748b";
+      meta.style.fontSize =
+        "13px";
+
+      left.appendChild(
+        title
+      );
+
+      left.appendChild(
+        meta
+      );
+
+
+      header.appendChild(
+        left
+      );
+
+      header.appendChild(
+        createCountBadge(
+          count
+        )
+      );
+
+      workspaceHost.appendChild(
+        header
+      );
+
+
+      var progress =
+        createProgressBar(
+          count
+        );
+
+      progress.style.marginBottom =
+        "12px";
+
+      workspaceHost.appendChild(
+        progress
+      );
+
+
+      addProStatGrid(
+        workspaceHost,
+        [
+          {
+            label:
+              "Telt",
+            value:
+              String(
+                count
+                  .counted_line_count ||
+                0
+              ) +
+              "/" +
+              String(
+                count
+                  .line_count ||
+                0
+              ),
+            tone:
+              countProgress(
+                count
+              ) >= 100
+                ? "ok"
+                : "warning"
+          },
+          {
+            label:
+              "Forventet antall",
+            value:
+              money(
+                count
+                  .expected_quantity_total
+              ),
+            tone:
+              "ok"
+          },
+          {
+            label:
+              "Opptalt antall",
+            value:
+              money(
+                count
+                  .counted_quantity_total
+              ),
+            tone:
+              "ok"
+          },
+          {
+            label:
+              "Avvik stk",
+            value:
+              money(
+                count
+                  .difference_quantity_total
+              ),
+            tone:
+              Number(
+                count
+                  .difference_quantity_total ||
+                0
+              ) === 0
+                ? "ok"
+                : "warning"
+          },
+          {
+            label:
+              "Avvik verdi eks.",
+            value:
+              money(
+                count
+                  .difference_value_ex_vat_total
+              ) +
+              " kr",
+            tone:
+              Number(
+                count
+                  .difference_value_ex_vat_total ||
+                0
+              ) === 0
+                ? "ok"
+                : "warning"
+          },
+          {
+            label:
+              "Quickbutik",
+            value:
+              count
+                .quickbutik_updated_at
+                ? "Oppdatert"
+                : "Ikke oppdatert",
+            tone:
+              count
+                .quickbutik_updated_at
+                ? "ok"
+                : "warning"
+          }
+        ]
+      );
+
+
+      var actionRow =
+        el("div");
+
+      actionRow.style.display =
+        "flex";
+      actionRow.style.gap =
+        "8px";
+      actionRow.style.flexWrap =
+        "wrap";
+      actionRow.style.marginBottom =
+        "12px";
+
+
+      if (
+        count.status ===
+        "locked"
+      ) {
+        var unlockButton =
+          createButton(
+            "🔓 Åpne telling igjen"
+          );
+
+        unlockButton.onclick =
+          function () {
+            var confirmText =
+              prompt(
+                "Skriv ÅPNE for å åpne tellingen igjen:"
+              );
+
+
+            if (
+              confirmText !==
+              "ÅPNE"
+            ) {
+              return;
+            }
+
+
+            unlockButton.disabled =
+              true;
+
+            sb.rpc(
+              "internal_set_stock_count_status",
+              {
+                p_stock_count_id:
+                  count.id,
+
+                p_action:
+                  "unlock",
+
+                p_confirm_text:
+                  confirmText
+              }
+            )
+              .then(
+                function (
+                  result
+                ) {
+                  if (
+                    result.error
+                  ) {
+                    throw result.error;
+                  }
+
+
+                  count.status =
+                    "in_progress";
+
+                  count.locked_at =
+                    null;
+
+                  openCounts =
+                    counts.filter(
+                      isOpenCount
+                    );
+
+                  lockedCounts =
+                    counts.filter(
+                      function (
+                        row
+                      ) {
+                        return (
+                          isLockedCount(
+                            row
+                          ) &&
+                          !row
+                            .quickbutik_updated_at
+                        );
+                      }
+                    );
+
+                  renderCurrentCounts();
+                  renderWorkspace();
+                  renderHistory();
+                }
+              )
+              .catch(
+                function (
+                  error
+                ) {
+                  alert(
+                    "Kunne ikke åpne tellingen: " +
+                      (
+                        error.message ||
+                        String(
+                          error
+                        )
+                      )
+                  );
+                }
+              );
+          };
+
+        actionRow.appendChild(
+          unlockButton
+        );
+      } else if (
+        isOpenCount(
+          count
+        )
+      ) {
+        var lockButton =
+          createPrimaryButton(
+            "🔒 Lås telling"
+          );
+
+        lockButton.onclick =
+          function () {
+            var notCounted =
+              Number(
+                count
+                  .line_count ||
+                0
+              ) -
+              Number(
+                count
+                  .counted_line_count ||
+                0
+              );
+
+
+            var warning =
+              notCounted > 0
+                ? (
+                    "\n\nOBS: " +
+                    String(
+                      notCounted
+                    ) +
+                    " linjer er ikke telt."
+                  )
+                : "";
+
+
+            var confirmText =
+              prompt(
+                "Lås tellingen når du er ferdig med kontrollen." +
+                  warning +
+                  "\n\nSkriv LÅS for å bekrefte:"
+              );
+
+
+            if (
+              confirmText !==
+              "LÅS"
+            ) {
+              return;
+            }
+
+
+            lockButton.disabled =
+              true;
+
+
+            sb.rpc(
+              "internal_set_stock_count_status",
+              {
+                p_stock_count_id:
+                  count.id,
+
+                p_action:
+                  "lock",
+
+                p_confirm_text:
+                  confirmText
+              }
+            )
+              .then(
+                function (
+                  result
+                ) {
+                  if (
+                    result.error
+                  ) {
+                    throw result.error;
+                  }
+
+
+                  count.status =
+                    "locked";
+
+                  openCounts =
+                    counts.filter(
+                      isOpenCount
+                    );
+
+                  lockedCounts =
+                    counts.filter(
+                      function (
+                        row
+                      ) {
+                        return (
+                          isLockedCount(
+                            row
+                          ) &&
+                          !row
+                            .quickbutik_updated_at
+                        );
+                      }
+                    );
+
+                  renderCurrentCounts();
+                  renderWorkspace();
+                  renderHistory();
+                }
+              )
+              .catch(
+                function (
+                  error
+                ) {
+                  alert(
+                    "Kunne ikke låse tellingen: " +
+                      (
+                        error.message ||
+                        String(
+                          error
+                        )
+                      )
+                  );
+                }
+              );
+          };
+
+        actionRow.appendChild(
+          lockButton
+        );
       }
-    });
 
-    var groupedRows = Object.keys(grouped).map(function (key) {
-      return grouped[key];
-    }).sort(function (a, b) {
-      return Math.abs(b.difference_value_ex_vat) - Math.abs(a.difference_value_ex_vat);
-    });
 
-    var diffRows = allRows.filter(function (item) {
-      return Number(item.difference_quantity || 0) !== 0;
-    }).sort(function (a, b) {
-      return Math.abs(Number(b.difference_value_ex_vat || 0)) - Math.abs(Number(a.difference_value_ex_vat || 0));
-    });
+      var reportJump =
+        createButton(
+          "📈 Se rapport"
+        );
 
-    return {
-      count: count,
-      rows: rows,
-      allRows: allRows,
-      totals: totals,
-      groupedRows: groupedRows,
-      diffRows: diffRows
-    };
+      reportJump.onclick =
+        function () {
+          renderReport();
+
+          reportSection.body.style.display =
+            "block";
+
+          reportSection.wrap
+            .scrollIntoView({
+              behavior:
+                "smooth",
+              block:
+                "start"
+            });
+        };
+
+      actionRow.appendChild(
+        reportJump
+      );
+
+      workspaceHost.appendChild(
+        actionRow
+      );
+
+
+      renderQuickbutikPanel(
+        workspaceHost,
+        count
+      );
+
+
+      var editable =
+        isOpenCount(
+          count
+        );
+
+
+      var countingSection =
+        createCollapsibleSection(
+          editable
+            ? "🔎 Tell varer"
+            : "🔎 Se varelinjer",
+          editable
+            ? "Søk, registrer antall og lagre flere endringer samlet."
+            : "Tellingen er låst. Åpne den igjen hvis noe må korrigeres.",
+          true
+        );
+
+
+      var filterGrid =
+        el("div");
+
+      filterGrid.style.display =
+        "grid";
+      filterGrid.style.gridTemplateColumns =
+        "repeat(auto-fit, minmax(180px, 1fr))";
+      filterGrid.style.gap =
+        "10px";
+      filterGrid.style.alignItems =
+        "end";
+      filterGrid.style.marginBottom =
+        "10px";
+
+
+      var searchInput =
+        el("input");
+
+      searchInput.type =
+        "search";
+
+      searchInput.placeholder =
+        "Søk produkt, variant, merke eller SKU…";
+
+
+      var filterSelect =
+        el("select");
+
+      addOption(
+        filterSelect,
+        "not_counted",
+        "Kun ikke telt"
+      );
+
+      addOption(
+        filterSelect,
+        "all",
+        "Alle varer"
+      );
+
+      addOption(
+        filterSelect,
+        "counted",
+        "Kun telt"
+      );
+
+      addOption(
+        filterSelect,
+        "differences",
+        "Kun avvik"
+      );
+
+
+      if (
+        !countingFilterTouched
+      ) {
+        filterSelect.value =
+          editable
+            ? "not_counted"
+            : "all";
+      }
+
+
+      var hideZeroWrap =
+        el("label");
+
+      hideZeroWrap.style.display =
+        "flex";
+      hideZeroWrap.style.alignItems =
+        "center";
+      hideZeroWrap.style.gap =
+        "8px";
+      hideZeroWrap.style.minHeight =
+        "42px";
+      hideZeroWrap.style.fontWeight =
+        "700";
+
+
+      var hideZero =
+        el("input");
+
+      hideZero.type =
+        "checkbox";
+
+
+      hideZeroWrap.appendChild(
+        hideZero
+      );
+
+      hideZeroWrap.appendChild(
+        el(
+          "span",
+          "Skjul forventet 0"
+        )
+      );
+
+
+      addField(
+        filterGrid,
+        "Søk",
+        searchInput
+      );
+
+      addField(
+        filterGrid,
+        "Vis",
+        filterSelect
+      );
+
+      filterGrid.appendChild(
+        hideZeroWrap
+      );
+
+      countingSection.body.appendChild(
+        filterGrid
+      );
+
+
+      var batchBox =
+        el("div");
+
+      batchBox.style.display =
+        "flex";
+      batchBox.style.gap =
+        "8px";
+      batchBox.style.flexWrap =
+        "wrap";
+      batchBox.style.alignItems =
+        "center";
+      batchBox.style.padding =
+        "10px";
+      batchBox.style.marginBottom =
+        "10px";
+      batchBox.style.border =
+        "1px solid #e5e7eb";
+      batchBox.style.borderRadius =
+        "10px";
+      batchBox.style.background =
+        "#f8fafc";
+
+
+      var saveButton =
+        createPrimaryButton(
+          "Lagre endringer"
+        );
+
+      var resetButton =
+        createButton(
+          "Forkast ulagrede"
+        );
+
+      var batchInfo =
+        el(
+          "span",
+          "Ingen ulagrede endringer."
+        );
+
+      batchInfo.style.fontSize =
+        "13px";
+      batchInfo.style.color =
+        "#64748b";
+
+
+      batchBox.appendChild(
+        saveButton
+      );
+
+      batchBox.appendChild(
+        resetButton
+      );
+
+      batchBox.appendChild(
+        batchInfo
+      );
+
+      countingSection.body.appendChild(
+        batchBox
+      );
+
+
+      var summary =
+        el("div");
+
+      summary.style.marginBottom =
+        "8px";
+      summary.style.color =
+        "#64748b";
+      summary.style.fontSize =
+        "13px";
+
+      countingSection.body.appendChild(
+        summary
+      );
+
+
+      var tableHost =
+        el("div");
+
+      countingSection.body.appendChild(
+        tableHost
+      );
+
+
+      function updateBatchState() {
+        var pendingIds =
+          Object.keys(
+            pendingStockChanges
+          );
+
+        saveButton.disabled =
+          !editable ||
+          pendingIds.length === 0;
+
+        resetButton.disabled =
+          pendingIds.length === 0;
+
+        saveButton.textContent =
+          pendingIds.length
+            ? (
+                "Lagre " +
+                String(
+                  pendingIds.length
+                ) +
+                " endring" +
+                (
+                  pendingIds.length ===
+                    1
+                    ? ""
+                    : "er"
+                )
+              )
+            : "Lagre endringer";
+
+        batchInfo.textContent =
+          pendingIds.length
+            ? (
+                String(
+                  pendingIds.length
+                ) +
+                " ulagret."
+              )
+            : (
+                editable
+                  ? "Ingen ulagrede endringer."
+                  : "Tellingen er låst."
+              );
+      }
+
+
+      function renderCountingTable() {
+        clear(
+          tableHost
+        );
+
+
+        var rows =
+          visibleItems(
+            count,
+            searchInput.value,
+            filterSelect.value,
+            hideZero.checked
+          );
+
+
+        summary.textContent =
+          "Viser " +
+          String(
+            rows.length
+          ) +
+          " av " +
+          String(
+            count.line_count ||
+            0
+          ) +
+          " linjer.";
+
+
+        if (!rows.length) {
+          var empty =
+            el(
+              "div",
+              filterSelect.value ===
+                "not_counted"
+                ? "Ingen ikke-telte linjer i dette utvalget."
+                : "Ingen varelinjer matcher filteret."
+            );
+
+          empty.className =
+            "sk-note";
+
+          tableHost.appendChild(
+            empty
+          );
+
+          updateBatchState();
+
+          return;
+        }
+
+
+        var wrap =
+          el("div");
+
+        wrap.style.overflowX =
+          "auto";
+
+        wrap.style.border =
+          "1px solid #e5e7eb";
+
+        wrap.style.borderRadius =
+          "12px";
+
+
+        var table =
+          el("table");
+
+        table.style.width =
+          "100%";
+        table.style.borderCollapse =
+          "collapse";
+        table.style.fontSize =
+          "14px";
+
+
+        var thead =
+          el("thead");
+
+        var head =
+          el("tr");
+
+
+        [
+          "Produkt",
+          "Variant / SKU",
+          "Forventet",
+          "Opptalt",
+          "Avvik",
+          "Notat"
+        ].forEach(
+          function (label) {
+            var th =
+              el(
+                "th",
+                label
+              );
+
+            th.style.textAlign =
+              "left";
+            th.style.padding =
+              "10px";
+            th.style.borderBottom =
+              "1px solid #e5e7eb";
+            th.style.background =
+              "#f9fafb";
+            th.style.whiteSpace =
+              "nowrap";
+
+            head.appendChild(
+              th
+            );
+          }
+        );
+
+
+        thead.appendChild(
+          head
+        );
+
+        table.appendChild(
+          thead
+        );
+
+
+        var tbody =
+          el("tbody");
+
+        var countInputs =
+          [];
+
+
+        rows.forEach(
+          function (
+            item,
+            index
+          ) {
+            var tr =
+              el("tr");
+
+            var savedCounted =
+              item.counted_quantity;
+
+            var savedDiff =
+              Number(
+                item.difference_quantity ||
+                0
+              );
+
+
+            if (
+              savedCounted !==
+                null &&
+              savedCounted !==
+                undefined &&
+              savedDiff !== 0
+            ) {
+              tr.style.background =
+                "#fff7f7";
+            }
+
+
+            if (
+              pendingStockChanges[
+                item.id
+              ]
+            ) {
+              tr.style.outline =
+                "2px solid #f59e0b";
+
+              tr.style.outlineOffset =
+                "-2px";
+            }
+
+
+            function tdNode(
+              node
+            ) {
+              var td =
+                el("td");
+
+              td.style.padding =
+                "10px";
+
+              td.style.borderBottom =
+                "1px solid #f3f4f6";
+
+              td.style.verticalAlign =
+                "top";
+
+              td.appendChild(
+                node
+              );
+
+              tr.appendChild(
+                td
+              );
+
+              return td;
+            }
+
+
+            var productBox =
+              el("div");
+
+            productBox.appendChild(
+              el(
+                "strong",
+                item.name ||
+                "-"
+              )
+            );
+
+
+            var productMeta =
+              el(
+                "div",
+                [
+                  item.brand ||
+                    "",
+                  item.category ||
+                    ""
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              );
+
+            productMeta.style.marginTop =
+              "3px";
+            productMeta.style.color =
+              "#64748b";
+            productMeta.style.fontSize =
+              "12px";
+
+            if (
+              productMeta.textContent
+            ) {
+              productBox.appendChild(
+                productMeta
+              );
+            }
+
+            tdNode(
+              productBox
+            );
+
+
+            var variantText =
+              item.count_level ===
+                "variant"
+                ? cleanVariantText(
+                    item
+                  )
+                : "-";
+
+            var variantBox =
+              el("div");
+
+            variantBox.appendChild(
+              el(
+                "span",
+                variantText
+              )
+            );
+
+
+            var sku =
+              item.quickbutik_variant_sku ||
+              item.quickbutik_sku ||
+              "";
+
+            if (
+              sku &&
+              sku !== variantText
+            ) {
+              var skuMeta =
+                el(
+                  "div",
+                  sku
+                );
+
+              skuMeta.style.marginTop =
+                "3px";
+              skuMeta.style.color =
+                "#64748b";
+              skuMeta.style.fontSize =
+                "11px";
+
+              variantBox.appendChild(
+                skuMeta
+              );
+            }
+
+            tdNode(
+              variantBox
+            );
+
+
+            var expected =
+              el(
+                "strong",
+                money(
+                  item
+                    .expected_quantity
+                )
+              );
+
+            tdNode(
+              expected
+            );
+
+
+            var countedInput =
+              el("input");
+
+            countedInput.type =
+              "number";
+            countedInput.min =
+              "0";
+            countedInput.step =
+              "1";
+            countedInput.inputMode =
+              "numeric";
+
+            countedInput.style.width =
+              "88px";
+            countedInput.style.padding =
+              "8px";
+            countedInput.style.border =
+              "1px solid #d1d5db";
+            countedInput.style.borderRadius =
+              "8px";
+
+
+            if (
+              pendingStockChanges[
+                item.id
+              ]
+            ) {
+              countedInput.value =
+                pendingStockChanges[
+                  item.id
+                ].counted_quantity;
+            } else {
+              countedInput.value =
+                savedCounted ===
+                  null ||
+                savedCounted ===
+                  undefined
+                  ? ""
+                  : savedCounted;
+            }
+
+
+            countedInput.disabled =
+              !editable;
+
+            tdNode(
+              countedInput
+            );
+
+
+            var diffNode =
+              el(
+                "strong",
+                savedCounted ===
+                  null ||
+                savedCounted ===
+                  undefined
+                  ? "-"
+                  : money(
+                      savedDiff
+                    )
+              );
+
+            if (
+              savedDiff !== 0
+            ) {
+              diffNode.style.color =
+                "#991b1b";
+            }
+
+            tdNode(
+              diffNode
+            );
+
+
+            var noteInput =
+              el("input");
+
+            noteInput.type =
+              "text";
+            noteInput.placeholder =
+              "Valgfritt";
+            noteInput.style.width =
+              "180px";
+            noteInput.style.maxWidth =
+              "100%";
+            noteInput.style.padding =
+              "8px";
+            noteInput.style.border =
+              "1px solid #d1d5db";
+            noteInput.style.borderRadius =
+              "8px";
+
+            if (
+              pendingStockChanges[
+                item.id
+              ]
+            ) {
+              noteInput.value =
+                pendingStockChanges[
+                  item.id
+                ].notes ||
+                "";
+            } else {
+              noteInput.value =
+                item.notes ||
+                "";
+            }
+
+            noteInput.disabled =
+              !editable;
+
+            tdNode(
+              noteInput
+            );
+
+
+            function updateLiveDiff() {
+              if (
+                countedInput.value ===
+                ""
+              ) {
+                diffNode.textContent =
+                  "-";
+
+                diffNode.style.color =
+                  "";
+
+                return;
+              }
+
+              var liveDiff =
+                Number(
+                  countedInput.value
+                ) -
+                Number(
+                  item.expected_quantity ||
+                  0
+                );
+
+              diffNode.textContent =
+                money(
+                  liveDiff
+                );
+
+              diffNode.style.color =
+                liveDiff === 0
+                  ? "#166534"
+                  : "#991b1b";
+            }
+
+
+            function markChanged() {
+              pendingStockChanges[
+                item.id
+              ] = {
+                item_id:
+                  item.id,
+
+                counted_quantity:
+                  countedInput.value,
+
+                notes:
+                  noteInput.value
+                    .trim() ||
+                  null
+              };
+
+              tr.style.outline =
+                "2px solid #f59e0b";
+
+              tr.style.outlineOffset =
+                "-2px";
+
+              updateLiveDiff();
+              updateBatchState();
+            }
+
+
+            countedInput.oninput =
+              markChanged;
+
+            noteInput.oninput =
+              markChanged;
+
+
+            countedInput.onkeydown =
+              function (
+                event
+              ) {
+                if (
+                  event.key !==
+                  "Enter"
+                ) {
+                  return;
+                }
+
+                event.preventDefault();
+
+                markChanged();
+
+                var next =
+                  countInputs[
+                    index + 1
+                  ];
+
+                if (next) {
+                  next.focus();
+                  next.select();
+                }
+              };
+
+
+            countInputs.push(
+              countedInput
+            );
+
+            tbody.appendChild(
+              tr
+            );
+          }
+        );
+
+
+        table.appendChild(
+          tbody
+        );
+
+        wrap.appendChild(
+          table
+        );
+
+        tableHost.appendChild(
+          wrap
+        );
+
+        updateBatchState();
+      }
+
+
+      searchInput.oninput =
+        renderCountingTable;
+
+      filterSelect.onchange =
+        function () {
+          countingFilterTouched =
+            true;
+
+          renderCountingTable();
+        };
+
+      hideZero.onchange =
+        renderCountingTable;
+
+
+      resetButton.onclick =
+        function () {
+          if (
+            !Object.keys(
+              pendingStockChanges
+            ).length
+          ) {
+            return;
+          }
+
+          if (
+            !window.confirm(
+              "Forkaste alle ulagrede endringer?"
+            )
+          ) {
+            return;
+          }
+
+          pendingStockChanges =
+            {};
+
+          renderCountingTable();
+        };
+
+
+      saveButton.onclick =
+        function () {
+          var ids =
+            Object.keys(
+              pendingStockChanges
+            );
+
+
+          if (!ids.length) {
+            return;
+          }
+
+
+          var invalid =
+            ids.some(
+              function (id) {
+                return (
+                  pendingStockChanges[
+                    id
+                  ]
+                    .counted_quantity ===
+                  ""
+                );
+              }
+            );
+
+
+          if (invalid) {
+            alert(
+              "Alle endrede linjer må ha et opptalt antall."
+            );
+
+            return;
+          }
+
+
+          saveButton.disabled =
+            true;
+
+          resetButton.disabled =
+            true;
+
+
+          var completed =
+            0;
+
+          var chain =
+            Promise.resolve();
+
+
+          ids.forEach(
+            function (id) {
+              chain =
+                chain.then(
+                  function () {
+                    var change =
+                      pendingStockChanges[
+                        id
+                      ];
+
+
+                    saveButton.textContent =
+                      "Lagrer " +
+                      String(
+                        completed + 1
+                      ) +
+                      "/" +
+                      String(
+                        ids.length
+                      ) +
+                      "…";
+
+
+                    return sb.rpc(
+                      "internal_update_stock_count_item",
+                      {
+                        p_item_id:
+                          change
+                            .item_id,
+
+                        p_counted_quantity:
+                          Number(
+                            change
+                              .counted_quantity
+                          ),
+
+                        p_notes:
+                          change.notes ||
+                          null
+                      }
+                    )
+                      .then(
+                        function (
+                          result
+                        ) {
+                          if (
+                            result.error
+                          ) {
+                            throw result
+                              .error;
+                          }
+
+
+                          var saved =
+                            result
+                              .data &&
+                            result
+                              .data[0];
+
+
+                          var localItem =
+                            items.find(
+                              function (
+                                item
+                              ) {
+                                return (
+                                  item.id ===
+                                  id
+                                );
+                              }
+                            );
+
+
+                          if (
+                            saved &&
+                            localItem
+                          ) {
+                            localItem
+                              .counted_quantity =
+                              saved
+                                .counted_quantity;
+
+                            localItem
+                              .difference_quantity =
+                              saved
+                                .difference_quantity;
+
+                            localItem
+                              .difference_value_ex_vat =
+                              saved
+                                .difference_value_ex_vat;
+
+                            localItem.notes =
+                              change.notes ||
+                              null;
+                          }
+
+
+                          completed +=
+                            1;
+                        }
+                      );
+                  }
+                );
+            }
+          );
+
+
+          chain
+            .then(
+              function () {
+                pendingStockChanges =
+                  {};
+
+                recomputeCountSummary(
+                  count.id
+                );
+
+                openCounts =
+                  counts.filter(
+                    isOpenCount
+                  );
+
+                lockedCounts =
+                  counts.filter(
+                    function (
+                      row
+                    ) {
+                      return (
+                        isLockedCount(
+                          row
+                        ) &&
+                        !row
+                          .quickbutik_updated_at
+                      );
+                    }
+                  );
+
+                renderCurrentCounts();
+                renderWorkspace();
+                renderReport();
+                renderHistory();
+              }
+            )
+            .catch(
+              function (
+                error
+              ) {
+                alert(
+                  "Kunne ikke lagre alle endringene: " +
+                    (
+                      error.message ||
+                      String(
+                        error
+                      )
+                    )
+                );
+
+                updateBatchState();
+              }
+            );
+        };
+
+
+      renderCountingTable();
+
+      workspaceHost.appendChild(
+        countingSection.wrap
+      );
+    }
+
+
+    // ============================================================
+    // RAPPORT
+    // ============================================================
+
+    var reportSection =
+      createCollapsibleSection(
+        "📈 Rapport og avvik",
+        "Oppsummering, største avvik og PDF for valgt varetelling.",
+        false
+      );
+
+
+    var reportHost =
+      el("div");
+
+    reportSection.body.appendChild(
+      reportHost
+    );
+
+    parent.appendChild(
+      reportSection.wrap
+    );
+
+
+    function reportData() {
+      var count =
+        selectedCount();
+
+      if (!count) {
+        return null;
+      }
+
+
+      var allRows =
+        countItems(
+          count.id
+        );
+
+      var grouped = {};
+
+
+      allRows.forEach(
+        function (item) {
+          var key =
+            reportGroupSelect.value;
+
+          var groupName =
+            item[key] ||
+            "Ukjent";
+
+
+          if (
+            !grouped[
+              groupName
+            ]
+          ) {
+            grouped[
+              groupName
+            ] = {
+              name:
+                groupName,
+              line_count:
+                0,
+              counted_line_count:
+                0,
+              expected_quantity:
+                0,
+              counted_quantity:
+                0,
+              difference_quantity:
+                0,
+              difference_value_ex_vat:
+                0
+            };
+          }
+
+
+          var group =
+            grouped[
+              groupName
+            ];
+
+          group.line_count +=
+            1;
+
+          group.expected_quantity +=
+            Number(
+              item.expected_quantity ||
+              0
+            );
+
+          group.counted_quantity +=
+            Number(
+              item.counted_quantity ||
+              0
+            );
+
+          group.difference_quantity +=
+            Number(
+              item.difference_quantity ||
+              0
+            );
+
+          group.difference_value_ex_vat +=
+            Number(
+              item.difference_value_ex_vat ||
+              0
+            );
+
+
+          if (
+            item.counted_quantity !==
+              null &&
+            item.counted_quantity !==
+              undefined
+          ) {
+            group.counted_line_count +=
+              1;
+          }
+        }
+      );
+
+
+      var groupedRows =
+        Object.keys(
+          grouped
+        )
+          .map(
+            function (key) {
+              return grouped[
+                key
+              ];
+            }
+          )
+          .sort(
+            function (a, b) {
+              return (
+                Math.abs(
+                  b
+                    .difference_value_ex_vat
+                ) -
+                Math.abs(
+                  a
+                    .difference_value_ex_vat
+                )
+              );
+            }
+          );
+
+
+      var diffRows =
+        allRows
+          .filter(
+            function (item) {
+              return (
+                item
+                  .counted_quantity !==
+                  null &&
+                item
+                  .counted_quantity !==
+                  undefined &&
+                Number(
+                  item.difference_quantity ||
+                  0
+                ) !== 0
+              );
+            }
+          )
+          .sort(
+            function (a, b) {
+              return (
+                Math.abs(
+                  Number(
+                    b
+                      .difference_value_ex_vat ||
+                    0
+                  )
+                ) -
+                Math.abs(
+                  Number(
+                    a
+                      .difference_value_ex_vat ||
+                    0
+                  )
+                )
+              );
+            }
+          );
+
+
+      return {
+        count:
+          count,
+        allRows:
+          allRows,
+        groupedRows:
+          groupedRows,
+        diffRows:
+          diffRows
+      };
+    }
+
+
+    var reportGroupSelect =
+      el("select");
+
+    addOption(
+      reportGroupSelect,
+      "category",
+      "Grupper på kategori"
+    );
+
+    addOption(
+      reportGroupSelect,
+      "supplier_name",
+      "Grupper på leverandør"
+    );
+
+    addOption(
+      reportGroupSelect,
+      "brand",
+      "Grupper på merke"
+    );
+
+
+    function reportText() {
+      var report =
+        reportData();
+
+      if (!report) {
+        return "Ingen varetelling valgt.";
+      }
+
+
+      var count =
+        report.count;
+
+      var lines = [];
+
+      lines.push(
+        "Varetellingsrapport"
+      );
+
+      lines.push(
+        "Nr: " +
+        (
+          count.count_number ||
+          "-"
+        )
+      );
+
+      lines.push(
+        "Tittel: " +
+        (
+          count.title ||
+          "-"
+        )
+      );
+
+      lines.push(
+        "Status: " +
+        stockStatusLabel(
+          count.status
+        )
+      );
+
+      lines.push(
+        "Dato: " +
+        formatDateNorwegian(
+          count.created_at
+        )
+      );
+
+      lines.push("");
+
+      lines.push(
+        "OPPSUMMERING"
+      );
+
+      lines.push(
+        "Linjer: " +
+        String(
+          count
+            .counted_line_count ||
+          0
+        ) +
+        "/" +
+        String(
+          count.line_count ||
+          0
+        )
+      );
+
+      lines.push(
+        "Forventet antall: " +
+        money(
+          count
+            .expected_quantity_total
+        )
+      );
+
+      lines.push(
+        "Opptalt antall: " +
+        money(
+          count
+            .counted_quantity_total
+        )
+      );
+
+      lines.push(
+        "Avvik stk: " +
+        money(
+          count
+            .difference_quantity_total
+        )
+      );
+
+      lines.push(
+        "Avvik verdi eks. MVA: " +
+        money(
+          count
+            .difference_value_ex_vat_total
+        ) +
+        " kr"
+      );
+
+      lines.push("");
+
+      lines.push(
+        "STØRSTE AVVIK"
+      );
+
+      lines.push(
+        "Produkt\tVariant\tForventet\tOpptalt\tAvvik\tVerdiavvik"
+      );
+
+
+      report.diffRows
+        .slice(
+          0,
+          50
+        )
+        .forEach(
+          function (item) {
+            lines.push(
+              [
+                item.name ||
+                  "",
+                cleanVariantText(
+                  item
+                ),
+                item
+                  .expected_quantity ||
+                  0,
+                item
+                  .counted_quantity ??
+                  "",
+                item
+                  .difference_quantity ||
+                  0,
+                item
+                  .difference_value_ex_vat ||
+                  0
+              ].join(
+                "\t"
+              )
+            );
+          }
+        );
+
+
+      return lines.join(
+        "\n"
+      );
+    }
+
+
+    function renderReport() {
+      clear(
+        reportHost
+      );
+
+
+      var report =
+        reportData();
+
+
+      if (!report) {
+        var empty =
+          el(
+            "div",
+            "Velg en varetelling først."
+          );
+
+        empty.className =
+          "sk-note";
+
+        reportHost.appendChild(
+          empty
+        );
+
+        return;
+      }
+
+
+      var count =
+        report.count;
+
+
+      addProStatGrid(
+        reportHost,
+        [
+          {
+            label:
+              "Status",
+            value:
+              stockStatusLabel(
+                count.status
+              ),
+            tone:
+              stockStatusTone(
+                count
+              )
+          },
+          {
+            label:
+              "Telt",
+            value:
+              String(
+                count
+                  .counted_line_count ||
+                0
+              ) +
+              "/" +
+              String(
+                count
+                  .line_count ||
+                0
+              ),
+            tone:
+              countProgress(
+                count
+              ) >= 100
+                ? "ok"
+                : "warning"
+          },
+          {
+            label:
+              "Avvik stk",
+            value:
+              money(
+                count
+                  .difference_quantity_total
+              ),
+            tone:
+              Number(
+                count
+                  .difference_quantity_total ||
+                0
+              ) === 0
+                ? "ok"
+                : "warning"
+          },
+          {
+            label:
+              "Avvik verdi eks.",
+            value:
+              money(
+                count
+                  .difference_value_ex_vat_total
+              ) +
+              " kr",
+            tone:
+              Number(
+                count
+                  .difference_value_ex_vat_total ||
+                0
+              ) === 0
+                ? "ok"
+                : "warning"
+          }
+        ]
+      );
+
+
+      var controls =
+        el("div");
+
+      controls.style.display =
+        "flex";
+      controls.style.gap =
+        "8px";
+      controls.style.flexWrap =
+        "wrap";
+      controls.style.alignItems =
+        "center";
+      controls.style.margin =
+        "10px 0";
+
+
+      controls.appendChild(
+        reportGroupSelect
+      );
+
+
+      var copyButton =
+        createButton(
+          "Kopier oppsummering"
+        );
+
+      copyButton.onclick =
+        function () {
+          navigator.clipboard
+            .writeText(
+              reportText()
+            )
+            .then(
+              function () {
+                alert(
+                  "Rapportoppsummering kopiert."
+                );
+              }
+            )
+            .catch(
+              function () {
+                alert(
+                  "Kunne ikke kopiere automatisk."
+                );
+              }
+            );
+        };
+
+
+      var pdfButton =
+        createPrimaryButton(
+          "Lagre som PDF"
+        );
+
+      pdfButton.onclick =
+        function () {
+          ensureOfferPrintStyle();
+
+
+          var old =
+            document.getElementById(
+              "sk-stock-report-document"
+            );
+
+          if (old) {
+            old.remove();
+          }
+
+
+          var doc =
+            el("div");
+
+          doc.id =
+            "sk-stock-report-document";
+
+          doc.style.background =
+            "#fff";
+          doc.style.color =
+            "#111827";
+          doc.style.padding =
+            "28px";
+          doc.style.maxWidth =
+            "900px";
+          doc.style.margin =
+            "0 auto";
+
+
+          doc.appendChild(
+            el(
+              "h1",
+              "Varetellingsrapport"
+            )
+          );
+
+
+          var pre =
+            el(
+              "pre",
+              reportText()
+            );
+
+          pre.style.whiteSpace =
+            "pre-wrap";
+          pre.style.fontFamily =
+            "Arial, sans-serif";
+          pre.style.fontSize =
+            "12px";
+          pre.style.lineHeight =
+            "1.45";
+
+          doc.appendChild(
+            pre
+          );
+
+          document.body.appendChild(
+            doc
+          );
+
+
+          printElementAsPdf(
+            "sk-stock-report-document",
+            "Velg «Lagre som PDF» i utskriftsvinduet."
+          );
+        };
+
+
+      controls.appendChild(
+        copyButton
+      );
+
+      controls.appendChild(
+        pdfButton
+      );
+
+      reportHost.appendChild(
+        controls
+      );
+
+
+      var groupedTitle =
+        el(
+          "h3",
+          "Avvik gruppert"
+        );
+
+      groupedTitle.style.marginTop =
+        "16px";
+
+      reportHost.appendChild(
+        groupedTitle
+      );
+
+
+      addTable(
+        reportHost,
+        [
+          {
+            key:
+              "name",
+            label:
+              "Gruppe"
+          },
+          {
+            key:
+              "line_count",
+            label:
+              "Linjer"
+          },
+          {
+            key:
+              "counted_line_count",
+            label:
+              "Telt"
+          },
+          {
+            key:
+              "difference_quantity",
+            label:
+              "Avvik stk"
+          },
+          {
+            key:
+              "difference_value_ex_vat",
+            label:
+              "Avvik verdi",
+            format:
+              "money"
+          }
+        ],
+        report.groupedRows,
+        "Ingen rapportdata."
+      );
+
+
+      var diffTitle =
+        el(
+          "h3",
+          "Største avvik"
+        );
+
+      diffTitle.style.marginTop =
+        "16px";
+
+      reportHost.appendChild(
+        diffTitle
+      );
+
+
+      var diffRows =
+        report.diffRows
+          .slice(
+            0,
+            30
+          )
+          .map(
+            function (item) {
+              return Object.assign(
+                {},
+                item,
+                {
+                  variant_display:
+                    item.count_level ===
+                      "variant"
+                      ? cleanVariantText(
+                          item
+                        )
+                      : "-"
+                }
+              );
+            }
+          );
+
+
+      addTable(
+        reportHost,
+        [
+          {
+            key:
+              "name",
+            label:
+              "Produkt"
+          },
+          {
+            key:
+              "variant_display",
+            label:
+              "Variant"
+          },
+          {
+            key:
+              "expected_quantity",
+            label:
+              "Forventet"
+          },
+          {
+            key:
+              "counted_quantity",
+            label:
+              "Opptalt"
+          },
+          {
+            key:
+              "difference_quantity",
+            label:
+              "Avvik"
+          },
+          {
+            key:
+              "difference_value_ex_vat",
+            label:
+              "Verdiavvik",
+            format:
+              "money"
+          }
+        ],
+        diffRows,
+        "Ingen avvik."
+      );
+    }
+
+
+    reportGroupSelect.onchange =
+      renderReport;
+
+
+    // ============================================================
+    // HISTORIKK
+    // ============================================================
+
+    var historySection =
+      createCollapsibleSection(
+        "📚 Historikk og administrasjon",
+        "Finn gamle tellinger, åpne rapporter eller slett tellinger som aldri ble brukt mot Quickbutik.",
+        true
+      );
+
+
+    var historyControls =
+      el("div");
+
+    historyControls.style.display =
+      "grid";
+    historyControls.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(180px, 1fr))";
+    historyControls.style.gap =
+      "10px";
+    historyControls.style.marginBottom =
+      "10px";
+
+
+    var historySearch =
+      el("input");
+
+    historySearch.type =
+      "search";
+    historySearch.placeholder =
+      "Søk nummer, tittel eller utvalg…";
+
+
+    var historyFilter =
+      el("select");
+
+    addOption(
+      historyFilter,
+      "all",
+      "Alle tellinger"
+    );
+
+    addOption(
+      historyFilter,
+      "open",
+      "Pågående"
+    );
+
+    addOption(
+      historyFilter,
+      "locked",
+      "Låste"
+    );
+
+    addOption(
+      historyFilter,
+      "updated",
+      "Quickbutik oppdatert"
+    );
+
+    addOption(
+      historyFilter,
+      "cancelled",
+      "Kansellert"
+    );
+
+
+    historyControls.appendChild(
+      historySearch
+    );
+
+    historyControls.appendChild(
+      historyFilter
+    );
+
+    historySection.body.appendChild(
+      historyControls
+    );
+
+
+    var historyHost =
+      el("div");
+
+    historySection.body.appendChild(
+      historyHost
+    );
+
+    parent.appendChild(
+      historySection.wrap
+    );
+
+
+    function canDeleteCount(
+      count
+    ) {
+      return (
+        count.status !==
+          "applied" &&
+        !count
+          .quickbutik_updated_at
+      );
+    }
+
+
+    function deleteCount(
+      count,
+      button
+    ) {
+      if (
+        !canDeleteCount(
+          count
+        )
+      ) {
+        alert(
+          "Denne varetellingen kan ikke slettes fordi den allerede er brukt / oppdatert."
+        );
+
+        return;
+      }
+
+
+      var confirmText =
+        prompt(
+          "Dette sletter hele varetellingen og alle tellelinjene permanent.\n\nSkriv " +
+            count.count_number +
+            " for å bekrefte:"
+        );
+
+
+      if (
+        confirmText !==
+        count.count_number
+      ) {
+        return;
+      }
+
+
+      button.disabled =
+        true;
+
+      button.textContent =
+        "Sletter…";
+
+
+      sb.rpc(
+        "internal_delete_stock_count",
+        {
+          p_stock_count_id:
+            count.id,
+
+          p_confirm_text:
+            confirmText
+        }
+      )
+        .then(
+          function (
+            result
+          ) {
+            if (
+              result.error
+            ) {
+              throw result.error;
+            }
+
+
+            if (
+              selectedCountId ===
+              count.id
+            ) {
+              localStorage.removeItem(
+                "sk_internal_selected_stock_count_id"
+              );
+            }
+
+
+            alert(
+              "Varetellingen " +
+                count.count_number +
+                " er slettet."
+            );
+
+
+            window.location.reload();
+          }
+        )
+        .catch(
+          function (
+            error
+          ) {
+            button.disabled =
+              false;
+
+            button.textContent =
+              "Slett";
+
+            alert(
+              "Kunne ikke slette tellingen: " +
+                (
+                  error.message ||
+                  String(
+                    error
+                  )
+                )
+            );
+          }
+        );
+    }
+
+
+    function renderHistory() {
+      clear(
+        historyHost
+      );
+
+
+      var query =
+        String(
+          historySearch.value ||
+          ""
+        )
+          .toLowerCase()
+          .trim();
+
+
+      var rows =
+        counts.filter(
+          function (count) {
+            if (
+              historyFilter.value ===
+                "open" &&
+              !isOpenCount(
+                count
+              )
+            ) {
+              return false;
+            }
+
+
+            if (
+              historyFilter.value ===
+                "locked" &&
+              count.status !==
+                "locked"
+            ) {
+              return false;
+            }
+
+
+            if (
+              historyFilter.value ===
+                "updated" &&
+              !count
+                .quickbutik_updated_at
+            ) {
+              return false;
+            }
+
+
+            if (
+              historyFilter.value ===
+                "cancelled" &&
+              count.status !==
+                "cancelled"
+            ) {
+              return false;
+            }
+
+
+            if (!query) {
+              return true;
+            }
+
+
+            return [
+              count.count_number,
+              count.title,
+              count.status,
+              scopeLabel(
+                count
+              ),
+              count.notes
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase()
+              .indexOf(
+                query
+              ) >= 0;
+          }
+        );
+
+
+      if (!rows.length) {
+        var empty =
+          el(
+            "div",
+            "Ingen varetellinger matcher filteret."
+          );
+
+        empty.className =
+          "sk-note";
+
+        historyHost.appendChild(
+          empty
+        );
+
+        return;
+      }
+
+
+      var wrap =
+        el("div");
+
+      wrap.style.overflowX =
+        "auto";
+      wrap.style.border =
+        "1px solid #e5e7eb";
+      wrap.style.borderRadius =
+        "12px";
+
+
+      var table =
+        el("table");
+
+      table.style.width =
+        "100%";
+      table.style.borderCollapse =
+        "collapse";
+      table.style.fontSize =
+        "13px";
+
+
+      var thead =
+        el("thead");
+
+      var head =
+        el("tr");
+
+
+      [
+        "Dato",
+        "Varetelling",
+        "Status",
+        "Utvalg",
+        "Fremdrift",
+        "Avvik",
+        "Quickbutik",
+        "Handling"
+      ].forEach(
+        function (label) {
+          var th =
+            el(
+              "th",
+              label
+            );
+
+          th.style.textAlign =
+            "left";
+          th.style.padding =
+            "10px";
+          th.style.borderBottom =
+            "1px solid #e5e7eb";
+          th.style.background =
+            "#f9fafb";
+          th.style.whiteSpace =
+            "nowrap";
+
+          head.appendChild(
+            th
+          );
+        }
+      );
+
+
+      thead.appendChild(
+        head
+      );
+
+      table.appendChild(
+        thead
+      );
+
+
+      var tbody =
+        el("tbody");
+
+
+      rows.forEach(
+        function (count) {
+          var tr =
+            el("tr");
+
+
+          if (
+            count.id ===
+            selectedCountId
+          ) {
+            tr.style.background =
+              "#f8fafc";
+          }
+
+
+          function tdNode(
+            node
+          ) {
+            var td =
+              el("td");
+
+            td.style.padding =
+              "10px";
+            td.style.borderBottom =
+              "1px solid #f3f4f6";
+            td.style.verticalAlign =
+              "top";
+
+            td.appendChild(
+              node
+            );
+
+            tr.appendChild(
+              td
+            );
+          }
+
+
+          tdNode(
+            el(
+              "span",
+              formatDateNorwegian(
+                count.created_at
+              )
+            )
+          );
+
+
+          var countBox =
+            el("div");
+
+          countBox.appendChild(
+            el(
+              "strong",
+              count.title ||
+              "-"
+            )
+          );
+
+
+          var number =
+            el(
+              "div",
+              count.count_number ||
+              "-"
+            );
+
+          number.style.color =
+            "#64748b";
+          number.style.fontSize =
+            "11px";
+          number.style.marginTop =
+            "2px";
+
+          countBox.appendChild(
+            number
+          );
+
+          tdNode(
+            countBox
+          );
+
+
+          tdNode(
+            createCountBadge(
+              count
+            )
+          );
+
+
+          tdNode(
+            el(
+              "span",
+              scopeLabel(
+                count
+              )
+            )
+          );
+
+
+          tdNode(
+            el(
+              "span",
+              String(
+                count
+                  .counted_line_count ||
+                0
+              ) +
+                "/" +
+                String(
+                  count
+                    .line_count ||
+                  0
+                ) +
+                " · " +
+                String(
+                  countProgress(
+                    count
+                  )
+                ) +
+                "%"
+            )
+          );
+
+
+          var diff =
+            el(
+              "span",
+              money(
+                count
+                  .difference_quantity_total
+              ) +
+                " stk · " +
+                money(
+                  count
+                    .difference_value_ex_vat_total
+                ) +
+                " kr"
+            );
+
+          if (
+            Number(
+              count
+                .difference_quantity_total ||
+              0
+            ) !== 0
+          ) {
+            diff.style.color =
+              "#991b1b";
+            diff.style.fontWeight =
+              "800";
+          }
+
+          tdNode(
+            diff
+          );
+
+
+          var qb =
+            el(
+              "span",
+              count
+                .quickbutik_updated_at
+                ? "✅ Oppdatert"
+                : "–"
+            );
+
+          tdNode(
+            qb
+          );
+
+
+          var actions =
+            el("div");
+
+          actions.style.display =
+            "flex";
+          actions.style.gap =
+            "6px";
+          actions.style.flexWrap =
+            "wrap";
+
+
+          var openButton =
+            createButton(
+              "Åpne"
+            );
+
+          openButton.onclick =
+            function () {
+              selectCount(
+                count.id,
+                "workspace"
+              );
+            };
+
+          actions.appendChild(
+            openButton
+          );
+
+
+          var reportButton =
+            createButton(
+              "Rapport"
+            );
+
+          reportButton.onclick =
+            function () {
+              selectCount(
+                count.id,
+                "report"
+              );
+            };
+
+          actions.appendChild(
+            reportButton
+          );
+
+
+          if (
+            canDeleteCount(
+              count
+            )
+          ) {
+            var deleteButton =
+              createButton(
+                "Slett"
+              );
+
+            deleteButton.style.color =
+              "#991b1b";
+            deleteButton.style.borderColor =
+              "#fecaca";
+
+            deleteButton.onclick =
+              function () {
+                deleteCount(
+                  count,
+                  deleteButton
+                );
+              };
+
+            actions.appendChild(
+              deleteButton
+            );
+          }
+
+
+          tdNode(
+            actions
+          );
+
+          tbody.appendChild(
+            tr
+          );
+        }
+      );
+
+
+      table.appendChild(
+        tbody
+      );
+
+      wrap.appendChild(
+        table
+      );
+
+      historyHost.appendChild(
+        wrap
+      );
+    }
+
+
+    historySearch.oninput =
+      renderHistory;
+
+    historyFilter.onchange =
+      renderHistory;
+
+
+    // ============================================================
+    // INITIAL RENDER
+    // ============================================================
+
+    renderCurrentCounts();
+    renderWorkspace();
+    renderReport();
+    renderHistory();
   }
-
-  function renderStockReport() {
-    clear(reportTarget);
-
-    var dataReport = getStockReportData();
-    var count = dataReport.count;
-
-    if (!count) {
-      reportTarget.appendChild(el("p", "Velg en varetelling først."));
-      return;
-    }
-
-    var summary = el("div");
-    summary.className = "sk-card";
-    summary.style.marginBottom = "14px";
-
-    var title = el("h3", "Oppsummering");
-    title.style.marginTop = "0";
-    summary.appendChild(title);
-
-    addProStatGrid(summary, [
-      { label: "Varetelling", value: count.count_number || "-" },
-      { label: "Status", value: statusLabel(count.status) },
-      { label: "Linjer telt", value: String(dataReport.totals.counted_line_count) + "/" + String(dataReport.totals.line_count), tone: dataReport.totals.counted_line_count === dataReport.totals.line_count ? "ok" : "warning" },
-      { label: "Avvik stk", value: money(dataReport.totals.difference_quantity), tone: Number(dataReport.totals.difference_quantity || 0) === 0 ? "ok" : "warning" },
-      { label: "Avvik verdi eks.", value: money(dataReport.totals.difference_value_ex_vat) + " kr", tone: Number(dataReport.totals.difference_value_ex_vat || 0) === 0 ? "ok" : "warning" }
-    ]);
-
-    var text = el("p", "Rapporten viser først totaloversikt og deretter avvik gruppert. Bruk PDF-knappen for en ryddig rapport til arkiv eller deling.");
-    text.style.color = "#6b7280";
-    text.style.lineHeight = "1.5";
-    summary.appendChild(text);
-    reportTarget.appendChild(summary);
-
-    var groupedTitle = el("h3", "Avvik gruppert");
-    groupedTitle.style.marginTop = "18px";
-    reportTarget.appendChild(groupedTitle);
-
-    addTable(reportTarget, [
-      { key: "name", label: "Gruppe" },
-      { key: "line_count", label: "Linjer" },
-      { key: "counted_line_count", label: "Telt" },
-      { key: "expected_quantity", label: "Forventet" },
-      { key: "counted_quantity", label: "Opptalt" },
-      { key: "difference_quantity", label: "Avvik stk" },
-      { key: "difference_value_ex_vat", label: "Avvik verdi", format: "money" }
-    ], dataReport.groupedRows, "Ingen rapportdata.");
-
-    var topTitle = el("h3", "Største avvik");
-    topTitle.style.marginTop = "18px";
-    reportTarget.appendChild(topTitle);
-
-    addTable(reportTarget, [
-      { key: "name", label: "Produkt" },
-      { key: "brand", label: "Merke" },
-      { key: "category", label: "Kategori" },
-      { key: "expected_quantity", label: "Forventet" },
-      { key: "counted_quantity", label: "Opptalt" },
-      { key: "difference_quantity", label: "Avvik stk" },
-      { key: "difference_value_ex_vat", label: "Avvik verdi", format: "money" }
-    ], dataReport.diffRows.slice(0, 25), "Ingen avvik funnet.");
-  }
-
-  function stockReportText() {
-    var dataReport = getStockReportData();
-    var count = dataReport.count;
-
-    if (!count) {
-      return "Ingen varetelling valgt.";
-    }
-
-    var lines = [];
-    lines.push("Varetellingsrapport");
-    lines.push("Nr: " + (count.count_number || "-"));
-    lines.push("Tittel: " + (count.title || "-"));
-    lines.push("Status: " + statusLabel(count.status));
-    lines.push("Dato: " + formatDateNorwegian(count.created_at));
-    lines.push("Quickbutik: " + (count.quickbutik_updated_at ? "Oppdatert " + formatDateNorwegian(count.quickbutik_updated_at) : "Ikke oppdatert"));
-    lines.push("");
-    lines.push("OPPSUMMERING");
-    lines.push("Linjer totalt: " + dataReport.totals.line_count);
-    lines.push("Linjer telt: " + dataReport.totals.counted_line_count);
-    lines.push("Forventet antall: " + money(dataReport.totals.expected_quantity));
-    lines.push("Opptalt antall: " + money(dataReport.totals.counted_quantity));
-    lines.push("Avvik antall: " + money(dataReport.totals.difference_quantity));
-    lines.push("Avvik verdi eks. mva: " + money(dataReport.totals.difference_value_ex_vat) + " kr");
-    lines.push("");
-    lines.push("AVVIK GRUPPERT");
-    lines.push("Gruppe\tLinjer\tTelt\tForventet\tOpptalt\tAvvik stk\tAvvik verdi eks. mva");
-
-    dataReport.groupedRows.forEach(function (row) {
-      lines.push([
-        row.name,
-        row.line_count,
-        row.counted_line_count,
-        row.expected_quantity,
-        row.counted_quantity,
-        row.difference_quantity,
-        row.difference_value_ex_vat
-      ].join("\t"));
-    });
-
-    lines.push("");
-    lines.push("STØRSTE AVVIK");
-    lines.push("Produkt\tMerke\tKategori\tForventet\tOpptalt\tAvvik stk\tAvvik verdi eks. mva\tNotat");
-
-    dataReport.diffRows.slice(0, 50).forEach(function (item) {
-      lines.push([
-        item.name || "",
-        item.brand || "",
-        item.category || "",
-        item.expected_quantity || 0,
-        item.counted_quantity === null || item.counted_quantity === undefined ? "" : item.counted_quantity,
-        item.difference_quantity || 0,
-        item.difference_value_ex_vat || 0,
-        item.notes || ""
-      ].join("\t"));
-    });
-
-    return lines.join("\n");
-  }
-
-  copyReportBtn.onclick = function () {
-    navigator.clipboard.writeText(stockReportText()).then(function () {
-      alert("Rapportoppsummering kopiert.");
-    }).catch(function () {
-      alert("Kunne ikke kopiere rapporten automatisk.");
-    });
-  };
-
-  pdfReportBtn.onclick = function () {
-    var dataReport = getStockReportData();
-
-    if (!dataReport.count) {
-      alert("Velg en varetelling først.");
-      return;
-    }
-
-    ensureOfferPrintStyle();
-
-    var old = document.getElementById("sk-stock-report-document");
-    if (old) {
-      old.parentNode.removeChild(old);
-    }
-
-    var doc = el("div");
-    doc.id = "sk-stock-report-document";
-    doc.style.background = "#fff";
-    doc.style.color = "#111827";
-    doc.style.padding = "28px";
-    doc.style.maxWidth = "900px";
-    doc.style.margin = "0 auto";
-
-    var h = el("h1", "Varetellingsrapport");
-    doc.appendChild(h);
-    doc.appendChild(el("p", "Nr: " + (dataReport.count.count_number || "-")));
-    doc.appendChild(el("p", "Tittel: " + (dataReport.count.title || "-")));
-    doc.appendChild(el("p", "Status: " + statusLabel(dataReport.count.status)));
-
-    var pre = el("pre", stockReportText());
-    pre.style.whiteSpace = "pre-wrap";
-    pre.style.fontFamily = "Arial, sans-serif";
-    pre.style.fontSize = "12px";
-    pre.style.lineHeight = "1.45";
-    doc.appendChild(pre);
-
-    document.body.appendChild(doc);
-    printElementAsPdf("sk-stock-report-document", "Velg ‘Lagre som PDF’ i utskriftsvinduet for å laste ned rapporten som PDF.");
-  };
-
-  reportGroupSelect.onchange = renderStockReport;
-  onlyDiffCheckbox.onchange = renderStockReport;
-  renderStockReport();
-
-  // ============================================================
-  // KAPITTEL 4 – Oversikt over varetellinger
-  // ============================================================
-
-  var overviewSection = createCollapsibleSection(
-    "📋 Tidligere varetellinger",
-    "Oversikt over varetellinger og avvik.",
-    true
-  );
-
-  addTable(overviewSection.body, [
-    { key: "count_number", label: "Nr" },
-    { key: "title", label: "Tittel" },
-    { key: "status", label: "Status" },
-    { key: "scope_type", label: "Type" },
-    { key: "scope_value", label: "Utvalg" },
-    { key: "line_count", label: "Linjer" },
-    { key: "counted_line_count", label: "Telt" },
-    { key: "expected_quantity_total", label: "Forventet" },
-    { key: "counted_quantity_total", label: "Opptalt" },
-    { key: "difference_quantity_total", label: "Avvik stk" },
-    { key: "difference_value_ex_vat_total", label: "Avvik verdi", format: "money" }
-  ], data.stockCounts || [], "Ingen varetellinger funnet.");
-
-  parent.appendChild(overviewSection.wrap);
-}
 
 
   function renderBookingAdmin(parent) {
