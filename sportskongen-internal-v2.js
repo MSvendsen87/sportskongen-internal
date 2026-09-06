@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.22 · Produktkontroll godkjente unntak"
+      "Admin v5.23 · Mission Control"
     );
 
     var products =
@@ -21217,9 +21217,9 @@ function renderProductControlDashboard(
 ) {
   createPageHeader(
     parent,
-    "Produktkontroll",
-    "En enkel arbeidsliste med avvik som faktisk bør følges opp.",
-    "Kvalitetssjekk"
+    "Mission Control",
+    "Samlet kontrollsenter for varer, lager, pris og produktdata. Start med «Må fikses», og godkjenn bevisste avvik så de ikke skaper støy.",
+    "Driftskontroll"
   );
 
   var issues =
@@ -21237,7 +21237,8 @@ function renderProductControlDashboard(
       "negative_product_stock",
       "negative_variant_stock",
       "recent_seller_out_of_stock",
-      "recent_seller_low_stock"
+      "recent_seller_low_stock",
+      "inactive_product_with_stock"
     ].indexOf(
       issue.issue_type
     ) >= 0;
@@ -21250,7 +21251,9 @@ function renderProductControlDashboard(
       "purchase_cost_not_synced",
       "negative_margin",
       "low_margin",
-      "missing_sales_price"
+      "missing_sales_price",
+      "parent_variant_sales_price_mismatch",
+      "variant_missing_sales_price"
     ].indexOf(
       issue.issue_type
     ) >= 0;
@@ -21261,7 +21264,9 @@ function renderProductControlDashboard(
     return [
       "missing_quickbutik_product_id",
       "disc_missing_flight",
-      "missing_inventory_group"
+      "missing_inventory_group",
+      "variant_missing_quickbutik_id",
+      "missing_brand"
     ].indexOf(
       issue.issue_type
     ) >= 0;
@@ -21272,7 +21277,10 @@ function renderProductControlDashboard(
     return [
       "missing_purchase_price",
       "negative_margin",
-      "low_margin"
+      "low_margin",
+      "parent_variant_sales_price_mismatch",
+      "inactive_product_with_stock",
+      "missing_brand"
     ].indexOf(
       issue.issue_type
     ) >= 0;
@@ -21448,6 +21456,18 @@ function renderProductControlDashboard(
         "Ingen innkjøpspris med vilje",
       accepted:
         "Godkjent som korrekt",
+      variant_price_intentional:
+        "Variantpriser er bevisst forskjellige",
+      service_variant_pricing:
+        "Booking/tjeneste – variantprisene er bevisste",
+      gift_card_variant_pricing:
+        "Gavekort – beløpsvariantene er bevisste",
+      intentional_hidden_stock:
+        "Bevisst skjult / reservevare",
+      seasonal_hidden_stock:
+        "Sesongvare – skjult med vilje",
+      brand_not_relevant:
+        "Merke er ikke relevant",
       other:
         "Annet"
     };
@@ -21617,6 +21637,48 @@ function renderProductControlDashboard(
       return "intentional_low_price";
     }
 
+    if (
+      issue.issue_type ===
+      "parent_variant_sales_price_mismatch"
+    ) {
+      var lowerName =
+        String(
+          issue.product_name ||
+          ""
+        ).toLowerCase();
+
+      if (
+        lowerName.indexOf("booking") >= 0 ||
+        lowerName.indexOf("simulator") >= 0 ||
+        lowerName.indexOf("leie") >= 0
+      ) {
+        return "service_variant_pricing";
+      }
+
+      if (
+        lowerName.indexOf("gavekort") >= 0 ||
+        lowerName.indexOf("gift card") >= 0
+      ) {
+        return "gift_card_variant_pricing";
+      }
+
+      return "variant_price_intentional";
+    }
+
+    if (
+      issue.issue_type ===
+      "inactive_product_with_stock"
+    ) {
+      return "intentional_hidden_stock";
+    }
+
+    if (
+      issue.issue_type ===
+      "missing_brand"
+    ) {
+      return "brand_not_relevant";
+    }
+
     return "accepted";
   }
 
@@ -21644,6 +21706,84 @@ function renderProductControlDashboard(
             "intentional_no_cost",
           label:
             "Ingen innkjøpspris med vilje"
+        },
+        {
+          value:
+            "other",
+          label:
+            "Annet"
+        }
+      ];
+    }
+
+    if (
+      issue.issue_type ===
+      "parent_variant_sales_price_mismatch"
+    ) {
+      return [
+        {
+          value:
+            "variant_price_intentional",
+          label:
+            "Variantpriser er bevisst forskjellige"
+        },
+        {
+          value:
+            "service_variant_pricing",
+          label:
+            "Booking / tjeneste – variantprisene er bevisste"
+        },
+        {
+          value:
+            "gift_card_variant_pricing",
+          label:
+            "Gavekort – beløpsvariantene er bevisste"
+        },
+        {
+          value:
+            "other",
+          label:
+            "Annet"
+        }
+      ];
+    }
+
+    if (
+      issue.issue_type ===
+      "inactive_product_with_stock"
+    ) {
+      return [
+        {
+          value:
+            "intentional_hidden_stock",
+          label:
+            "Bevisst skjult / reservevare"
+        },
+        {
+          value:
+            "seasonal_hidden_stock",
+          label:
+            "Sesongvare – skjult med vilje"
+        },
+        {
+          value:
+            "other",
+          label:
+            "Annet"
+        }
+      ];
+    }
+
+    if (
+      issue.issue_type ===
+      "missing_brand"
+    ) {
+      return [
+        {
+          value:
+            "brand_not_relevant",
+          label:
+            "Merke er ikke relevant"
         },
         {
           value:
@@ -21886,7 +22026,7 @@ function renderProductControlDashboard(
       3;
 
     noteInput.placeholder =
-      "F.eks. selges bevisst billig for å tømme lager.";
+      "Valgfritt: skriv kort hvorfor dette er riktig eller bevisst.";
 
     noteInput.style.width =
       "100%";
@@ -22148,7 +22288,7 @@ function renderProductControlDashboard(
 
   if (dangerCount) {
     note.textContent =
-      "Start med «Må fikses». Bevisste avvik kan godkjennes slik at de ikke kommer tilbake som støy.";
+      "Mission Control viser bare ting som er verdt å se på. Start med «Må fikses». Bevisste avvik kan godkjennes som OK, mens reelle systemfeil må rettes.";
   } else if (issues.length) {
     note.textContent =
       "Ingen kritiske avvik. Det finnes noen varsler som bør følges opp.";
@@ -22190,7 +22330,7 @@ function renderProductControlDashboard(
     "search";
 
   search.placeholder =
-    "Søk produkt, variant, merke eller Quickbutik-ID…";
+    "Søk i Mission Control – produkt, variant, merke eller Quickbutik-ID…";
 
   search.style.width =
     "100%";
@@ -46620,11 +46760,11 @@ function renderPortal(sb, user, data) {
       },
 
       productControl: {
-        label: "Produktkontroll",
-        icon: "🔎",
+        label: "Mission Control",
+        icon: "🛰️",
         group: "Varer og lager",
         description:
-          "Reelle avvik som bør undersøkes.",
+          "Kontrollsenter for varer, lager, pris og produktdata.",
         render: function (parent) {
           renderLazyModule(
             parent,
