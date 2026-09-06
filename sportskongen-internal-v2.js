@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.19 · Enkel fakturaflyt"
+      "Admin v5.20 · Produktkontroll uten falske bildevarsler"
     );
 
     var products =
@@ -21214,11 +21214,18 @@ function renderProductControlDashboard(parent, data) {
   createPageHeader(
     parent,
     "Produktkontroll",
-    "Kontroller som hjelper oss å finne feil før de blir et problem i butikk, varetelling eller produktvedlikehold.",
+    "Viser bare avvik som kan kontrolleres sikkert fra synkroniserte produkt-, lager-, flight- og kostdata.",
     "Kvalitetssjekk"
   );
 
-  var issues = data.productQualityIssues || data.productControlIssues || [];
+  /*
+   * Produktkontroll skal bare vise avvik vi faktisk kan stole på.
+   * internal_product_quality_view hadde bl.a. "missing_image" basert på
+   * internal_products.image_url. Det feltet er ikke en pålitelig fasit for
+   * om varen faktisk har bilder i Quickbutik og ga derfor hundrevis av
+   * falske varsler.
+   */
+  var issues = data.productControlIssues || [];
 
   var dangerCount = issues.filter(function (x) {
     return x.severity === "danger";
@@ -21271,6 +21278,14 @@ function renderProductControlDashboard(parent, data) {
   }
 
   parent.appendChild(note);
+
+  var reliabilityNote = el(
+    "div",
+    "Produktbilder brukes ikke som avvik her. Det interne image_url-feltet er ikke en sikker fasit for bilder som faktisk ligger i Quickbutik, og ga derfor falske varsler."
+  );
+  reliabilityNote.className = "sk-note";
+  reliabilityNote.style.marginBottom = "16px";
+  parent.appendChild(reliabilityNote);
 
   var toolbar = el("div");
   toolbar.style.display = "flex";
@@ -44775,16 +44790,16 @@ function renderPortal(sb, user, data) {
         icon: "🔎",
         group: "Varer og lager",
         description:
-          "Avvik og produkter som bør undersøkes.",
+          "Reelle avvik som bør undersøkes.",
         render: function (parent) {
           renderLazyModule(
             parent,
-            "productQualityIssues",
-            "produktkvalitet",
+            "productControlIssues",
+            "produktkontroll",
             function () {
               return fetchAllRows(
                 sb,
-                "internal_product_quality_view",
+                "internal_product_control_view",
                 "product_name",
                 true
               );
@@ -45350,8 +45365,7 @@ function renderPortal(sb, user, data) {
         results[18].data || [],
       inventoryAnalytics:
         results[19].data || [],
-      productQualityIssues:
-        results[20].data || [],
+      productQualityIssues: [],
       tasks:
         results[21].data || [],
       systemStatus:
@@ -45364,6 +45378,7 @@ function renderPortal(sb, user, data) {
         customerQuoteItems: false,
         stockCountItems: false,
         productQualityIssues: false,
+        productControlIssues: false,
         auditLog: false
       },
       __lazyLoading: {}
