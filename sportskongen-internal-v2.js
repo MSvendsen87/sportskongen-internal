@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.20 · Produktkontroll uten falske bildevarsler"
+      "Admin v5.21 · Produktkontroll handlingsliste"
     );
 
     var products =
@@ -21214,277 +21214,1044 @@ function renderProductControlDashboard(parent, data) {
   createPageHeader(
     parent,
     "Produktkontroll",
-    "Viser bare avvik som kan kontrolleres sikkert fra synkroniserte produkt-, lager-, flight- og kostdata.",
+    "En enkel arbeidsliste med avvik som faktisk bør følges opp.",
     "Kvalitetssjekk"
   );
 
-  /*
-   * Produktkontroll skal bare vise avvik vi faktisk kan stole på.
-   * internal_product_quality_view hadde bl.a. "missing_image" basert på
-   * internal_products.image_url. Det feltet er ikke en pålitelig fasit for
-   * om varen faktisk har bilder i Quickbutik og ga derfor hundrevis av
-   * falske varsler.
-   */
-  var issues = data.productControlIssues || [];
+  var issues =
+    data.productControlIssues || [];
 
-  var dangerCount = issues.filter(function (x) {
-    return x.severity === "danger";
-  }).length;
+  var searchTerm = "";
+  var activeFilter = "all";
 
-  var warningCount = issues.filter(function (x) {
-    return x.severity === "warning";
-  }).length;
 
-  var negativeProductStock = issues.filter(function (x) {
-    return x.issue_type === "negative_product_stock";
-  }).length;
-
-  var negativeVariantStock = issues.filter(function (x) {
-    return x.issue_type === "negative_variant_stock";
-  }).length;
-
-  var missingFlight = issues.filter(function (x) {
-    return x.issue_type === "disc_missing_flight";
-  }).length;
-
-  var missingGroup = issues.filter(function (x) {
-    return x.issue_type === "missing_inventory_group";
-  }).length;
-
-  var lowMargin = issues.filter(function (x) {
-    return x.issue_type === "low_margin";
-  }).length;
-
-  addProStatGrid(parent, [
-    { label: "Kritiske avvik", value: String(dangerCount), tone: dangerCount ? "danger" : "ok" },
-    { label: "Advarsler", value: String(warningCount), tone: warningCount ? "warning" : "ok" },
-    { label: "Minus produktlager", value: String(negativeProductStock), tone: negativeProductStock ? "danger" : "ok" },
-    { label: "Minus variantlager", value: String(negativeVariantStock), tone: negativeVariantStock ? "danger" : "ok" },
-    { label: "Discer uten flight", value: String(missingFlight), tone: missingFlight ? "warning" : "ok" },
-    { label: "Uten varetellingsgruppe", value: String(missingGroup), tone: missingGroup ? "warning" : "ok" },
-    { label: "Lav margin", value: String(lowMargin), tone: lowMargin ? "warning" : "ok" }
-  ]);
-
-  var note = el("div");
-  note.className = dangerCount ? "sk-danger-zone" : "sk-note";
-  note.style.marginBottom = "16px";
-
-  if (dangerCount) {
-    note.textContent = "Det finnes kritiske avvik som bør rettes først. Start med minusbeholdning før du jobber med lav margin.";
-  } else if (warningCount) {
-    note.textContent = "Ingen kritiske avvik funnet. Det finnes noen advarsler som kan ryddes etter hvert.";
-  } else {
-    note.textContent = "Alt ser ryddig ut akkurat nå. Ingen produktavvik funnet.";
+  function countBy(filterKey) {
+    return issues.filter(
+      function (issue) {
+        return issueMatchesFilter(
+          issue,
+          filterKey
+        );
+      }
+    ).length;
   }
 
-  parent.appendChild(note);
 
-  var reliabilityNote = el(
-    "div",
-    "Produktbilder brukes ikke som avvik her. Det interne image_url-feltet er ikke en sikker fasit for bilder som faktisk ligger i Quickbutik, og ga derfor falske varsler."
-  );
-  reliabilityNote.className = "sk-note";
-  reliabilityNote.style.marginBottom = "16px";
-  parent.appendChild(reliabilityNote);
-
-  var toolbar = el("div");
-  toolbar.style.display = "flex";
-  toolbar.style.gap = "8px";
-  toolbar.style.flexWrap = "wrap";
-  toolbar.style.marginBottom = "14px";
-
-  var tableArea = el("div");
-
-  function button(label, filterKey) {
-    var btn = createButton(label);
-    btn.onclick = function () {
-      renderRows(filterKey);
-    };
-    toolbar.appendChild(btn);
+  function isStockIssue(issue) {
+    return [
+      "negative_product_stock",
+      "negative_variant_stock",
+      "recent_seller_out_of_stock",
+      "recent_seller_low_stock"
+    ].indexOf(
+      issue.issue_type
+    ) >= 0;
   }
 
-  button("Alle", "all");
-  button("Kritiske", "danger");
-  button("Advarsler", "warning");
-  button("Minusbeholdning", "negative_stock");
-  button("Mangler flight", "disc_missing_flight");
-  button("Mangler gruppe", "missing_inventory_group");
-  button("Lav margin", "low_margin");
 
-  parent.appendChild(toolbar);
-  parent.appendChild(tableArea);
+  function isPriceIssue(issue) {
+    return [
+      "missing_purchase_price",
+      "purchase_cost_not_synced",
+      "negative_margin",
+      "low_margin",
+      "missing_sales_price"
+    ].indexOf(
+      issue.issue_type
+    ) >= 0;
+  }
 
-  function issueMatchesFilter(issue, filterKey) {
-    if (filterKey === "all") return true;
-    if (filterKey === "danger") return issue.severity === "danger";
-    if (filterKey === "warning") return issue.severity === "warning";
 
-    if (filterKey === "negative_stock") {
-      return issue.issue_type === "negative_product_stock" || issue.issue_type === "negative_variant_stock";
+  function isDataIssue(issue) {
+    return [
+      "missing_quickbutik_product_id",
+      "disc_missing_flight",
+      "missing_inventory_group"
+    ].indexOf(
+      issue.issue_type
+    ) >= 0;
+  }
+
+
+  function issueMatchesFilter(
+    issue,
+    filterKey
+  ) {
+    if (filterKey === "all") {
+      return true;
     }
 
-    return issue.issue_type === filterKey;
+    if (filterKey === "danger") {
+      return (
+        issue.severity ===
+        "danger"
+      );
+    }
+
+    if (filterKey === "stock") {
+      return isStockIssue(
+        issue
+      );
+    }
+
+    if (filterKey === "price") {
+      return isPriceIssue(
+        issue
+      );
+    }
+
+    if (filterKey === "data") {
+      return isDataIssue(
+        issue
+      );
+    }
+
+    return (
+      issue.issue_type ===
+      filterKey
+    );
   }
 
-  function createSeverityBadge(issue) {
-    var badge = el("span", issue.severity === "danger" ? "Kritisk" : "Advarsel");
-    badge.style.display = "inline-flex";
-    badge.style.padding = "5px 8px";
-    badge.style.borderRadius = "999px";
-    badge.style.fontSize = "12px";
-    badge.style.fontWeight = "800";
 
-    if (issue.severity === "danger") {
-      badge.style.background = "#fef2f2";
-      badge.style.color = "#991b1b";
-      badge.style.border = "1px solid #fecaca";
+  function issueMatchesSearch(
+    issue
+  ) {
+    var query =
+      String(
+        searchTerm || ""
+      )
+        .trim()
+        .toLowerCase();
+
+    if (!query) {
+      return true;
+    }
+
+    var haystack = [
+      issue.issue_label,
+      issue.message,
+      issue.product_name,
+      issue.variant_name,
+      issue.brand,
+      issue.category,
+      issue.inventory_main_group,
+      issue.quickbutik_product_id,
+      issue.quickbutik_variant_id
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      haystack.indexOf(
+        query
+      ) >= 0
+    );
+  }
+
+
+  function createSeverityBadge(
+    issue
+  ) {
+    var badge =
+      el(
+        "span",
+        issue.severity ===
+          "danger"
+          ? "Må fikses"
+          : "Sjekk"
+      );
+
+    badge.style.display =
+      "inline-flex";
+    badge.style.padding =
+      "5px 8px";
+    badge.style.borderRadius =
+      "999px";
+    badge.style.fontSize =
+      "12px";
+    badge.style.fontWeight =
+      "800";
+    badge.style.whiteSpace =
+      "nowrap";
+
+    if (
+      issue.severity ===
+      "danger"
+    ) {
+      badge.style.background =
+        "#fef2f2";
+      badge.style.color =
+        "#991b1b";
+      badge.style.border =
+        "1px solid #fecaca";
     } else {
-      badge.style.background = "#fffbeb";
-      badge.style.color = "#92400e";
-      badge.style.border = "1px solid #fde68a";
+      badge.style.background =
+        "#fffbeb";
+      badge.style.color =
+        "#92400e";
+      badge.style.border =
+        "1px solid #fde68a";
     }
 
     return badge;
   }
 
-  function renderRows(filterKey) {
-    clear(tableArea);
 
-    var filtered = issues.filter(function (issue) {
-      return issueMatchesFilter(issue, filterKey || "all");
-    });
+  var dangerCount =
+    countBy("danger");
+
+  var stockCount =
+    countBy("stock");
+
+  var priceCount =
+    countBy("price");
+
+  var dataCount =
+    countBy("data");
+
+
+  addProStatGrid(
+    parent,
+    [
+      {
+        label:
+          "Må fikses",
+        value:
+          String(
+            dangerCount
+          ),
+        tone:
+          dangerCount
+            ? "danger"
+            : "ok"
+      },
+      {
+        label:
+          "Lager",
+        value:
+          String(
+            stockCount
+          ),
+        tone:
+          stockCount
+            ? "warning"
+            : "ok"
+      },
+      {
+        label:
+          "Pris & kost",
+        value:
+          String(
+            priceCount
+          ),
+        tone:
+          priceCount
+            ? "warning"
+            : "ok"
+      },
+      {
+        label:
+          "Produktdata",
+        value:
+          String(
+            dataCount
+          ),
+        tone:
+          dataCount
+            ? "warning"
+            : "ok"
+      }
+    ]
+  );
+
+
+  var note =
+    el("div");
+
+  note.className =
+    dangerCount
+      ? "sk-danger-zone"
+      : "sk-note";
+
+  note.style.marginBottom =
+    "14px";
+
+  if (dangerCount) {
+    note.textContent =
+      "Start med «Må fikses». Resten er varsler du kan ta når det passer.";
+  } else if (issues.length) {
+    note.textContent =
+      "Ingen kritiske avvik. Det finnes noen varsler som bør følges opp.";
+  } else {
+    note.textContent =
+      "Alt ser ryddig ut akkurat nå.";
+  }
+
+  parent.appendChild(
+    note
+  );
+
+
+  var controls =
+    el("div");
+
+  controls.style.display =
+    "grid";
+
+  controls.style.gridTemplateColumns =
+    "minmax(220px, 1fr) auto";
+
+  controls.style.gap =
+    "10px";
+
+  controls.style.alignItems =
+    "center";
+
+  controls.style.marginBottom =
+    "12px";
+
+
+  var search =
+    document.createElement(
+      "input"
+    );
+
+  search.type =
+    "search";
+
+  search.placeholder =
+    "Søk produkt, variant, merke eller Quickbutik-ID…";
+
+  search.style.width =
+    "100%";
+
+  search.style.padding =
+    "10px 12px";
+
+  search.style.border =
+    "1px solid #cbd5e1";
+
+  search.style.borderRadius =
+    "10px";
+
+  search.style.background =
+    "#fff";
+
+  search.oninput =
+    function () {
+      searchTerm =
+        search.value || "";
+
+      renderRows();
+    };
+
+  controls.appendChild(
+    search
+  );
+
+
+  var refresh =
+    createButton(
+      "↻ Oppdater"
+    );
+
+  refresh.onclick =
+    function () {
+      data._loaded.productControlIssues =
+        false;
+
+      setHash(
+        "admin-productControl"
+      );
+
+      renderApp();
+    };
+
+  controls.appendChild(
+    refresh
+  );
+
+  parent.appendChild(
+    controls
+  );
+
+
+  var toolbar =
+    el("div");
+
+  toolbar.style.display =
+    "flex";
+  toolbar.style.gap =
+    "8px";
+  toolbar.style.flexWrap =
+    "wrap";
+  toolbar.style.marginBottom =
+    "14px";
+
+
+  var filterButtons = {};
+
+
+  function addFilterButton(
+    label,
+    filterKey,
+    count
+  ) {
+    var btn =
+      createButton(
+        label +
+          " · " +
+          String(count)
+      );
+
+    btn.onclick =
+      function () {
+        activeFilter =
+          filterKey;
+
+        updateFilterButtons();
+        renderRows();
+      };
+
+    filterButtons[
+      filterKey
+    ] = btn;
+
+    toolbar.appendChild(
+      btn
+    );
+  }
+
+
+  function updateFilterButtons() {
+    Object.keys(
+      filterButtons
+    ).forEach(
+      function (key) {
+        var btn =
+          filterButtons[key];
+
+        if (
+          key ===
+          activeFilter
+        ) {
+          btn.style.background =
+            "#111827";
+          btn.style.color =
+            "#fff";
+          btn.style.borderColor =
+            "#111827";
+        } else {
+          btn.style.background =
+            "#fff";
+          btn.style.color =
+            "#111827";
+          btn.style.borderColor =
+            "#d1d5db";
+        }
+      }
+    );
+  }
+
+
+  addFilterButton(
+    "Alle",
+    "all",
+    issues.length
+  );
+
+  addFilterButton(
+    "Må fikses",
+    "danger",
+    dangerCount
+  );
+
+  addFilterButton(
+    "Lager",
+    "stock",
+    stockCount
+  );
+
+  addFilterButton(
+    "Pris & kost",
+    "price",
+    priceCount
+  );
+
+  addFilterButton(
+    "Produktdata",
+    "data",
+    dataCount
+  );
+
+  updateFilterButtons();
+
+  parent.appendChild(
+    toolbar
+  );
+
+
+  var tableArea =
+    el("div");
+
+  parent.appendChild(
+    tableArea
+  );
+
+
+  function quickbutikAdminUrl(
+    issue
+  ) {
+    if (
+      !issue.quickbutik_product_id
+    ) {
+      return null;
+    }
+
+    return (
+      "https://platform.quickbutik.com/admin/products/edit/" +
+      encodeURIComponent(
+        String(
+          issue.quickbutik_product_id
+        )
+      )
+    );
+  }
+
+
+  function renderRows() {
+    clear(
+      tableArea
+    );
+
+    var filtered =
+      issues
+        .filter(
+          function (issue) {
+            return (
+              issueMatchesFilter(
+                issue,
+                activeFilter
+              ) &&
+              issueMatchesSearch(
+                issue
+              )
+            );
+          }
+        )
+        .sort(
+          function (a, b) {
+            if (
+              a.severity !==
+              b.severity
+            ) {
+              return (
+                a.severity ===
+                "danger"
+                  ? -1
+                  : 1
+              );
+            }
+
+            var labelCompare =
+              String(
+                a.issue_label ||
+                ""
+              ).localeCompare(
+                String(
+                  b.issue_label ||
+                  ""
+                ),
+                "nb"
+              );
+
+            if (labelCompare) {
+              return labelCompare;
+            }
+
+            return String(
+              a.product_name ||
+              ""
+            ).localeCompare(
+              String(
+                b.product_name ||
+                ""
+              ),
+              "nb"
+            );
+          }
+        );
+
 
     if (!filtered.length) {
-      var empty = el("div", "Ingen avvik i dette filteret.");
-      empty.className = "sk-note";
-      tableArea.appendChild(empty);
+      var empty =
+        el(
+          "div",
+          searchTerm
+            ? "Ingen treff på søket i dette filteret."
+            : "Ingen varsler i denne kategorien."
+        );
+
+      empty.className =
+        "sk-note";
+
+      tableArea.appendChild(
+        empty
+      );
+
       return;
     }
 
-    var wrap = el("div");
-    wrap.style.overflowX = "auto";
-    wrap.style.border = "1px solid #e5e7eb";
-    wrap.style.borderRadius = "14px";
 
-    var table = el("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    table.style.fontSize = "14px";
+    var resultMeta =
+      el(
+        "div",
+        String(
+          filtered.length
+        ) +
+          (
+            filtered.length ===
+            1
+              ? " varsel"
+              : " varsler"
+          )
+      );
 
-    var thead = el("thead");
-    var headTr = el("tr");
+    resultMeta.style.fontSize =
+      "13px";
 
-    ["Status", "Avvik", "Produkt", "Variant", "Gruppe", "Beholdning", "Handling"].forEach(function (label) {
-      var th = el("th", label);
-      th.style.textAlign = "left";
-      th.style.padding = "11px";
-      th.style.borderBottom = "1px solid #e5e7eb";
-      th.style.background = "#f9fafb";
-      th.style.whiteSpace = "nowrap";
-      headTr.appendChild(th);
-    });
+    resultMeta.style.color =
+      "#64748b";
 
-    thead.appendChild(headTr);
-    table.appendChild(thead);
+    resultMeta.style.marginBottom =
+      "8px";
 
-    var tbody = el("tbody");
+    tableArea.appendChild(
+      resultMeta
+    );
 
-    filtered.forEach(function (issue) {
-      var tr = el("tr");
 
-      function tdNode(node) {
-        var td = el("td");
-        td.style.padding = "11px";
-        td.style.borderBottom = "1px solid #f3f4f6";
-        td.style.verticalAlign = "top";
-        td.appendChild(node);
-        tr.appendChild(td);
+    var wrap =
+      el("div");
+
+    wrap.style.overflowX =
+      "auto";
+
+    wrap.style.border =
+      "1px solid #e5e7eb";
+
+    wrap.style.borderRadius =
+      "14px";
+
+
+    var table =
+      el("table");
+
+    table.style.width =
+      "100%";
+
+    table.style.borderCollapse =
+      "collapse";
+
+    table.style.fontSize =
+      "14px";
+
+
+    var thead =
+      el("thead");
+
+    var headTr =
+      el("tr");
+
+    [
+      "Prioritet",
+      "Hva må sjekkes",
+      "Produkt",
+      "Variant",
+      "Lager",
+      "Handling"
+    ].forEach(
+      function (label) {
+        var th =
+          el(
+            "th",
+            label
+          );
+
+        th.style.textAlign =
+          "left";
+
+        th.style.padding =
+          "11px";
+
+        th.style.borderBottom =
+          "1px solid #e5e7eb";
+
+        th.style.background =
+          "#f9fafb";
+
+        th.style.whiteSpace =
+          "nowrap";
+
+        headTr.appendChild(
+          th
+        );
       }
+    );
 
-      function tdText(value) {
-        tdNode(el("span", value === null || value === undefined || value === "" ? "-" : String(value)));
+    thead.appendChild(
+      headTr
+    );
+
+    table.appendChild(
+      thead
+    );
+
+
+    var tbody =
+      el("tbody");
+
+
+    filtered.forEach(
+      function (issue) {
+        var tr =
+          el("tr");
+
+
+        function tdNode(
+          node
+        ) {
+          var td =
+            el("td");
+
+          td.style.padding =
+            "11px";
+
+          td.style.borderBottom =
+            "1px solid #f3f4f6";
+
+          td.style.verticalAlign =
+            "top";
+
+          td.appendChild(
+            node
+          );
+
+          tr.appendChild(
+            td
+          );
+        }
+
+
+        function tdText(
+          value
+        ) {
+          tdNode(
+            el(
+              "span",
+              value === null ||
+              value === undefined ||
+              value === ""
+                ? "-"
+                : String(value)
+            )
+          );
+        }
+
+
+        tdNode(
+          createSeverityBadge(
+            issue
+          )
+        );
+
+
+        var issueBox =
+          el("div");
+
+        var issueLabel =
+          el(
+            "strong",
+            issue.issue_label ||
+              "-"
+          );
+
+        issueBox.appendChild(
+          issueLabel
+        );
+
+
+        var msg =
+          el(
+            "div",
+            issue.message ||
+              ""
+          );
+
+        msg.style.color =
+          "#64748b";
+
+        msg.style.fontSize =
+          "13px";
+
+        msg.style.marginTop =
+          "3px";
+
+        msg.style.maxWidth =
+          "440px";
+
+        issueBox.appendChild(
+          msg
+        );
+
+        tdNode(
+          issueBox
+        );
+
+
+        var productBox =
+          el("div");
+
+        var productName =
+          el(
+            "strong",
+            issue.product_name ||
+              "-"
+          );
+
+        productBox.appendChild(
+          productName
+        );
+
+
+        var meta =
+          el(
+            "div",
+            [
+              issue.brand ||
+                "",
+              issue.inventory_main_group ||
+                "",
+              issue.quickbutik_product_id
+                ? (
+                    "QB " +
+                    issue.quickbutik_product_id
+                  )
+                : ""
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          );
+
+        meta.style.color =
+          "#64748b";
+
+        meta.style.fontSize =
+          "13px";
+
+        meta.style.marginTop =
+          "3px";
+
+        productBox.appendChild(
+          meta
+        );
+
+        tdNode(
+          productBox
+        );
+
+
+        tdText(
+          issue.variant_name ||
+          issue.quickbutik_variant_id ||
+          "-"
+        );
+
+
+        var stockText =
+          issue.stock_quantity ===
+            null ||
+          issue.stock_quantity ===
+            undefined
+            ? "-"
+            : String(
+                issue.stock_quantity
+              );
+
+        var stockSpan =
+          el(
+            "strong",
+            stockText
+          );
+
+        if (
+          Number(
+            issue.stock_quantity ||
+            0
+          ) < 0
+        ) {
+          stockSpan.style.color =
+            "#991b1b";
+        } else if (
+          Number(
+            issue.stock_quantity ||
+            0
+          ) <= 2
+        ) {
+          stockSpan.style.color =
+            "#92400e";
+        }
+
+        tdNode(
+          stockSpan
+        );
+
+
+        var actionBox =
+          el("div");
+
+        actionBox.style.display =
+          "flex";
+
+        actionBox.style.gap =
+          "7px";
+
+        actionBox.style.flexWrap =
+          "wrap";
+
+
+        var qbUrl =
+          quickbutikAdminUrl(
+            issue
+          );
+
+        if (qbUrl) {
+          var quickbutik =
+            el(
+              "a",
+              "Åpne i Quickbutik"
+            );
+
+          quickbutik.href =
+            qbUrl;
+
+          quickbutik.target =
+            "_blank";
+
+          quickbutik.rel =
+            "noopener";
+
+          quickbutik.style.display =
+            "inline-flex";
+
+          quickbutik.style.padding =
+            "8px 10px";
+
+          quickbutik.style.borderRadius =
+            "9px";
+
+          quickbutik.style.border =
+            "1px solid #111827";
+
+          quickbutik.style.background =
+            "#111827";
+
+          quickbutik.style.color =
+            "#fff";
+
+          quickbutik.style.textDecoration =
+            "none";
+
+          quickbutik.style.fontWeight =
+            "800";
+
+          quickbutik.style.whiteSpace =
+            "nowrap";
+
+          actionBox.appendChild(
+            quickbutik
+          );
+        }
+
+
+        if (issue.product_url) {
+          var publicLink =
+            el(
+              "a",
+              "Se i nettbutikk"
+            );
+
+          publicLink.href =
+            issue.product_url;
+
+          publicLink.target =
+            "_blank";
+
+          publicLink.rel =
+            "noopener";
+
+          publicLink.style.display =
+            "inline-flex";
+
+          publicLink.style.padding =
+            "8px 10px";
+
+          publicLink.style.borderRadius =
+            "9px";
+
+          publicLink.style.border =
+            "1px solid #d1d5db";
+
+          publicLink.style.background =
+            "#fff";
+
+          publicLink.style.color =
+            "#111827";
+
+          publicLink.style.textDecoration =
+            "none";
+
+          publicLink.style.fontWeight =
+            "700";
+
+          publicLink.style.whiteSpace =
+            "nowrap";
+
+          actionBox.appendChild(
+            publicLink
+          );
+        }
+
+
+        tdNode(
+          actionBox
+        );
+
+        tbody.appendChild(
+          tr
+        );
       }
+    );
 
-      tdNode(createSeverityBadge(issue));
 
-      var issueBox = el("div");
-      var label = el("strong", issue.issue_label || "-");
-      var msg = el("div", issue.message || "");
-      msg.style.color = "#64748b";
-      msg.style.fontSize = "13px";
-      msg.style.marginTop = "3px";
-      issueBox.appendChild(label);
-      issueBox.appendChild(msg);
-      tdNode(issueBox);
+    table.appendChild(
+      tbody
+    );
 
-      var productBox = el("div");
-      var productName = el("strong", issue.product_name || "-");
-      productBox.appendChild(productName);
+    wrap.appendChild(
+      table
+    );
 
-      var meta = el("div", [
-        issue.brand || "",
-        issue.quickbutik_product_id ? "QB " + issue.quickbutik_product_id : ""
-      ].filter(Boolean).join(" · "));
-      meta.style.color = "#64748b";
-      meta.style.fontSize = "13px";
-      meta.style.marginTop = "3px";
-      productBox.appendChild(meta);
-
-      tdNode(productBox);
-
-      tdText(issue.variant_name || issue.quickbutik_variant_id || "-");
-      tdText(issue.inventory_main_group || "-");
-
-      var stockText = issue.stock_quantity === null || issue.stock_quantity === undefined ? "-" : String(issue.stock_quantity);
-      var stockSpan = el("strong", stockText);
-
-      if (Number(issue.stock_quantity || 0) < 0) {
-        stockSpan.style.color = "#991b1b";
-      }
-
-      tdNode(stockSpan);
-
-      var actionBox = el("div");
-      actionBox.style.display = "flex";
-      actionBox.style.gap = "8px";
-      actionBox.style.flexWrap = "wrap";
-
-      if (issue.product_url) {
-        var open = el("a", "Åpne produkt");
-        open.href = issue.product_url;
-        open.target = "_blank";
-        open.rel = "noopener";
-        open.style.display = "inline-flex";
-        open.style.padding = "8px 10px";
-        open.style.borderRadius = "9px";
-        open.style.border = "1px solid #d1d5db";
-        open.style.background = "#fff";
-        open.style.color = "#111827";
-        open.style.textDecoration = "none";
-        open.style.fontWeight = "700";
-        actionBox.appendChild(open);
-      }
-
-      var copy = createButton("Kopier ID");
-      copy.style.padding = "8px 10px";
-      copy.onclick = function () {
-        navigator.clipboard.writeText(String(issue.quickbutik_product_id || ""));
-        alert("Kopierte produkt-ID: " + String(issue.quickbutik_product_id || ""));
-      };
-      actionBox.appendChild(copy);
-
-      tdNode(actionBox);
-
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    tableArea.appendChild(wrap);
+    tableArea.appendChild(
+      wrap
+    );
   }
 
-  renderRows("all");
+
+  renderRows();
 }
+
   function renderPriceCheckDashboard(parent, data, sb) {
     function formatPriceCheckMoney(value) {
       if (
