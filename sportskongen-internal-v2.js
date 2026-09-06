@@ -1448,8 +1448,8 @@
     createPageHeader(
       parent,
       greeting,
-      "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.23 · Mission Control"
+      "Dette er arbeidsforsiden i Mission Control. Start med det som krever handling, og bruk hurtigvalgene for resten.",
+      "Arbeidsforside"
     );
 
     var products =
@@ -1466,54 +1466,46 @@
     var productIssues =
       data.productControlIssues || [];
 
-    var comparisons =
-      data.priceComparisons || [];
-
-    var suggestions =
-      data.priceSuggestions || [];
-
-    var followUps =
-      data.priceFollowUps || [];
-
     var inventoryAnalytics =
       data.inventoryAnalytics || [];
 
     var tasks =
       data.tasks || [];
 
-    var lowStockCount =
-      inventoryAnalytics.filter(
-        function (row) {
+    var systemRows =
+      data.systemStatus || [];
+
+    var invoiceRows =
+      data.supplierInvoiceSummaries ||
+      [];
+
+    var priceFollowUps =
+      data.priceFollowUps || [];
+
+    var priceSuggestions =
+      data.priceSuggestions || [];
+
+    var criticalIssues =
+      productIssues.filter(
+        function (issue) {
           return (
-            row.popular_low_stock ===
-            true
+            issue.severity ===
+            "danger"
           );
         }
-      ).length;
+      );
 
-    var deadStock90Count =
-      inventoryAnalytics.filter(
-        function (row) {
+    var warningIssues =
+      productIssues.filter(
+        function (issue) {
           return (
-            row.dead_90d === true
+            issue.severity !==
+            "danger"
           );
         }
-      ).length;
+      );
 
-    var purchaseSuggestionCount =
-      inventoryAnalytics.filter(
-        function (row) {
-          return (
-            Number(
-              row
-                .suggested_purchase_qty_60d ||
-              0
-            ) > 0
-          );
-        }
-      ).length;
-
-    var openTaskCount =
+    var openTasks =
       tasks.filter(
         function (task) {
           return (
@@ -1521,188 +1513,340 @@
             "done"
           );
         }
-      ).length;
+      );
 
-    var missingPriceMatch =
-      comparisons.filter(
-        function (row) {
+    var now =
+      Date.now();
+
+    var overdueTasks =
+      openTasks.filter(
+        function (task) {
+          if (!task.due_at) {
+            return false;
+          }
+
           return (
-            row.price_status ===
-            "Mangler prissjekk"
+            new Date(
+              task.due_at
+            ).getTime() <
+            now
           );
         }
-      ).length;
+      );
 
-    var waitingSuggestions =
-      suggestions.filter(
-        function (row) {
+    var invoicesNeedingWork =
+      invoiceRows.filter(
+        function (invoice) {
           return (
-            row.is_active !== false &&
-            row.match_status ===
-              "probable"
+            invoice.status !==
+              "costed" &&
+            invoice.status !==
+              "cancelled"
           );
         }
-      ).length;
+      );
+
+    var lowStock =
+      inventoryAnalytics.filter(
+        function (row) {
+          return (
+            row.popular_low_stock ===
+            true
+          );
+        }
+      );
+
+    var purchaseSuggestions =
+      inventoryAnalytics.filter(
+        function (row) {
+          return (
+            Number(
+              row.suggested_purchase_qty_60d ||
+              0
+            ) > 0
+          );
+        }
+      );
 
     var priceFollowUpNow =
-      followUps.filter(
+      priceFollowUps.filter(
         function (row) {
           return (
             row.needs_follow_up ===
             true
           );
         }
-      ).length;
+      );
 
-    var missingCost =
-      products.filter(
-        function (product) {
+    var waitingPriceSuggestions =
+      priceSuggestions.filter(
+        function (row) {
           return (
-            Number(
-              product.purchase_price_ex_vat ||
-              0
-            ) <= 0 &&
-            Number(
-              product.purchase_price_inc_vat ||
-              0
-            ) <= 0
+            row.is_active !==
+              false &&
+            row.match_status ===
+              "probable"
           );
         }
-      ).length;
+      );
+
+    var systemErrors =
+      systemRows.filter(
+        function (row) {
+          return (
+            row.status ===
+            "error"
+          );
+        }
+      );
+
+    var revenue7 =
+      inventoryAnalytics.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.revenue_7d ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    var revenue30 =
+      inventoryAnalytics.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.revenue_30d ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    var units30 =
+      inventoryAnalytics.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.units_sold_30d ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    var stockPurchaseValue =
+      inventoryAnalytics.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.stock_purchase_value_ex_vat ||
+              0
+            )
+          );
+        },
+        0
+      );
 
     var openQuotes =
       quotes.filter(
         function (quote) {
           return (
-            quote.status === "sent" ||
-            quote.status === "draft"
+            quote.status ===
+              "sent" ||
+            quote.status ===
+              "draft"
           );
         }
-      ).length;
+      );
 
     var latestStock =
       stockCounts.length
         ? stockCounts[0]
         : null;
 
+
     addDashboardSectionTitle(
       parent,
-      "Krever oppmerksomhet",
-      "Klikk på et kort for å gå direkte til riktig modul."
+      "Dette bør du se på nå",
+      "Røde kort først. Alt er klikkbart og fører til riktig arbeidsområde."
     );
 
-    var attentionGrid =
+    var attention =
       el("div");
 
-    attentionGrid.className =
+    attention.className =
       "sk-v4-attention-grid";
 
     createDashboardActionCard(
-      attentionGrid,
-      missingPriceMatch,
-      "Mangler godkjent pristreff",
-      "Produkter uten en godkjent konkurrentkobling.",
-      missingPriceMatch
-        ? "warning"
-        : "ok",
-      "priceCheck"
-    );
-
-    createDashboardActionCard(
-      attentionGrid,
-      waitingSuggestions,
-      "Prisforslag venter",
-      "Forslag som fortsatt må godkjennes eller avvises.",
-      waitingSuggestions
-        ? "warning"
-        : "ok",
-      "priceCheck"
-    );
-
-    createDashboardActionCard(
-      attentionGrid,
-      productIssues.length,
-      "Produktavvik",
-      "Produkter som produktkontrollen mener bør undersøkes.",
-      productIssues.length
+      attention,
+      criticalIssues.length,
+      "Må fikses",
+      criticalIssues.length
+        ? "Kritiske avvik i Kontrollsenter."
+        : "Ingen kritiske avvik.",
+      criticalIssues.length
         ? "danger"
         : "ok",
       "productControl"
     );
 
     createDashboardActionCard(
-      attentionGrid,
-      priceFollowUpNow,
-      "Prisoppfølging nå",
-      "Godkjente koblinger som trenger ny vurdering.",
-      priceFollowUpNow
+      attention,
+      invoicesNeedingWork.length,
+      "Fakturaer som venter",
+      invoicesNeedingWork.length
+        ? "Leverandørfakturaer som ikke er ferdige."
+        : "Alle leverandørfakturaer er ferdige.",
+      invoicesNeedingWork.length
+        ? "warning"
+        : "ok",
+      "supplierInvoices"
+    );
+
+    createDashboardActionCard(
+      attention,
+      overdueTasks.length,
+      "Forfalte oppgaver",
+      overdueTasks.length
+        ? "Oppgaver med passert frist."
+        : "Ingen forfalte oppgaver.",
+      overdueTasks.length
+        ? "danger"
+        : "ok",
+      "tasks"
+    );
+
+    createDashboardActionCard(
+      attention,
+      lowStock.length,
+      "Populære med lavt lager",
+      "Varer som selger og kan gå tomme snart.",
+      lowStock.length
+        ? "warning"
+        : "ok",
+      "inventoryAnalytics"
+    );
+
+    createDashboardActionCard(
+      attention,
+      (
+        priceFollowUpNow.length +
+        waitingPriceSuggestions.length
+      ),
+      "Prisoppfølging",
+      "Priskoblinger eller forslag som bør vurderes.",
+      (
+        priceFollowUpNow.length +
+        waitingPriceSuggestions.length
+      )
         ? "warning"
         : "ok",
       "priceCheck"
     );
 
-    parent.appendChild(
-      attentionGrid
-    );
-
-    var inventoryAttention =
-      el("div");
-
-    inventoryAttention.className =
-      "sk-v4-attention-grid";
-
     createDashboardActionCard(
-      inventoryAttention,
-      lowStockCount,
-      "Populære med lavt lager",
-      "Produkter med salgstakt som kan gå tomme snart.",
-      lowStockCount
-        ? "warning"
+      attention,
+      systemErrors.length,
+      "Systemfeil",
+      systemErrors.length
+        ? "En eller flere synk-/systemjobber har feilet."
+        : "Ingen registrerte systemfeil.",
+      systemErrors.length
+        ? "danger"
         : "ok",
-      "inventoryAnalytics"
-    );
-
-    createDashboardActionCard(
-      inventoryAttention,
-      deadStock90Count,
-      "Dødt lager · 90 dager",
-      "Produkter med lager, men uten salg siste 90 dager.",
-      deadStock90Count
-        ? "warning"
-        : "ok",
-      "inventoryAnalytics"
-    );
-
-    createDashboardActionCard(
-      inventoryAttention,
-      purchaseSuggestionCount,
-      "Innkjøpsforslag",
-      "Produkter hvor salgstakten tilsier mer lager.",
-      purchaseSuggestionCount
-        ? "warning"
-        : "ok",
-      "inventoryAnalytics"
-    );
-
-    createDashboardActionCard(
-      inventoryAttention,
-      openTaskCount,
-      "Åpne oppgaver",
-      "Intern huskeliste.",
-      openTaskCount
-        ? "warning"
-        : "ok",
-      "tasks"
+      "systemStatus"
     );
 
     parent.appendChild(
-      inventoryAttention
+      attention
     );
+
 
     addDashboardSectionTitle(
       parent,
-      "Hurtighandlinger",
-      "De vanligste oppgavene er ett klikk unna."
+      "Drift i korte trekk",
+      "Nøkkeltall du ofte trenger uten å åpne en analyserapport."
+    );
+
+    addProStatGrid(
+      parent,
+      [
+        {
+          label:
+            "Omsetning · 7 dager",
+          value:
+            skFormatMoney(
+              revenue7
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Omsetning · 30 dager",
+          value:
+            skFormatMoney(
+              revenue30
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Solgte enheter · 30 dager",
+          value:
+            String(
+              Math.round(
+                units30
+              )
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Lagerverdi eks. MVA",
+          value:
+            skFormatMoney(
+              stockPurchaseValue
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Aktive produkter",
+          value:
+            String(
+              products.length
+            ),
+          tone: "ok"
+        },
+        {
+          label:
+            "Åpne tilbud",
+          value:
+            String(
+              openQuotes.length
+            ),
+          tone:
+            openQuotes.length
+              ? "warning"
+              : "ok"
+        }
+      ]
+    );
+
+
+    addDashboardSectionTitle(
+      parent,
+      "Hurtigvalg",
+      "De vanligste jobbene er ett klikk unna."
     );
 
     var quick =
@@ -1713,94 +1857,138 @@
 
     [
       {
-        label: "💰 Prissjekk",
-        key: "priceCheck"
+        label:
+          "🛡️ Kontrollsenter",
+        key:
+          "productControl"
       },
       {
-        label: "📊 Lageranalyse",
-        key: "inventoryAnalytics"
+        label:
+          "📥 Leverandørfaktura",
+        key:
+          "supplierInvoices"
       },
       {
-        label: "📈 Salgsanalyse",
-        key: "salesAnalytics"
+        label:
+          "🛒 Finn produkt",
+        key:
+          "products"
       },
       {
-        label: "📦 Varetelling",
-        key: "stock"
+        label:
+          "📊 Lageranalyse",
+        key:
+          "inventoryAnalytics"
       },
       {
-        label: "🧾 Nytt tilbud",
-        key: "offers"
+        label:
+          "✅ Oppgaver",
+        key:
+          "tasks"
       },
       {
-        label: "📅 Booking",
-        key: "booking"
+        label:
+          "📅 Booking",
+        key:
+          "booking"
       },
       {
-        label: "🛒 Produkter",
-        key: "products"
+        label:
+          "💰 Prissjekk",
+        key:
+          "priceCheck"
       },
       {
-        label: "🔎 Produktkontroll",
-        key: "productControl"
+        label:
+          "📈 Salgsanalyse",
+        key:
+          "salesAnalytics"
       }
-    ].forEach(function (item) {
-      var button =
-        createButton(item.label);
-
-      button.onclick = function () {
-        if (skPortalNavigate) {
-          skPortalNavigate(
-            item.key
+    ].forEach(
+      function (item) {
+        var button =
+          createButton(
+            item.label
           );
-        }
-      };
 
-      quick.appendChild(button);
-    });
+        button.onclick =
+          function () {
+            if (
+              skPortalNavigate
+            ) {
+              skPortalNavigate(
+                item.key
+              );
+            }
+          };
 
-    parent.appendChild(quick);
+        quick.appendChild(
+          button
+        );
+      }
+    );
 
-    var grid = el("div");
-    grid.className = "sk-two-col";
+    parent.appendChild(
+      quick
+    );
 
-    var left = el("div");
-    var right = el("div");
 
-    var work =
+    var grid =
+      el("div");
+
+    grid.className =
+      "sk-two-col";
+
+    var left =
+      el("div");
+
+    var right =
+      el("div");
+
+
+    var workload =
       createCollapsibleSection(
-        "📌 Drift akkurat nå",
-        "Kort status på produkter, tilbud og lager.",
+        "📌 Arbeidskø",
+        "Ting som ikke er kritiske, men som kan være smart å ta.",
         true
       );
 
     addProStatGrid(
-      work.body,
+      workload.body,
       [
         {
           label:
-            "Produkter",
+            "Åpne oppgaver",
           value:
-            String(products.length),
-          tone: "ok"
-        },
-        {
-          label:
-            "Mangler innpris",
-          value:
-            String(missingCost),
+            String(
+              openTasks.length
+            ),
           tone:
-            missingCost
+            openTasks.length
               ? "warning"
               : "ok"
         },
         {
           label:
-            "Åpne/utkast tilbud",
+            "Innkjøpsforslag",
           value:
-            String(openQuotes),
+            String(
+              purchaseSuggestions.length
+            ),
           tone:
-            openQuotes
+            purchaseSuggestions.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Andre kontrollvarsler",
+          value:
+            String(
+              warningIssues.length
+            ),
+          tone:
+            warningIssues.length
               ? "warning"
               : "ok"
         },
@@ -1824,39 +2012,51 @@
     );
 
     left.appendChild(
-      work.wrap
+      workload.wrap
     );
+
 
     var recent =
       createCollapsibleSection(
         "🧾 Siste tilbud",
         "De siste kundetilbudene.",
-        true
+        false
       );
 
     addTable(
       recent.body,
       [
         {
-          key: "quote_number",
-          label: "Tilbud"
+          key:
+            "quote_number",
+          label:
+            "Tilbud"
         },
         {
-          key: "customer_name",
-          label: "Kunde"
+          key:
+            "customer_name",
+          label:
+            "Kunde"
         },
         {
-          key: "status",
-          label: "Status"
+          key:
+            "status",
+          label:
+            "Status"
         },
         {
           key:
             "total_sales_inc_vat",
-          label: "Sum inkl.",
-          format: "money"
+          label:
+            "Sum inkl.",
+          format:
+            "money"
         }
       ],
-      quotes.slice(0, 5),
+      quotes.slice(
+        0,
+        5
+      ),
       "Ingen tilbud funnet."
     );
 
@@ -1864,10 +2064,11 @@
       recent.wrap
     );
 
+
     var system =
       createCollapsibleSection(
-        "⚙️ Systemstatus",
-        "Når data sist ble oppdatert i de viktigste delene av portalen.",
+        "⚙️ Data og system",
+        "Kort status. Tekniske detaljer ligger under Systemstatus.",
         true
       );
 
@@ -1890,15 +2091,11 @@
 
     addDashboardStatusRow(
       statusList,
-      "Siste prissjekk",
+      "Siste registrerte salg",
       formatAdminDateTime(
         newestDate(
-          suggestions,
-          "checked_at"
-        ) ||
-        newestDate(
-          comparisons,
-          "checked_at"
+          inventoryAnalytics,
+          "last_sale_at"
         )
       )
     );
@@ -1908,15 +2105,15 @@
       "Varetelling",
       latestStock
         ? (
-            (
-              latestStock
-                .quickbutik_updated_at
-                ? "Quickbutik oppdatert · "
-                : "Ikke oppdatert mot Quickbutik · "
-            ) +
             String(
               latestStock.status ||
               "-"
+            ) +
+            (
+              latestStock
+                .quickbutik_updated_at
+                ? " · Quickbutik oppdatert"
+                : ""
             )
           )
         : "Ingen varetelling"
@@ -1924,8 +2121,15 @@
 
     addDashboardStatusRow(
       statusList,
-      "Portaldata",
-      "Lastet OK nå"
+      "System",
+      systemErrors.length
+        ? (
+            String(
+              systemErrors.length
+            ) +
+            " registrerte feil"
+          )
+        : "OK"
     );
 
     system.body.appendChild(
@@ -1936,65 +2140,80 @@
       system.wrap
     );
 
-    var navigation =
+
+    var help =
       createCollapsibleSection(
-        "🧭 Hvor finner jeg hva?",
-        "Kort forklart, så forsiden også fungerer som inngang til portalen.",
+        "🧭 Hva brukes sidene til?",
+        "Kort forklaring når du er usikker på hvor noe ligger.",
         false
       );
 
-    var navList = el("div");
+    var navList =
+      el("div");
+
     navList.className =
       "sk-v4-status-list";
 
     [
       [
+        "Kontrollsenter",
+        "Feil og avvik som krever handling eller godkjenning."
+      ],
+      [
         "Produkter",
-        "Opprette, redigere og synkronisere produkter."
+        "Finn ett produkt og se lager, pris, kost og status."
       ],
       [
-        "Produktkontroll",
-        "Avvik og produkter som bør undersøkes."
+        "Lageranalyse",
+        "Hva bør kjøpes inn, hva står stille, og hvor er kapital bundet?"
       ],
       [
-        "Varetelling",
-        "Telling, avvik og oppdatering mot Quickbutik."
+        "Salgsanalyse",
+        "Bestselgere, svakere salg og utvikling per periode."
+      ],
+      [
+        "Markedsanalyse",
+        "Strategisk bilde av marked og konkurrenter."
       ],
       [
         "Prissjekk",
-        "Konkurrentpriser, forslag, oppfølging og læring."
+        "Operativ kontroll av konkrete konkurrentpriser."
       ],
       [
-        "Tilbud",
-        "Tilbudsbygger, kundetilbud og arkiv."
-      ],
-      [
-        "Leverandører",
-        "Leverandører, kostnader og tillegg."
+        "Leverandørfakturaer",
+        "Last opp faktura, kontroller usikre linjer og oppdater kost."
       ]
-    ].forEach(function (item) {
-      addDashboardStatusRow(
-        navList,
-        item[0],
-        item[1]
-      );
-    });
+    ].forEach(
+      function (item) {
+        addDashboardStatusRow(
+          navList,
+          item[0],
+          item[1]
+        );
+      }
+    );
 
-    navigation.body.appendChild(
+    help.body.appendChild(
       navList
     );
 
     right.appendChild(
-      navigation.wrap
+      help.wrap
     );
 
-    grid.appendChild(left);
-    grid.appendChild(right);
-    parent.appendChild(grid);
+    grid.appendChild(
+      left
+    );
+    grid.appendChild(
+      right
+    );
+    parent.appendChild(
+      grid
+    );
   }
 
   function renderOffersHub(parent, data, sb) {
-    createPageHeader(parent, "Tilbud", "Lag tilbud, custom print-kalkyler og vis ferdige kundetilbud. Seksjonene er lukket for å holde siden ryddig.", "PC anbefales");
+    createPageHeader(parent, "Tilbud", "Lag og følg opp kundetilbud. Custom print og arkiv ligger på samme side, men er lukket til du trenger dem.", "Salg og pris");
     addMobileAdvice(parent);
 
     var standard = createCollapsibleSection("🧾 Lag nytt tilbud", "Vanlig tilbudsbygger med produkter, frakt, rabatt og manuelle linjer.", true);
@@ -2212,7 +2431,7 @@
     left.appendChild(h1);
     left.appendChild(p);
 
-    var badge = el("div", "🔒 Intern admin");
+    var badge = el("div", "🔒 Sportskongen intern");
     badge.className = "sk-badge";
 
     top.appendChild(left);
@@ -2225,16 +2444,16 @@
   }
 
   function renderLoading() {
-    renderShell("Sportskongen Admin", "Laster Admin v4…");
+    renderShell("Mission Control", "Laster kontrollsenteret…");
   }
 
   function renderError(message) {
-    renderShell("Feil i internportal", message);
+    renderShell("Feil i Mission Control", message);
   }
 
   function renderLogin(sb) {
     var app = renderShell(
-      "Intern Sportskongen-portal",
+      "Mission Control",
       "Logg inn med e-post og engangskoden du får på e-post."
     );
 
@@ -2536,7 +2755,7 @@
     app.appendChild(bar);
   }
 
-  function createTabs(app, tabs) {
+  function createTabs(app, tabs, data) {
     var layout = el("div");
     layout.className =
       "sk-v4-layout";
@@ -2554,7 +2773,7 @@
       "sk-v4-mobile-nav-head";
 
     var mobileNavTitle =
-      el("strong", "Navigasjon");
+      el("strong", "Mission Control");
 
     var mobileClose =
       createButton("✕ Lukk");
@@ -2575,7 +2794,7 @@
     var search = el("input");
     search.type = "search";
     search.placeholder =
-      "Finn funksjon…";
+      "Finn side eller produkt…";
     search.className =
       "sk-v4-nav-search";
 
@@ -2607,7 +2826,7 @@
     var breadcrumb =
       el(
         "div",
-        "Admin / Oversikt"
+        "Mission Control / Oversikt"
       );
 
     breadcrumb.className =
@@ -2616,7 +2835,7 @@
     var contextDesc =
       el(
         "div",
-        "Dashboard og det som krever oppmerksomhet."
+        "Arbeidsforsiden og det som krever oppmerksomhet."
       );
     contextDesc.className =
       "sk-v4-context-desc";
@@ -2678,10 +2897,135 @@
       "System"
     ];
 
+
+    function badgeValue(tab) {
+      if (!tab) {
+        return null;
+      }
+
+      var value =
+        typeof tab.badge ===
+          "function"
+          ? tab.badge()
+          : tab.badge;
+
+      if (
+        value === null ||
+        value === undefined ||
+        value === "" ||
+        value === 0 ||
+        value === "0"
+      ) {
+        return null;
+      }
+
+      return value;
+    }
+
+
+    function appendBadge(
+      button,
+      tab
+    ) {
+      var value =
+        badgeValue(tab);
+
+      if (value === null) {
+        return;
+      }
+
+      var badge =
+        el(
+          "span",
+          String(value)
+        );
+
+      badge.style.marginLeft =
+        "auto";
+      badge.style.minWidth =
+        "20px";
+      badge.style.height =
+        "20px";
+      badge.style.padding =
+        "0 6px";
+      badge.style.borderRadius =
+        "999px";
+      badge.style.display =
+        "inline-flex";
+      badge.style.alignItems =
+        "center";
+      badge.style.justifyContent =
+        "center";
+      badge.style.fontSize =
+        "11px";
+      badge.style.fontWeight =
+        "900";
+      badge.style.lineHeight =
+        "1";
+
+      if (
+        tab.badgeTone ===
+        "danger"
+      ) {
+        badge.style.background =
+          "#fee2e2";
+        badge.style.color =
+          "#991b1b";
+      } else if (
+        tab.badgeTone ===
+        "warning"
+      ) {
+        badge.style.background =
+          "#fef3c7";
+        badge.style.color =
+          "#92400e";
+      } else {
+        badge.style.background =
+          "#e2e8f0";
+        badge.style.color =
+          "#334155";
+      }
+
+      button.appendChild(
+        badge
+      );
+    }
+
+
+    function productMatches(
+      product,
+      normalized
+    ) {
+      if (!normalized) {
+        return false;
+      }
+
+      var haystack = [
+        product.name,
+        product.brand,
+        product.quickbutik_sku,
+        product.quickbutik_product_id,
+        product.supplier_name,
+        product.inventory_main_group
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return (
+        haystack.indexOf(
+          normalized
+        ) >= 0
+      );
+    }
+
+
     function renderNavigation(
       filterText
     ) {
       clear(navHost);
+
+      buttons = {};
 
       var normalized =
         String(filterText || "")
@@ -2771,18 +3115,41 @@
               icon.className =
                 "sk-v4-nav-icon";
 
-              var text =
+              var labelWrap =
+                el("span");
+
+              labelWrap.style.display =
+                "flex";
+              labelWrap.style.alignItems =
+                "center";
+              labelWrap.style.gap =
+                "7px";
+              labelWrap.style.flex =
+                "1";
+              labelWrap.style.minWidth =
+                "0";
+
+              var textNode =
                 el(
                   "span",
                   tab.label
                 );
+
+              labelWrap.appendChild(
+                textNode
+              );
 
               button.appendChild(
                 icon
               );
 
               button.appendChild(
-                text
+                labelWrap
+              );
+
+              appendBadge(
+                button,
+                tab
               );
 
               button.onclick =
@@ -2800,7 +3167,185 @@
           );
         }
       );
+
+
+      if (
+        normalized.length >= 2 &&
+        data &&
+        Array.isArray(
+          data.products
+        )
+      ) {
+        var productResults =
+          data.products
+            .filter(
+              function (product) {
+                return productMatches(
+                  product,
+                  normalized
+                );
+              }
+            )
+            .slice(0, 8);
+
+        if (
+          productResults.length
+        ) {
+          var productTitle =
+            el(
+              "div",
+              "Produkter"
+            );
+
+          productTitle.className =
+            "sk-v4-nav-title";
+
+          navHost.appendChild(
+            productTitle
+          );
+
+          productResults.forEach(
+            function (product) {
+              var productButton =
+                el("button");
+
+              productButton.type =
+                "button";
+              productButton.className =
+                "sk-v4-nav-btn";
+
+              var icon =
+                el(
+                  "span",
+                  "🛒"
+                );
+
+              icon.className =
+                "sk-v4-nav-icon";
+
+              var textWrap =
+                el("span");
+
+              textWrap.style.display =
+                "block";
+              textWrap.style.minWidth =
+                "0";
+
+              var name =
+                el(
+                  "span",
+                  product.name ||
+                    "Produkt"
+                );
+
+              name.style.display =
+                "block";
+              name.style.fontWeight =
+                "800";
+              name.style.whiteSpace =
+                "nowrap";
+              name.style.overflow =
+                "hidden";
+              name.style.textOverflow =
+                "ellipsis";
+
+              var meta =
+                el(
+                  "span",
+                  [
+                    product.brand ||
+                      "",
+                    product.quickbutik_product_id
+                      ? (
+                          "QB " +
+                          product.quickbutik_product_id
+                        )
+                      : ""
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                );
+
+              meta.style.display =
+                "block";
+              meta.style.marginTop =
+                "2px";
+              meta.style.fontSize =
+                "10px";
+              meta.style.color =
+                "#64748b";
+              meta.style.whiteSpace =
+                "nowrap";
+              meta.style.overflow =
+                "hidden";
+              meta.style.textOverflow =
+                "ellipsis";
+
+              textWrap.appendChild(
+                name
+              );
+
+              if (
+                meta.textContent
+              ) {
+                textWrap.appendChild(
+                  meta
+                );
+              }
+
+              productButton.appendChild(
+                icon
+              );
+              productButton.appendChild(
+                textWrap
+              );
+
+              productButton.onclick =
+                function () {
+                  localStorage.setItem(
+                    "sk_products_search",
+                    product.name ||
+                      normalized
+                  );
+
+                  activate(
+                    "products",
+                    true
+                  );
+                };
+
+              navHost.appendChild(
+                productButton
+              );
+            }
+          );
+        }
+      }
+
+
+      if (
+        normalized &&
+        !navHost.children.length
+      ) {
+        var empty =
+          el(
+            "div",
+            "Ingen treff."
+          );
+
+        empty.style.padding =
+          "12px";
+        empty.style.color =
+          "#64748b";
+        empty.style.fontSize =
+          "12px";
+
+        navHost.appendChild(
+          empty
+        );
+      }
     }
+
 
     function setActiveButton(key) {
       Object.keys(buttons).forEach(
@@ -2822,6 +3367,7 @@
       }
     }
 
+
     function closeMobileNavigation() {
       layout.classList.remove(
         "sk-nav-open"
@@ -2831,6 +3377,7 @@
         "false"
       );
     }
+
 
     function activate(
       key,
@@ -2848,10 +3395,14 @@
       window.location.hash =
         "admin-" + key;
 
+      renderNavigation(
+        search.value
+      );
+
       setActiveButton(key);
 
       breadcrumb.textContent =
-        "Admin / " +
+        "Mission Control / " +
         tabs[key].label;
 
       contextDesc.textContent =
@@ -2867,12 +3418,6 @@
 
       closeMobileNavigation();
 
-      /*
-       * Ikke glatt-scroll ved første rendering. Den gamle løsningen
-       * kombinerte smooth scroll med dynamisk root-forskyvning og kunne
-       * oppleves som blink/hopp. Ved brukerinitiert modulbytte flyttes vi
-       * kun til toppen hvis brukeren faktisk er et stykke nede på siden.
-       */
       if (shouldScroll === true) {
         var targetTop =
           Math.max(
@@ -2897,10 +3442,12 @@
       }
     }
 
+
     skPortalNavigate =
       function (key) {
         activate(key, true);
       };
+
 
     search.addEventListener(
       "input",
@@ -2917,6 +3464,7 @@
         setActiveButton(active);
       }
     );
+
 
     mobileToggle.onclick =
       function () {
@@ -2940,10 +3488,13 @@
         }
       };
 
+
     mobileClose.onclick =
       closeMobileNavigation;
+
     mobileBackdrop.onclick =
       closeMobileNavigation;
+
 
     document.addEventListener(
       "keydown",
@@ -2958,6 +3509,7 @@
         }
       }
     );
+
 
     renderNavigation("");
 
@@ -4260,426 +4812,1126 @@ savePriceBtn.onclick = function () {
   renderDocument();
 }
 
-  function renderProductsSmartTable(parent, products) {
-  var state = {
-  search: "",
-  sortKey: "name",
-  sortDir: "asc",
-  filter: "all"
-};
+  function renderProductsSmartTable(
+    parent,
+    products,
+    issues,
+    inventoryAnalytics
+  ) {
+    var initialSearch =
+      localStorage.getItem(
+        "sk_products_search"
+      ) || "";
 
-  var controls = el("div");
-  controls.style.display = "grid";
-  controls.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
-  controls.style.gap = "12px";
-  controls.style.marginBottom = "14px";
+    localStorage.removeItem(
+      "sk_products_search"
+    );
 
-  var searchInput = el("input");
-  searchInput.type = "text";
-  searchInput.placeholder = "Søk produkt, merke, kategori, leverandør, SKU...";
-  searchInput.style.width = "100%";
-  searchInput.style.padding = "10px";
-  searchInput.style.border = "1px solid #d1d5db";
-  searchInput.style.borderRadius = "10px";
-  searchInput.style.boxSizing = "border-box";
+    var state = {
+      search:
+        initialSearch,
+      sortKey:
+        "name",
+      sortDir:
+        "asc",
+      filter:
+        "all"
+    };
 
-  var sortSelect = el("select");
-  sortSelect.style.width = "100%";
-  sortSelect.style.padding = "10px";
-  sortSelect.style.border = "1px solid #d1d5db";
-  sortSelect.style.borderRadius = "10px";
-  sortSelect.style.boxSizing = "border-box";
+    var issuesByProduct = {};
+    var analyticsByProduct = {};
 
-  addOption(sortSelect, "name", "Produkt");
-  addOption(sortSelect, "brand", "Merke");
-  addOption(sortSelect, "category", "Kategori");
-  addOption(sortSelect, "supplier_name", "Leverandør");
-  addOption(sortSelect, "sales_price_inc_vat", "Utsalgspris");
-  addOption(sortSelect, "purchase_price_ex_vat", "Innpris eks.");
-  addOption(sortSelect, "purchase_price_inc_vat", "Innpris inkl.");
-  addOption(sortSelect, "profit_ex_vat", "Fortjeneste kr");
-  addOption(sortSelect, "profit_margin_percent", "Fortjeneste %");
-  addOption(sortSelect, "stock_quantity", "Lager");
-  addOption(sortSelect, "quickbutik_status", "Status");
-  addOption(sortSelect, "last_synced_at", "Sist synket");
+    (inventoryAnalytics || []).forEach(
+      function (row) {
+        if (row.product_id) {
+          analyticsByProduct[
+            row.product_id
+          ] = row;
+        }
+      }
+    );
 
-  var dirSelect = el("select");
-  dirSelect.style.width = "100%";
-  dirSelect.style.padding = "10px";
-  dirSelect.style.border = "1px solid #d1d5db";
-  dirSelect.style.borderRadius = "10px";
-  dirSelect.style.boxSizing = "border-box";
+    function effectiveStock(product) {
+      var analytics =
+        analyticsByProduct[
+          product.id
+        ];
 
-  addOption(dirSelect, "asc", "A–Å / lavest først");
-  addOption(dirSelect, "desc", "Å–A / høyest først");
-
-  controls.appendChild(searchInput);
-  controls.appendChild(sortSelect);
-  controls.appendChild(dirSelect);
-  parent.appendChild(controls);
-    var filterRow = el("div");
-filterRow.style.display = "flex";
-filterRow.style.gap = "8px";
-filterRow.style.flexWrap = "wrap";
-filterRow.style.marginBottom = "14px";
-
-function createFilterButton(key, label) {
-  var btn = createButton(label);
-
-  btn.onclick = function () {
-    state.filter = key;
-    updateFilterButtons();
-    render();
-  };
-
-  btn.setActive = function (active) {
-    btn.style.background = active ? "#111827" : "#fff";
-    btn.style.color = active ? "#fff" : "#111827";
-    btn.style.borderColor = active ? "#111827" : "#d1d5db";
-  };
-
-  filterRow.appendChild(btn);
-  return btn;
-}
-
-var filterButtons = {
-  all: createFilterButton("all", "Alle"),
-  lowProfit: createFilterButton("lowProfit", "Under 20 %"),
-  missingCost: createFilterButton("missingCost", "Mangler innpris"),
-  unlocked: createFilterButton("unlocked", "Ikke låst"),
-  quickbutik: createFilterButton("quickbutik", "Synket fra Quickbutik"),
-  hidden: createFilterButton("hidden", "Skjult i nettbutikk"),
-  outOfStock: createFilterButton("outOfStock", "Tomt lager")
-};
-
-function updateFilterButtons() {
-  Object.keys(filterButtons).forEach(function (key) {
-    filterButtons[key].setActive(state.filter === key);
-  });
-}
-
-updateFilterButtons();
-
-parent.appendChild(filterRow);
-
-  var summary = el("div");
-  summary.style.marginBottom = "10px";
-  summary.style.color = "#6b7280";
-  summary.style.fontSize = "13px";
-  parent.appendChild(summary);
-
-  var tableTarget = el("div");
-  parent.appendChild(tableTarget);
-
-  function normalize(value) {
-    if (value === null || value === undefined) {
-      return "";
-    }
-
-    return String(value).toLowerCase();
-  }
-
-  function isNumberLike(value) {
-    if (value === null || value === undefined || value === "") {
-      return false;
-    }
-
-    return !Number.isNaN(Number(value));
-  }
-
-  function formatValue(row, key) {
-    var value = row[key];
-
-    if (key === "sales_price_inc_vat" ||
-        key === "sales_price_ex_vat" ||
-        key === "purchase_price_ex_vat" ||
-        key === "purchase_price_inc_vat" ||
-        key === "profit_ex_vat") {
-      return money(value) + " kr";
-    }
-
-    if (key === "profit_margin_percent") {
-      return money(value) + " %";
-    }
-
-    if (key === "cost_locked") {
-      return value ? "🔒 Låst" : "🔓 Åpen";
-    }
-
-    if (key === "last_synced_at") {
-      if (!value) {
-        return "-";
+      if (
+        analytics &&
+        analytics.stock_quantity !==
+          null &&
+        analytics.stock_quantity !==
+          undefined
+      ) {
+        return Number(
+          analytics.stock_quantity
+        );
       }
 
-      var d = new Date(value);
-
-      if (isNaN(d.getTime())) {
-        return "-";
+      if (
+        product.stock_quantity ===
+          null ||
+        product.stock_quantity ===
+          undefined
+      ) {
+        return null;
       }
 
-      return d.toLocaleString("no-NO");
+      return Number(
+        product.stock_quantity
+      );
     }
 
-    if (value === null || value === undefined || value === "") {
-      return "-";
+    (issues || []).forEach(
+      function (issue) {
+        if (!issue.product_id) {
+          return;
+        }
+
+        if (
+          !issuesByProduct[
+            issue.product_id
+          ]
+        ) {
+          issuesByProduct[
+            issue.product_id
+          ] = [];
+        }
+
+        issuesByProduct[
+          issue.product_id
+        ].push(
+          issue
+        );
+      }
+    );
+
+
+    function productIssues(product) {
+      return (
+        issuesByProduct[
+          product.id
+        ] || []
+      );
     }
 
-    return value;
-  }
 
-  function productMatchesSearch(p, query) {
-    if (!query) {
+    var controls =
+      el("div");
+
+    controls.style.display =
+      "grid";
+    controls.style.gridTemplateColumns =
+      "repeat(auto-fit, minmax(180px, 1fr))";
+    controls.style.gap =
+      "10px";
+    controls.style.marginBottom =
+      "12px";
+
+
+    var searchInput =
+      el("input");
+
+    searchInput.type =
+      "search";
+    searchInput.placeholder =
+      "Søk produkt, merke, SKU eller Quickbutik-ID…";
+    searchInput.value =
+      initialSearch;
+
+    searchInput.style.width =
+      "100%";
+    searchInput.style.padding =
+      "10px";
+    searchInput.style.border =
+      "1px solid #d1d5db";
+    searchInput.style.borderRadius =
+      "10px";
+    searchInput.style.boxSizing =
+      "border-box";
+
+
+    var sortSelect =
+      el("select");
+
+    [
+      [
+        "name",
+        "Sorter: Produkt"
+      ],
+      [
+        "stock_quantity",
+        "Sorter: Lager"
+      ],
+      [
+        "sales_price_inc_vat",
+        "Sorter: Utsalgspris"
+      ],
+      [
+        "purchase_price_ex_vat",
+        "Sorter: Innkjøpspris"
+      ],
+      [
+        "profit_margin_percent",
+        "Sorter: Margin"
+      ],
+      [
+        "supplier_name",
+        "Sorter: Leverandør"
+      ]
+    ].forEach(
+      function (item) {
+        addOption(
+          sortSelect,
+          item[0],
+          item[1]
+        );
+      }
+    );
+
+
+    var dirSelect =
+      el("select");
+
+    addOption(
+      dirSelect,
+      "asc",
+      "Lavest / A–Å"
+    );
+
+    addOption(
+      dirSelect,
+      "desc",
+      "Høyest / Å–A"
+    );
+
+    controls.appendChild(
+      searchInput
+    );
+    controls.appendChild(
+      sortSelect
+    );
+    controls.appendChild(
+      dirSelect
+    );
+
+    parent.appendChild(
+      controls
+    );
+
+
+    var filterRow =
+      el("div");
+
+    filterRow.style.display =
+      "flex";
+    filterRow.style.gap =
+      "8px";
+    filterRow.style.flexWrap =
+      "wrap";
+    filterRow.style.marginBottom =
+      "12px";
+
+
+    var filterButtons = {};
+
+
+    function filterCount(key) {
+      return (
+        products || []
+      ).filter(
+        function (product) {
+          return matchesFilter(
+            product,
+            key
+          );
+        }
+      ).length;
+    }
+
+
+    function makeFilter(
+      key,
+      label
+    ) {
+      var button =
+        createButton(
+          label
+        );
+
+      button.onclick =
+        function () {
+          state.filter =
+            key;
+
+          updateFilters();
+          render();
+        };
+
+      filterButtons[key] =
+        button;
+
+      filterRow.appendChild(
+        button
+      );
+    }
+
+
+    function updateFilters() {
+      Object.keys(
+        filterButtons
+      ).forEach(
+        function (key) {
+          var button =
+            filterButtons[key];
+
+          var active =
+            key ===
+            state.filter;
+
+          button.style.background =
+            active
+              ? "#111827"
+              : "#fff";
+
+          button.style.color =
+            active
+              ? "#fff"
+              : "#111827";
+
+          button.style.borderColor =
+            active
+              ? "#111827"
+              : "#d1d5db";
+        }
+      );
+    }
+
+
+    makeFilter(
+      "all",
+      "Alle"
+    );
+    makeFilter(
+      "issues",
+      "Har varsler"
+    );
+    makeFilter(
+      "lowProfit",
+      "Lav margin"
+    );
+    makeFilter(
+      "missingCost",
+      "Mangler innpris"
+    );
+    makeFilter(
+      "hidden",
+      "Skjult"
+    );
+    makeFilter(
+      "outOfStock",
+      "Tomt lager"
+    );
+
+    parent.appendChild(
+      filterRow
+    );
+
+
+    var summary =
+      el("div");
+
+    summary.style.marginBottom =
+      "9px";
+    summary.style.color =
+      "#64748b";
+    summary.style.fontSize =
+      "13px";
+
+    parent.appendChild(
+      summary
+    );
+
+
+    var tableHost =
+      el("div");
+
+    parent.appendChild(
+      tableHost
+    );
+
+
+    function normalize(value) {
+      return String(
+        value === null ||
+        value === undefined
+          ? ""
+          : value
+      ).toLowerCase();
+    }
+
+
+    function matchesSearch(
+      product
+    ) {
+      var query =
+        normalize(
+          state.search
+        ).trim();
+
+      if (!query) {
+        return true;
+      }
+
+      return [
+        product.name,
+        product.brand,
+        product.category,
+        product.supplier_name,
+        product.quickbutik_sku,
+        product.quickbutik_product_id,
+        product.quickbutik_slug,
+        product.inventory_main_group
+      ]
+        .map(
+          normalize
+        )
+        .join(" ")
+        .indexOf(
+          query
+        ) >= 0;
+    }
+
+
+    function matchesFilter(
+      product,
+      filterKey
+    ) {
+      var margin =
+        Number(
+          product
+            .profit_margin_percent ||
+          0
+        );
+
+      var purchaseEx =
+        Number(
+          product
+            .purchase_price_ex_vat ||
+          0
+        );
+
+      var purchaseInc =
+        Number(
+          product
+            .purchase_price_inc_vat ||
+          0
+        );
+
+      var status =
+        String(
+          product
+            .quickbutik_status ||
+          ""
+        ).toLowerCase();
+
+      if (
+        filterKey ===
+        "issues"
+      ) {
+        return (
+          productIssues(
+            product
+          ).length > 0
+        );
+      }
+
+      if (
+        filterKey ===
+        "lowProfit"
+      ) {
+        return (
+          product
+            .low_profit_warning ===
+            true ||
+          (
+            margin > 0 &&
+            margin < 20
+          )
+        );
+      }
+
+      if (
+        filterKey ===
+        "missingCost"
+      ) {
+        return (
+          purchaseEx <= 0 &&
+          purchaseInc <= 0
+        );
+      }
+
+      if (
+        filterKey ===
+        "hidden"
+      ) {
+        return (
+          status ===
+          "hidden"
+        );
+      }
+
+      if (
+        filterKey ===
+        "outOfStock"
+      ) {
+        var stock =
+          effectiveStock(
+            product
+          );
+
+        return (
+          stock !== null &&
+          stock <= 0
+        );
+      }
+
       return true;
     }
 
-    var haystack = [
-      p.name,
-      p.brand,
-      p.category,
-      p.supplier_name,
-      p.quickbutik_sku,
-      p.quickbutik_product_id,
-      p.quickbutik_slug,
-      p.quickbutik_status,
-      p.sync_source
-    ].map(normalize).join(" ");
 
-    return haystack.indexOf(query) >= 0;
-  }
+    function compareRows(
+      a,
+      b
+    ) {
+      var av =
+        a[state.sortKey];
 
-  function compareRows(a, b) {
-    var key = state.sortKey;
-    var av = a[key];
-    var bv = b[key];
+      var bv =
+        b[state.sortKey];
 
-    if (isNumberLike(av) || isNumberLike(bv)) {
-      av = Number(av || 0);
-      bv = Number(bv || 0);
-    } else {
-      av = normalize(av);
-      bv = normalize(bv);
+      var aNumber =
+        Number(av);
+
+      var bNumber =
+        Number(bv);
+
+      var result = 0;
+
+      if (
+        av !== "" &&
+        bv !== "" &&
+        !Number.isNaN(
+          aNumber
+        ) &&
+        !Number.isNaN(
+          bNumber
+        )
+      ) {
+        result =
+          aNumber -
+          bNumber;
+      } else {
+        result =
+          normalize(av)
+            .localeCompare(
+              normalize(bv),
+              "nb"
+            );
+      }
+
+      return (
+        state.sortDir ===
+        "desc"
+          ? -result
+          : result
+      );
     }
 
-    if (av < bv) {
-      return state.sortDir === "asc" ? -1 : 1;
+
+    function statusBadge(
+      product
+    ) {
+      var list =
+        productIssues(
+          product
+        );
+
+      var critical =
+        list.filter(
+          function (issue) {
+            return (
+              issue.severity ===
+              "danger"
+            );
+          }
+        );
+
+      var badge =
+        el("span");
+
+      badge.style.display =
+        "inline-flex";
+      badge.style.padding =
+        "5px 8px";
+      badge.style.borderRadius =
+        "999px";
+      badge.style.fontSize =
+        "12px";
+      badge.style.fontWeight =
+        "900";
+      badge.style.whiteSpace =
+        "nowrap";
+
+      if (
+        critical.length
+      ) {
+        badge.textContent =
+          String(
+            critical.length
+          ) +
+          " må fikses";
+        badge.style.background =
+          "#fee2e2";
+        badge.style.color =
+          "#991b1b";
+      } else if (
+        list.length
+      ) {
+        badge.textContent =
+          String(
+            list.length
+          ) +
+          " varsel";
+        badge.style.background =
+          "#fef3c7";
+        badge.style.color =
+          "#92400e";
+      } else if (
+        String(
+          product
+            .quickbutik_status ||
+          ""
+        ).toLowerCase() ===
+        "hidden"
+      ) {
+        badge.textContent =
+          "Skjult";
+        badge.style.background =
+          "#f1f5f9";
+        badge.style.color =
+          "#475569";
+      } else {
+        badge.textContent =
+          "OK";
+        badge.style.background =
+          "#dcfce7";
+        badge.style.color =
+          "#166534";
+      }
+
+      return badge;
     }
 
-    if (av > bv) {
-      return state.sortDir === "asc" ? 1 : -1;
+
+    function actionLink(
+      label,
+      href,
+      primary
+    ) {
+      var link =
+        el(
+          "a",
+          label
+        );
+
+      link.href =
+        href;
+      link.target =
+        "_blank";
+      link.rel =
+        "noopener";
+      link.style.display =
+        "inline-flex";
+      link.style.padding =
+        "7px 9px";
+      link.style.borderRadius =
+        "8px";
+      link.style.textDecoration =
+        "none";
+      link.style.fontWeight =
+        primary
+          ? "800"
+          : "700";
+      link.style.whiteSpace =
+        "nowrap";
+
+      if (primary) {
+        link.style.background =
+          "#111827";
+        link.style.color =
+          "#fff";
+        link.style.border =
+          "1px solid #111827";
+      } else {
+        link.style.background =
+          "#fff";
+        link.style.color =
+          "#111827";
+        link.style.border =
+          "1px solid #d1d5db";
+      }
+
+      return link;
     }
 
-    return 0;
-  }
-function productMatchesFilter(p) {
-  var margin = Number(p.profit_margin_percent || 0);
-  var purchaseEx = Number(p.purchase_price_ex_vat || 0);
-  var purchaseInc = Number(p.purchase_price_inc_vat || 0);
-  var stock = p.stock_quantity;
-  var status = String(p.quickbutik_status || "").toLowerCase();
-  var source = String(p.sync_source || "").toLowerCase();
 
-  if (state.filter === "lowProfit") {
-    return p.low_profit_warning === true || margin < 20;
-  }
+    function render() {
+      clear(
+        tableHost
+      );
 
-  if (state.filter === "missingCost") {
-    return purchaseEx <= 0 && purchaseInc <= 0;
-  }
+      var rows =
+        (products || [])
+          .filter(
+            function (product) {
+              return (
+                matchesSearch(
+                  product
+                ) &&
+                matchesFilter(
+                  product,
+                  state.filter
+                )
+              );
+            }
+          )
+          .sort(
+            compareRows
+          );
 
-  if (state.filter === "unlocked") {
-    return p.cost_locked !== true;
-  }
+      summary.textContent =
+        "Viser " +
+        String(
+          rows.length
+        ) +
+        " av " +
+        String(
+          (
+            products || []
+          ).length
+        ) +
+        " produkter.";
 
-  if (state.filter === "quickbutik") {
-    return source === "quickbutik";
-  }
+      if (!rows.length) {
+        var empty =
+          el(
+            "div",
+            "Ingen produkter matcher søket eller filteret."
+          );
 
-  if (state.filter === "hidden") {
-    return status === "hidden";
-  }
+        empty.className =
+          "sk-note";
 
-  if (state.filter === "outOfStock") {
-    return stock !== null && stock !== undefined && Number(stock) <= 0;
-  }
+        tableHost.appendChild(
+          empty
+        );
 
-  return true;
-}
-    function filterLabel(key) {
-  if (key === "lowProfit") return "Under 20 %";
-  if (key === "missingCost") return "Mangler innpris";
-  if (key === "unlocked") return "Ikke låst";
-  if (key === "quickbutik") return "Synket fra Quickbutik";
-  if (key === "hidden") return "Skjult i nettbutikk";
-  if (key === "outOfStock") return "Tomt lager";
-  return "Alle";
-}
-  function render() {
-    clear(tableTarget);
+        return;
+      }
 
-    var query = normalize(state.search);
 
-    var rows = (products || [])
-  .filter(function (p) {
-    return productMatchesSearch(p, query) && productMatchesFilter(p);
-  })
-  .sort(compareRows);
+      var wrap =
+        el("div");
 
-    var lowProfitCount = rows.filter(function (p) {
-      return p.low_profit_warning === true || Number(p.profit_margin_percent || 0) < 20;
-    }).length;
+      wrap.style.overflowX =
+        "auto";
+      wrap.style.border =
+        "1px solid #e5e7eb";
+      wrap.style.borderRadius =
+        "14px";
 
-    summary.textContent =
-  "Viser " +
-  rows.length +
-  " av " +
-  (products || []).length +
-  " produkter" +
-  " · Filter: " +
-  filterLabel(state.filter) +
-  (lowProfitCount > 0 ? " · " + lowProfitCount + " med under 20 % fortjeneste" : "");
 
-    if (!rows.length) {
-      var empty = el("p", "Ingen produkter matcher søket.");
-      empty.style.color = "#6b7280";
-      tableTarget.appendChild(empty);
-      return;
-    }
+      var table =
+        el("table");
 
-    var wrap = el("div");
-    wrap.style.overflowX = "auto";
-    wrap.style.border = "1px solid #e5e7eb";
-    wrap.style.borderRadius = "14px";
+      table.style.width =
+        "100%";
+      table.style.borderCollapse =
+        "collapse";
+      table.style.fontSize =
+        "14px";
 
-    var table = el("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    table.style.fontSize = "14px";
 
-    var columns = [
-  { key: "name", label: "Produkt" },
-  { key: "open_product", label: "Åpne" },
-  { key: "brand", label: "Merke" },
-  { key: "category", label: "Kategori" },
-  { key: "supplier_name", label: "Leverandør" },
-  { key: "sales_price_inc_vat", label: "Utsalg inkl." },
-  { key: "purchase_price_ex_vat", label: "Innpris eks." },
-  { key: "purchase_price_inc_vat", label: "Innpris inkl." },
-  { key: "profit_ex_vat", label: "Fortjeneste" },
-  { key: "profit_margin_percent", label: "Fortj. %" },
-  { key: "stock_quantity", label: "Lager" },
-  { key: "quickbutik_status", label: "Status" },
-  { key: "cost_locked", label: "Kostnad" },
-  { key: "sync_source", label: "Kilde" },
-  { key: "last_synced_at", label: "Sist synket" }
-];
+      var thead =
+        el("thead");
 
-    var thead = el("thead");
-    var headTr = el("tr");
+      var trh =
+        el("tr");
 
-    columns.forEach(function (col) {
-      var th = el("th", col.label + (state.sortKey === col.key ? (state.sortDir === "asc" ? " ↑" : " ↓") : ""));
-      th.style.textAlign = "left";
-      th.style.padding = "11px";
-      th.style.borderBottom = "1px solid #e5e7eb";
-      th.style.background = "#f9fafb";
-      th.style.whiteSpace = "nowrap";
-      th.style.cursor = "pointer";
+      [
+        "Produkt",
+        "Status",
+        "Lager",
+        "Utsalg",
+        "Innpris eks.",
+        "Margin",
+        "Leverandør",
+        "Handling"
+      ].forEach(
+        function (label) {
+          var th =
+            el(
+              "th",
+              label
+            );
 
-      th.onclick = function () {
-        if (state.sortKey === col.key) {
-          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-        } else {
-          state.sortKey = col.key;
-          state.sortDir = "asc";
+          th.style.textAlign =
+            "left";
+          th.style.padding =
+            "11px";
+          th.style.borderBottom =
+            "1px solid #e5e7eb";
+          th.style.background =
+            "#f9fafb";
+          th.style.whiteSpace =
+            "nowrap";
+
+          trh.appendChild(
+            th
+          );
         }
+      );
 
-        sortSelect.value = state.sortKey;
-        dirSelect.value = state.sortDir;
+      thead.appendChild(
+        trh
+      );
+
+      table.appendChild(
+        thead
+      );
+
+
+      var tbody =
+        el("tbody");
+
+
+      rows.forEach(
+        function (product) {
+          var tr =
+            el("tr");
+
+          var list =
+            productIssues(
+              product
+            );
+
+          if (
+            list.some(
+              function (issue) {
+                return (
+                  issue.severity ===
+                  "danger"
+                );
+              }
+            )
+          ) {
+            tr.style.background =
+              "#fff7f7";
+          }
+
+
+          function tdNode(node) {
+            var td =
+              el("td");
+
+            td.style.padding =
+              "11px";
+            td.style.borderBottom =
+              "1px solid #f3f4f6";
+            td.style.verticalAlign =
+              "top";
+
+            td.appendChild(
+              node
+            );
+
+            tr.appendChild(
+              td
+            );
+          }
+
+
+          var productBox =
+            el("div");
+
+          productBox.appendChild(
+            el(
+              "strong",
+              product.name ||
+                "-"
+            )
+          );
+
+          var meta =
+            el(
+              "div",
+              [
+                product.brand ||
+                  "",
+                product.inventory_main_group ||
+                  product.category ||
+                  "",
+                product.quickbutik_product_id
+                  ? (
+                      "QB " +
+                      product.quickbutik_product_id
+                    )
+                  : ""
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            );
+
+          meta.style.marginTop =
+            "3px";
+          meta.style.fontSize =
+            "12px";
+          meta.style.color =
+            "#64748b";
+
+          productBox.appendChild(
+            meta
+          );
+
+          tdNode(
+            productBox
+          );
+
+
+          tdNode(
+            statusBadge(
+              product
+            )
+          );
+
+
+          var stockValue =
+            effectiveStock(
+              product
+            );
+
+          var stock =
+            el(
+              "strong",
+              stockValue === null
+                ? "-"
+                : String(
+                    stockValue
+                  )
+            );
+
+          if (
+            stockValue !== null &&
+            stockValue <= 0
+          ) {
+            stock.style.color =
+              "#92400e";
+          }
+
+          tdNode(
+            stock
+          );
+
+
+          tdNode(
+            el(
+              "span",
+              money(
+                product
+                  .sales_price_inc_vat
+              ) +
+                " kr"
+            )
+          );
+
+
+          tdNode(
+            el(
+              "span",
+              money(
+                product
+                  .purchase_price_ex_vat
+              ) +
+                " kr"
+            )
+          );
+
+
+          var margin =
+            Number(
+              product
+                .profit_margin_percent ||
+              0
+            );
+
+          var marginNode =
+            el(
+              "strong",
+              money(
+                margin
+              ) +
+                " %"
+            );
+
+          if (
+            margin < 20
+          ) {
+            marginNode.style.color =
+              "#991b1b";
+          }
+
+          tdNode(
+            marginNode
+          );
+
+
+          tdNode(
+            el(
+              "span",
+              product.supplier_name ||
+                "-"
+            )
+          );
+
+
+          var actions =
+            el("div");
+
+          actions.style.display =
+            "flex";
+          actions.style.gap =
+            "6px";
+          actions.style.flexWrap =
+            "wrap";
+
+
+          if (
+            list.length
+          ) {
+            var alertButton =
+              createButton(
+                "Varsler"
+              );
+
+            alertButton.onclick =
+              function () {
+                localStorage.setItem(
+                  "sk_control_search",
+                  product.name ||
+                    ""
+                );
+
+                if (
+                  skPortalNavigate
+                ) {
+                  skPortalNavigate(
+                    "productControl"
+                  );
+                }
+              };
+
+            actions.appendChild(
+              alertButton
+            );
+          }
+
+
+          if (
+            product
+              .quickbutik_product_id
+          ) {
+            actions.appendChild(
+              actionLink(
+                "Quickbutik",
+                "https://platform.quickbutik.com/admin/products/edit/" +
+                  encodeURIComponent(
+                    String(
+                      product
+                        .quickbutik_product_id
+                    )
+                  ),
+                true
+              )
+            );
+          }
+
+
+          if (
+            product.product_url
+          ) {
+            actions.appendChild(
+              actionLink(
+                "Nettbutikk",
+                product.product_url,
+                false
+              )
+            );
+          }
+
+          tdNode(
+            actions
+          );
+
+          tbody.appendChild(
+            tr
+          );
+        }
+      );
+
+
+      table.appendChild(
+        tbody
+      );
+
+      wrap.appendChild(
+        table
+      );
+
+      tableHost.appendChild(
+        wrap
+      );
+    }
+
+
+    searchInput.oninput =
+      function () {
+        state.search =
+          searchInput.value;
+
         render();
       };
 
-      headTr.appendChild(th);
-    });
+    sortSelect.onchange =
+      function () {
+        state.sortKey =
+          sortSelect.value;
 
-    thead.appendChild(headTr);
-    table.appendChild(thead);
+        render();
+      };
 
-    var tbody = el("tbody");
+    dirSelect.onchange =
+      function () {
+        state.sortDir =
+          dirSelect.value;
 
-    rows.forEach(function (row) {
-      var tr = el("tr");
+        render();
+      };
 
-      var lowProfit =
-        row.low_profit_warning === true ||
-        Number(row.profit_margin_percent || 0) < 20;
-
-      if (lowProfit) {
-        tr.style.background = "#fee2e2";
-      }
-
-      columns.forEach(function (col) {
-        var td = el("td");
-
-if (col.key === "open_product") {
-  if (row.name) {
-    var link = el("a", "Søk");
-    var searchName = String(row.name || "").split(" - ")[0].trim();
-
-link.href = "https://golfkongen.no/shop/search?s=" + encodeURIComponent(searchName || row.name);
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.style.color = "#2563eb";
-    link.style.fontWeight = "800";
-    link.style.textDecoration = "none";
-    td.appendChild(link);
-  } else {
-    td.textContent = "-";
+    updateFilters();
+    render();
   }
-} else {
-  td.textContent = formatValue(row, col.key);
-}
-        td.style.padding = "11px";
-        td.style.borderBottom = "1px solid #f3f4f6";
-        td.style.whiteSpace = "nowrap";
-
-        if (col.key === "profit_margin_percent" && lowProfit) {
-          td.style.fontWeight = "900";
-          td.style.color = "#991b1b";
-        }
-
-        if (col.key === "profit_ex_vat" && lowProfit) {
-          td.style.fontWeight = "900";
-          td.style.color = "#991b1b";
-        }
-
-        tr.appendChild(td);
-      });
-
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    tableTarget.appendChild(wrap);
-  }
-
-  searchInput.oninput = function () {
-    state.search = searchInput.value;
-    render();
-  };
-
-  sortSelect.onchange = function () {
-    state.sortKey = sortSelect.value;
-    render();
-  };
-
-  dirSelect.onchange = function () {
-    state.sortDir = dirSelect.value;
-    render();
-  };
-
-  render();
-}
 
 function renderProductSyncBox(parent, sb) {
   var section = createCollapsibleSection(
@@ -5129,15 +6381,149 @@ function renderDeleteManualProductSection(parent, data, sb) {
 }
 
   function renderProductsManager(parent, data, sb) {
-  var h2 = el("h2", "Produkter");
-  h2.style.marginTop = "0";
-  parent.appendChild(h2);
+  createPageHeader(
+    parent,
+    "Produkter",
+    "Finn og kontroller ett produkt. Produktoversikten viser lager, pris, kost, margin og eventuelle varsler på samme sted.",
+    "Varer og lager"
+  );
 
-  var intro = el("p", "Her kan du oppdatere innkjøpspris og låse/åpne kostnad på interne produkter.");
-  intro.style.color = "#6b7280";
-  parent.appendChild(intro);
-    renderDeleteManualProductSection(parent, data, sb);
-    renderProductSyncBox(parent, sb);
+  var products =
+    data.products || [];
+
+  var issues =
+    data.productControlIssues || [];
+
+  var productsWithIssues = {};
+
+  issues.forEach(
+    function (issue) {
+      if (issue.product_id) {
+        productsWithIssues[
+          issue.product_id
+        ] = true;
+      }
+    }
+  );
+
+  addProStatGrid(
+    parent,
+    [
+      {
+        label:
+          "Produkter",
+        value:
+          String(
+            products.length
+          ),
+        tone:
+          "ok"
+      },
+      {
+        label:
+          "Har varsler",
+        value:
+          String(
+            Object.keys(
+              productsWithIssues
+            ).length
+          ),
+        tone:
+          Object.keys(
+            productsWithIssues
+          ).length
+            ? "warning"
+            : "ok"
+      },
+      {
+        label:
+          "Leverandører i produktregisteret",
+        value:
+          String(
+            Object.keys(
+              products.reduce(
+                function (
+                  acc,
+                  product
+                ) {
+                  if (
+                    product.supplier_name
+                  ) {
+                    acc[
+                      product.supplier_name
+                    ] = true;
+                  }
+
+                  return acc;
+                },
+                {}
+              )
+            ).length
+          ),
+        tone:
+          "ok"
+      },
+      {
+        label:
+          "Skjult",
+        value:
+          String(
+            products.filter(
+              function (product) {
+                return (
+                  String(
+                    product.quickbutik_status ||
+                    ""
+                  ).toLowerCase() ===
+                  "hidden"
+                );
+              }
+            ).length
+          ),
+        tone:
+          "ok"
+      }
+    ]
+  );
+
+  var productListSection =
+    createCollapsibleSection(
+      "📦 Produktoversikt",
+      "Søk produkt og gå direkte til Quickbutik, nettbutikken eller varslene.",
+      true
+    );
+
+  renderProductsSmartTable(
+    productListSection.body,
+    products,
+    issues,
+    data.inventoryAnalytics ||
+      []
+  );
+
+  parent.appendChild(
+    productListSection.wrap
+  );
+
+  var maintenance =
+    el(
+      "div",
+      "Vedlikehold og tekniske funksjoner ligger under. I normal bruk trenger du oftest bare produktoversikten."
+    );
+
+  maintenance.className =
+    "sk-note";
+  maintenance.style.marginBottom =
+    "12px";
+
+  parent.appendChild(
+    maintenance
+  );
+
+  renderProductSyncBox(
+    parent,
+    sb
+  );
 
     var createSection = createCollapsibleSection(
   "➕ Nytt produkt",
@@ -5258,8 +6644,8 @@ createWrap.appendChild(createGrid);
 createWrap.appendChild(createBtn);
 parent.appendChild(createSection.wrap);
   var editSection = createCollapsibleSection(
-  "✏️ Rediger innpris / lås kostnad",
-  "Endre innpris, mva, valuta og om kostnaden skal være låst.",
+  "✏️ Manuell kostjustering",
+  "Bruk bare når kost må korrigeres manuelt uten leverandørfaktura.",
   false
 );
 
@@ -5473,15 +6859,11 @@ createBtn.onclick = function () {
     });
   };
 
-  var productListSection = createCollapsibleSection(
-  "📦 Produktoversikt",
-  "Søk, sorter og kontroller priser, lager og fortjeneste.",
-  true
-);
-
-renderProductsSmartTable(productListSection.body, data.products || []);
-
-parent.appendChild(productListSection.wrap);
+  renderDeleteManualProductSection(
+    parent,
+    data,
+    sb
+  );
 }
 
   function renderDeleteAddonSection(parent, data, sb) {
@@ -17979,15 +19361,157 @@ parent.appendChild(productListSection.wrap);
 
 
   function renderSuppliersAddonsManager(parent, data, sb) {
-  var h2 = el("h2", "Leverandører og kostnader");
-  h2.style.marginTop = "0";
-  parent.appendChild(h2);
+  createPageHeader(
+    parent,
+    "Leverandører",
+    "Leverandørregister, standardkostnader og tillegg samlet på ett sted.",
+    "Innkjøp"
+  );
 
-  var intro = el("p", "Her kan du opprette og redigere tilleggskostnader som frakt, oppstart, folie, designkost, montering og andre tillegg.");
-  intro.style.color = "#6b7280";
-  parent.appendChild(intro);
+  var supplierRows =
+    data.suppliers || [];
 
-    renderDeleteAddonSection(parent, data, sb);
+  var activeSuppliers =
+    supplierRows.filter(
+      function (supplier) {
+        return (
+          supplier.is_active !==
+          false
+        );
+      }
+    );
+
+  var currencies = {};
+
+  activeSuppliers.forEach(
+    function (supplier) {
+      if (supplier.currency) {
+        currencies[
+          supplier.currency
+        ] = true;
+      }
+    }
+  );
+
+  addProStatGrid(
+    parent,
+    [
+      {
+        label:
+          "Aktive leverandører",
+        value:
+          String(
+            activeSuppliers.length
+          ),
+        tone:
+          "ok"
+      },
+      {
+        label:
+          "Valutaer",
+        value:
+          Object.keys(
+            currencies
+          ).join(", ") ||
+          "-",
+        tone:
+          "ok"
+      },
+      {
+        label:
+          "Standardtillegg",
+        value:
+          String(
+            (
+              data.addons || []
+            ).filter(
+              function (addon) {
+                return (
+                  addon
+                    .addon_is_active !==
+                  false
+                );
+              }
+            ).length
+          ),
+        tone:
+          "ok"
+      }
+    ]
+  );
+
+  var overview =
+    createCollapsibleSection(
+      "🚚 Leverandøroversikt",
+      "Kontakt, valuta, MOQ og normal leveringstid.",
+      true
+    );
+
+  skCreateAnalysisTable(
+    overview.body,
+    [
+      {
+        label:
+          "Leverandør",
+        key:
+          "name"
+      },
+      {
+        label:
+          "Merkegruppe",
+        key:
+          "brand_group"
+      },
+      {
+        label:
+          "Valuta",
+        key:
+          "currency"
+      },
+      {
+        label:
+          "MOQ",
+        key:
+          "minimum_order_quantity",
+        align:
+          "right"
+      },
+      {
+        label:
+          "Leveringstid",
+        key:
+          "typical_lead_time"
+      },
+      {
+        label:
+          "Kontakt",
+        value:
+          function (row) {
+            return [
+              row.contact_name ||
+                "",
+              row.contact_email ||
+                ""
+            ]
+              .filter(Boolean)
+              .join(" · ") ||
+              "-";
+          }
+      }
+    ],
+    activeSuppliers,
+    "Ingen leverandører registrert."
+  );
+
+  parent.appendChild(
+    overview.wrap
+  );
+
+  renderDeleteAddonSection(
+    parent,
+    data,
+    sb
+  );
 
   function supplierOptions(select) {
     addOption(select, "", "Ingen / generell");
@@ -21186,28 +22710,69 @@ renderStockCountDetails();
 
 
   function renderBookingAdmin(parent) {
-    createPageHeader(parent, "Booking-admin", "Booking-admin ligger fortsatt på egen side, men er tilgjengelig herfra som del av internportalen.", "Ekstern internside");
-    addMobileAdvice(parent);
+    createPageHeader(
+      parent,
+      "Booking",
+      "Booking styres fortsatt i den eksisterende bookingadministrasjonen. Herfra kommer du dit med ett klikk.",
+      "Drift"
+    );
 
-    var box = el("div");
-    box.className = "sk-card";
+    var box =
+      el("div");
 
-    var title = el("h3", "Åpne booking-admin");
-    title.style.marginTop = "0";
+    box.className =
+      "sk-card";
 
-    var text = el("p", "Bruk denne for å administrere bookingregler, fremtidige bookinger og bookingrelaterte innstillinger. Siden åpnes separat slik at eksisterende booking-admin ikke blandes inn i denne portalen før vi eventuelt bygger den inn senere.");
-    text.style.color = "#6b7280";
-    text.style.lineHeight = "1.5";
+    box.style.maxWidth =
+      "760px";
 
-    var btn = createPrimaryButton("Åpne Booking-admin");
-    btn.onclick = function () {
-      window.open("https://golfkongen.no/sider/booking-admin", "_blank", "noopener");
-    };
+    var title =
+      el(
+        "h3",
+        "Bookingadministrasjon"
+      );
 
-    box.appendChild(title);
-    box.appendChild(text);
-    box.appendChild(btn);
-    parent.appendChild(box);
+    title.style.marginTop =
+      "0";
+
+    var text =
+      el(
+        "p",
+        "Bruk booking-admin for bookinger, blokkeringer, regler og tidsluker. Den åpnes separat slik at den etablerte bookingløsningen beholdes stabil."
+      );
+
+    text.style.color =
+      "#64748b";
+    text.style.lineHeight =
+      "1.55";
+
+    var button =
+      createPrimaryButton(
+        "📅 Åpne Booking-admin"
+      );
+
+    button.onclick =
+      function () {
+        window.open(
+          "https://golfkongen.no/sider/booking-admin",
+          "_blank",
+          "noopener"
+        );
+      };
+
+    box.appendChild(
+      title
+    );
+    box.appendChild(
+      text
+    );
+    box.appendChild(
+      button
+    );
+
+    parent.appendChild(
+      box
+    );
   }
 
 function renderProductControlDashboard(
@@ -21217,9 +22782,9 @@ function renderProductControlDashboard(
 ) {
   createPageHeader(
     parent,
-    "Mission Control",
-    "Samlet kontrollsenter for varer, lager, pris og produktdata. Start med «Må fikses», og godkjenn bevisste avvik så de ikke skaper støy.",
-    "Driftskontroll"
+    "Kontrollsenter",
+    "Feil og avvik som krever handling. Start med «Må fikses», og godkjenn bevisste avvik slik at de ikke kommer tilbake som støy.",
+    "Mission Control"
   );
 
   var issues =
@@ -21228,8 +22793,33 @@ function renderProductControlDashboard(
   var exceptions =
     data.productControlExceptions || [];
 
-  var searchTerm = "";
-  var activeFilter = "all";
+  var savedControlSearch =
+    localStorage.getItem(
+      "sk_control_search"
+    ) || "";
+
+  localStorage.removeItem(
+    "sk_control_search"
+  );
+
+  var searchTerm =
+    savedControlSearch;
+
+  var activeFilter =
+    savedControlSearch
+      ? "all"
+      : (
+          issues.some(
+            function (issue) {
+              return (
+                issue.severity ===
+                "danger"
+              );
+            }
+          )
+            ? "danger"
+            : "all"
+        );
 
 
   function isStockIssue(issue) {
@@ -22288,7 +23878,7 @@ function renderProductControlDashboard(
 
   if (dangerCount) {
     note.textContent =
-      "Mission Control viser bare ting som er verdt å se på. Start med «Må fikses». Bevisste avvik kan godkjennes som OK, mens reelle systemfeil må rettes.";
+      "Kontrollsenter viser bare ting som er verdt å se på. Start med «Må fikses». Bevisste avvik kan godkjennes som OK, mens reelle systemfeil må rettes.";
   } else if (issues.length) {
     note.textContent =
       "Ingen kritiske avvik. Det finnes noen varsler som bør følges opp.";
@@ -22330,7 +23920,7 @@ function renderProductControlDashboard(
     "search";
 
   search.placeholder =
-    "Søk i Mission Control – produkt, variant, merke eller Quickbutik-ID…";
+    "Søk i Kontrollsenter – produkt, variant, merke eller Quickbutik-ID…";
 
   search.style.width =
     "100%";
@@ -22346,6 +23936,9 @@ function renderProductControlDashboard(
 
   search.style.background =
     "#fff";
+
+  search.value =
+    searchTerm;
 
   search.oninput =
     function () {
@@ -37474,15 +39067,15 @@ function renderInventoryAnalytics(
   createPageHeader(
     parent,
     "Lageranalyse",
-    "Lagerverdi, dødt lager, populære produkter med lav beholdning og innkjøpsforslag samlet på ett sted.",
-    "Lager v4.3.3"
+    "Se hva som bør kjøpes inn, hva som står stille og hvor kapital er bundet. Tekniske lagerfeil ligger i Kontrollsenter.",
+    "Varer og lager"
   );
 
   var rows =
     data.inventoryAnalytics || [];
 
   var selectedTab =
-    "value";
+    "low";
 
   var tabs = el("div");
   tabs.className =
@@ -37491,11 +39084,10 @@ function renderInventoryAnalytics(
   var content = el("div");
 
   var tabDefinitions = [
-    ["value", "Lagerverdi"],
-    ["low", "Lavt lager"],
+    ["low", "Lavt / utsolgt"],
+    ["purchase", "Kjøp inn"],
     ["dead", "Dødt lager"],
-    ["purchase", "Innkjøpsforslag"],
-    ["suspicious", "Mistenkelige"]
+    ["value", "Lagerverdi"]
   ];
 
   var tabButtons = {};
@@ -38579,7 +40171,7 @@ function renderInventoryAnalytics(
     ) {
       renderPurchase();
     } else {
-      renderSuspicious();
+      renderValue();
     }
   }
 
@@ -38824,14 +40416,16 @@ function renderSalesAnalytics(
   createPageHeader(
     parent,
     "Salgsanalyse",
-    "Se bestselgere og dårligst selgende produkter basert på synket Quickbutik-salg.",
-    "Salg v4.3.3"
+    "Se omsetning, solgte enheter, bestselgere og svake produkter for valgt periode.",
+    "Salg og pris"
   );
 
   var rows =
     data.inventoryAnalytics || [];
 
-  var toolbar = el("div");
+  var toolbar =
+    el("div");
+
   toolbar.className =
     "sk-analysis-toolbar";
 
@@ -38839,10 +40433,22 @@ function renderSalesAnalytics(
     el("select");
 
   [
-    ["7", "7 dager"],
-    ["30", "30 dager"],
-    ["90", "90 dager"],
-    ["365", "365 dager"]
+    [
+      "7",
+      "Siste 7 dager"
+    ],
+    [
+      "30",
+      "Siste 30 dager"
+    ],
+    [
+      "90",
+      "Siste 90 dager"
+    ],
+    [
+      "365",
+      "Siste 365 dager"
+    ]
   ].forEach(
     function (item) {
       addOption(
@@ -38853,7 +40459,9 @@ function renderSalesAnalytics(
     }
   );
 
-  periodSelect.value = "30";
+  periodSelect.value =
+    "30";
+
 
   var modeSelect =
     el("select");
@@ -38870,13 +40478,23 @@ function renderSalesAnalytics(
     "Dårligst selgende"
   );
 
+
   var groupSelect =
     el("select");
 
   [
-    ["all", "Alle grupper"],
-    ["Discer", "Discer"],
-    ["Sekker", "Sekker"],
+    [
+      "all",
+      "Alle grupper"
+    ],
+    [
+      "Discer",
+      "Discer"
+    ],
+    [
+      "Sekker",
+      "Sekker"
+    ],
     [
       "Discgolf-tilbehør",
       "Discgolf-tilbehør"
@@ -38899,6 +40517,7 @@ function renderSalesAnalytics(
     }
   );
 
+
   toolbar.appendChild(
     periodSelect
   );
@@ -38909,10 +40528,18 @@ function renderSalesAnalytics(
     groupSelect
   );
 
-  parent.appendChild(toolbar);
+  parent.appendChild(
+    toolbar
+  );
 
-  var host = el("div");
-  parent.appendChild(host);
+
+  var host =
+    el("div");
+
+  parent.appendChild(
+    host
+  );
+
 
   function rerender() {
     clear(host);
@@ -38926,9 +40553,32 @@ function renderSalesAnalytics(
       "d";
 
     var revenueKey =
-      "revenue_" +
-      days +
-      "d";
+      days === "60"
+        ? "revenue_30d"
+        : (
+            rows.length &&
+            Object.prototype.hasOwnProperty.call(
+              rows[0],
+              "revenue_" +
+                days +
+                "d"
+            )
+              ? (
+                  "revenue_" +
+                  days +
+                  "d"
+                )
+              : (
+                  days === "90"
+                    ? "revenue_90d"
+                    : (
+                        days ===
+                        "365"
+                          ? "revenue_365d"
+                          : "revenue_30d"
+                      )
+                )
+          );
 
     var filtered =
       rows.filter(
@@ -38936,28 +40586,170 @@ function renderSalesAnalytics(
           return (
             groupSelect.value ===
               "all" ||
-            skInventoryBucket(row) ===
+            skInventoryBucket(
+              row
+            ) ===
               groupSelect.value
           );
         }
       );
 
+    var totalUnits =
+      filtered.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row[
+                unitsKey
+              ] ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    var totalRevenue =
+      filtered.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row[
+                revenueKey
+              ] ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    var soldProducts =
+      filtered.filter(
+        function (row) {
+          return (
+            Number(
+              row[
+                unitsKey
+              ] ||
+              0
+            ) > 0
+          );
+        }
+      );
+
+    var best =
+      soldProducts
+        .slice()
+        .sort(
+          function (a, b) {
+            return (
+              Number(
+                b[
+                  unitsKey
+                ] ||
+                0
+              ) -
+              Number(
+                a[
+                  unitsKey
+                ] ||
+                0
+              )
+            );
+          }
+        )[0];
+
+    addProStatGrid(
+      host,
+      [
+        {
+          label:
+            "Omsetning",
+          value:
+            skFormatMoney(
+              totalRevenue
+            ),
+          tone:
+            "ok"
+        },
+        {
+          label:
+            "Solgte enheter",
+          value:
+            String(
+              Math.round(
+                totalUnits
+              )
+            ),
+          tone:
+            "ok"
+        },
+        {
+          label:
+            "Produkter med salg",
+          value:
+            String(
+              soldProducts.length
+            ),
+          tone:
+            "ok"
+        },
+        {
+          label:
+            "Bestselger",
+          value:
+            best
+              ? (
+                  best.name +
+                  " · " +
+                  String(
+                    Math.round(
+                      Number(
+                        best[
+                          unitsKey
+                        ] ||
+                        0
+                      )
+                    )
+                  ) +
+                  " stk"
+                )
+              : "-",
+          tone:
+            "ok"
+        }
+      ]
+    );
+
+
     filtered.sort(
       function (a, b) {
         var diff =
           Number(
-            b[unitsKey] || 0
+            b[
+              unitsKey
+            ] ||
+            0
           ) -
           Number(
-            a[unitsKey] || 0
+            a[
+              unitsKey
+            ] ||
+            0
           );
 
-        return modeSelect.value ===
-          "best"
-          ? diff
-          : -diff;
+        return (
+          modeSelect.value ===
+            "best"
+            ? diff
+            : -diff
+        );
       }
     );
+
 
     skCreateAnalysisTable(
       host,
@@ -38965,7 +40757,8 @@ function renderSalesAnalytics(
         {
           label:
             "Produkt",
-          key: "name"
+          key:
+            "name"
         },
         {
           label:
@@ -38982,7 +40775,8 @@ function renderSalesAnalytics(
                 unitsKey
               ];
             },
-          align: "right"
+          align:
+            "right"
         },
         {
           label:
@@ -38993,22 +40787,26 @@ function renderSalesAnalytics(
                 revenueKey
               ];
             },
-          format: "money",
-          align: "right"
+          format:
+            "money",
+          align:
+            "right"
         },
         {
           label:
             "Lager nå",
           key:
             "stock_quantity",
-          align: "right"
+          align:
+            "right"
         },
         {
           label:
             "Siste salg",
           value:
             function (row) {
-              return row.last_sale_at
+              return row
+                .last_sale_at
                 ? formatAdminDateTime(
                     row.last_sale_at
                   )
@@ -39016,15 +40814,21 @@ function renderSalesAnalytics(
             }
         }
       ],
-      filtered.slice(0, 200),
+      filtered.slice(
+        0,
+        200
+      ),
       "Ingen salgsdata."
     );
   }
 
+
   periodSelect.onchange =
     rerender;
+
   modeSelect.onchange =
     rerender;
+
   groupSelect.onchange =
     rerender;
 
@@ -39041,9 +40845,24 @@ function renderTasksManager(
   createPageHeader(
     parent,
     "Oppgaver",
-    "En enkel intern huskeliste med frist og prioritet.",
-    "Huskeliste"
+    "En enkel arbeidsliste. Frister og høy prioritet kommer først.",
+    "Drift"
   );
+
+  var tasks =
+    (data.tasks || [])
+      .slice();
+
+  var currentEmail =
+    String(
+      user &&
+      user.email ||
+      ""
+    ).toLowerCase();
+
+  var activeFilter =
+    "mine";
+
 
   var form =
     el("div");
@@ -39051,16 +40870,26 @@ function renderTasksManager(
   form.className =
     "sk-card";
 
-  var grid = el("div");
-  grid.style.display = "grid";
+
+  var grid =
+    el("div");
+
+  grid.style.display =
+    "grid";
+
   grid.style.gridTemplateColumns =
-    "minmax(220px,2fr) 140px 180px auto";
-  grid.style.gap = "8px";
+    "repeat(auto-fit, minmax(170px, 1fr))";
+
+  grid.style.gap =
+    "8px";
+
 
   var titleInput =
     el("input");
+
   titleInput.placeholder =
     "Hva skal gjøres?";
+
 
   var priority =
     el("select");
@@ -39070,66 +40899,245 @@ function renderTasksManager(
     "normal",
     "Normal"
   );
+
   addOption(
     priority,
     "high",
     "Høy"
   );
+
   addOption(
     priority,
     "low",
     "Lav"
   );
 
+
   var dueInput =
     el("input");
+
   dueInput.type =
     "datetime-local";
+
 
   var addButton =
     createPrimaryButton(
       "Legg til"
     );
 
+
   grid.appendChild(
     titleInput
   );
+
   grid.appendChild(
     priority
   );
+
   grid.appendChild(
     dueInput
   );
+
   grid.appendChild(
     addButton
   );
 
-  form.appendChild(grid);
-  parent.appendChild(form);
+  form.appendChild(
+    grid
+  );
 
-  var host = el("div");
-  host.style.marginTop =
-    "12px";
-  parent.appendChild(host);
+  parent.appendChild(
+    form
+  );
 
-  var tasks =
-    (data.tasks || []).slice();
 
-  function renderTasks() {
-    clear(host);
+  var toolbar =
+    el("div");
 
-    var open =
-      tasks.filter(
-        function (task) {
-          return (
-            task.status !==
-            "done"
-          );
-        }
+  toolbar.style.display =
+    "flex";
+  toolbar.style.gap =
+    "8px";
+  toolbar.style.flexWrap =
+    "wrap";
+  toolbar.style.margin =
+    "12px 0";
+
+
+  var buttons = {};
+
+
+  function addFilter(
+    key,
+    label
+  ) {
+    var button =
+      createButton(
+        label
       );
 
-    var done =
-      tasks.filter(
+    button.onclick =
+      function () {
+        activeFilter =
+          key;
+
+        updateButtons();
+        renderTasks();
+      };
+
+    buttons[key] =
+      button;
+
+    toolbar.appendChild(
+      button
+    );
+  }
+
+
+  function updateButtons() {
+    Object.keys(
+      buttons
+    ).forEach(
+      function (key) {
+        var active =
+          key ===
+          activeFilter;
+
+        buttons[
+          key
+        ].style.background =
+          active
+            ? "#111827"
+            : "#fff";
+
+        buttons[
+          key
+        ].style.color =
+          active
+            ? "#fff"
+            : "#111827";
+
+        buttons[
+          key
+        ].style.borderColor =
+          active
+            ? "#111827"
+            : "#d1d5db";
+      }
+    );
+  }
+
+
+  addFilter(
+    "mine",
+    "Mine åpne"
+  );
+
+  addFilter(
+    "all",
+    "Alle åpne"
+  );
+
+  addFilter(
+    "overdue",
+    "Forfalt"
+  );
+
+  addFilter(
+    "done",
+    "Ferdige"
+  );
+
+  updateButtons();
+
+  parent.appendChild(
+    toolbar
+  );
+
+
+  var host =
+    el("div");
+
+  parent.appendChild(
+    host
+  );
+
+
+  function isOpen(task) {
+    return (
+      task.status !==
+      "done"
+    );
+  }
+
+
+  function isMine(task) {
+    var assigned =
+      String(
+        task.assigned_to_email ||
+        task.created_by_email ||
+        ""
+      ).toLowerCase();
+
+    return (
+      !currentEmail ||
+      !assigned ||
+      assigned ===
+        currentEmail
+    );
+  }
+
+
+  function isOverdue(task) {
+    if (
+      !isOpen(task) ||
+      !task.due_at
+    ) {
+      return false;
+    }
+
+    return (
+      new Date(
+        task.due_at
+      ).getTime() <
+      Date.now()
+    );
+  }
+
+
+  function isDueToday(task) {
+    if (
+      !isOpen(task) ||
+      !task.due_at
+    ) {
+      return false;
+    }
+
+    var due =
+      new Date(
+        task.due_at
+      );
+
+    var now =
+      new Date();
+
+    return (
+      due.getFullYear() ===
+        now.getFullYear() &&
+      due.getMonth() ===
+        now.getMonth() &&
+      due.getDate() ===
+        now.getDate()
+    );
+  }
+
+
+  function visibleTasks() {
+    if (
+      activeFilter ===
+      "done"
+    ) {
+      return tasks.filter(
         function (task) {
           return (
             task.status ===
@@ -39137,17 +41145,104 @@ function renderTasksManager(
           );
         }
       );
+    }
+
+    if (
+      activeFilter ===
+      "overdue"
+    ) {
+      return tasks.filter(
+        isOverdue
+      );
+    }
+
+    if (
+      activeFilter ===
+      "mine"
+    ) {
+      return tasks.filter(
+        function (task) {
+          return (
+            isOpen(task) &&
+            isMine(task)
+          );
+        }
+      );
+    }
+
+    return tasks.filter(
+      isOpen
+    );
+  }
+
+
+  function renderTasks() {
+    clear(
+      host
+    );
+
+    var open =
+      tasks.filter(
+        isOpen
+      );
+
+    var overdue =
+      tasks.filter(
+        isOverdue
+      );
+
+    var dueToday =
+      tasks.filter(
+        isDueToday
+      );
+
+    var high =
+      open.filter(
+        function (task) {
+          return (
+            task.priority ===
+            "high"
+          );
+        }
+      );
+
 
     addProStatGrid(
       host,
       [
         {
           label:
-            "Åpne oppgaver",
+            "Åpne",
           value:
-            String(open.length),
+            String(
+              open.length
+            ),
           tone:
             open.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Forfalt",
+          value:
+            String(
+              overdue.length
+            ),
+          tone:
+            overdue.length
+              ? "danger"
+              : "ok"
+        },
+        {
+          label:
+            "Frist i dag",
+          value:
+            String(
+              dueToday.length
+            ),
+          tone:
+            dueToday.length
               ? "warning"
               : "ok"
         },
@@ -39156,114 +41251,221 @@ function renderTasksManager(
             "Høy prioritet",
           value:
             String(
-              open.filter(
-                function (task) {
-                  return (
-                    task.priority ===
-                    "high"
-                  );
-                }
-              ).length
+              high.length
             ),
-          tone: "danger"
+          tone:
+            high.length
+              ? "danger"
+              : "ok"
         }
       ]
     );
 
-    open
-      .sort(
-        function (a, b) {
-          var pa =
-            a.priority === "high"
-              ? 0
-              : (
-                  a.priority ===
-                    "normal"
-                    ? 1
-                    : 2
-                );
 
-          var pb =
-            b.priority === "high"
-              ? 0
-              : (
-                  b.priority ===
-                    "normal"
-                    ? 1
-                    : 2
-                );
+    var visible =
+      visibleTasks()
+        .slice()
+        .sort(
+          function (a, b) {
+            var overdueA =
+              isOverdue(a)
+                ? 0
+                : 1;
 
-          if (pa !== pb) {
-            return pa - pb;
+            var overdueB =
+              isOverdue(b)
+                ? 0
+                : 1;
+
+            if (
+              overdueA !==
+              overdueB
+            ) {
+              return (
+                overdueA -
+                overdueB
+              );
+            }
+
+            var pa =
+              a.priority ===
+                "high"
+                ? 0
+                : (
+                    a.priority ===
+                      "normal"
+                      ? 1
+                      : 2
+                  );
+
+            var pb =
+              b.priority ===
+                "high"
+                ? 0
+                : (
+                    b.priority ===
+                      "normal"
+                      ? 1
+                      : 2
+                  );
+
+            if (
+              pa !==
+              pb
+            ) {
+              return pa - pb;
+            }
+
+            return (
+              new Date(
+                a.due_at ||
+                "2999-01-01"
+              ).getTime() -
+              new Date(
+                b.due_at ||
+                "2999-01-01"
+              ).getTime()
+            );
           }
+        );
 
-          return (
-            new Date(
-              a.due_at ||
-              "2999-01-01"
-            ).getTime() -
-            new Date(
-              b.due_at ||
-              "2999-01-01"
-            ).getTime()
+
+    if (!visible.length) {
+      var empty =
+        el(
+          "div",
+          activeFilter ===
+            "done"
+            ? "Ingen ferdige oppgaver."
+            : "Ingen oppgaver i dette filteret."
+        );
+
+      empty.className =
+        "sk-note";
+
+      host.appendChild(
+        empty
+      );
+
+      return;
+    }
+
+
+    visible.forEach(
+      function (task) {
+        var row =
+          el("div");
+
+        row.className =
+          "sk-task-row";
+
+        if (
+          isOverdue(
+            task
+          )
+        ) {
+          row.style.borderColor =
+            "#fecaca";
+          row.style.background =
+            "#fef2f2";
+        } else if (
+          task.priority ===
+          "high"
+        ) {
+          row.className +=
+            " sk-task-high";
+        }
+
+
+        var info =
+          el("div");
+
+        info.appendChild(
+          el(
+            "strong",
+            (
+              task.status ===
+                "done"
+                ? "✓ "
+                : ""
+            ) +
+              task.title
+          )
+        );
+
+
+        var metaParts = [];
+
+        if (
+          task.priority ===
+          "high"
+        ) {
+          metaParts.push(
+            "Høy prioritet"
+          );
+        } else if (
+          task.priority ===
+          "low"
+        ) {
+          metaParts.push(
+            "Lav prioritet"
+          );
+        } else {
+          metaParts.push(
+            "Normal"
           );
         }
-      )
-      .forEach(
-        function (task) {
-          var row =
-            el("div");
-          row.className =
-            "sk-task-row";
 
-          if (
-            task.priority ===
-            "high"
-          ) {
-            row.className +=
-              " sk-task-high";
-          }
+        if (
+          task.due_at
+        ) {
+          metaParts.push(
+            (
+              isOverdue(task)
+                ? "FORFALT "
+                : "Frist "
+            ) +
+              formatAdminDateTime(
+                task.due_at
+              )
+          );
+        }
 
-          var info = el("div");
+        if (
+          task.assigned_to_email
+        ) {
+          metaParts.push(
+            task
+              .assigned_to_email
+          );
+        }
 
-          info.appendChild(
-            el(
-              "strong",
-              task.title
+
+        var meta =
+          el(
+            "div",
+            metaParts.join(
+              " · "
             )
           );
 
-          var meta =
-            el(
-              "div",
-              (
-                task.priority ===
-                  "high"
-                  ? "Høy prioritet"
-                  : (
-                      task.priority ===
-                        "low"
-                        ? "Lav prioritet"
-                        : "Normal"
-                    )
-              ) +
-                (
-                  task.due_at
-                    ? (
-                        " · Frist " +
-                        formatAdminDateTime(
-                          task.due_at
-                        )
-                      )
-                    : ""
-                )
-            );
+        meta.className =
+          "sk-task-meta";
 
-          meta.className =
-            "sk-task-meta";
+        info.appendChild(
+          meta
+        );
 
-          info.appendChild(meta);
 
+        row.appendChild(
+          info
+        );
+
+
+        if (
+          task.status !==
+          "done"
+        ) {
           var doneButton =
             createButton(
               "Ferdig"
@@ -39276,16 +41478,15 @@ function renderTasksManager(
                   "internal_tasks"
                 )
                 .update({
-                  status: "done"
+                  status:
+                    "done"
                 })
                 .eq(
                   "id",
                   task.id
                 )
                 .then(
-                  function (
-                    result
-                  ) {
+                  function (result) {
                     if (
                       result.error
                     ) {
@@ -39298,52 +41499,24 @@ function renderTasksManager(
 
                     task.status =
                       "done";
+
                     renderTasks();
                   }
                 );
             };
 
-          row.appendChild(info);
           row.appendChild(
             doneButton
           );
-
-          host.appendChild(row);
         }
-      );
 
-    if (done.length) {
-      var doneSection =
-        createCollapsibleSection(
-          "Ferdige oppgaver (" +
-            String(
-              done.length
-            ) +
-            ")",
-          "",
-          false
+        host.appendChild(
+          row
         );
-
-      done
-        .slice(0, 50)
-        .forEach(
-          function (task) {
-            doneSection.body
-              .appendChild(
-                el(
-                  "div",
-                  "✓ " +
-                    task.title
-                )
-              );
-          }
-        );
-
-      host.appendChild(
-        doneSection.wrap
-      );
-    }
+      }
+    );
   }
+
 
   addButton.onclick =
     function () {
@@ -39363,7 +41536,8 @@ function renderTasksManager(
           "internal_tasks"
         )
         .insert({
-          title: title,
+          title:
+            title,
           priority:
             priority.value,
           due_at:
@@ -39386,9 +41560,12 @@ function renderTasksManager(
             addButton.disabled =
               false;
 
-            if (result.error) {
+            if (
+              result.error
+            ) {
               alert(
-                result.error.message
+                result.error
+                  .message
               );
               return;
             }
@@ -39397,15 +41574,24 @@ function renderTasksManager(
               result.data
             );
 
+            data.tasks =
+              tasks;
+
             titleInput.value =
               "";
+
             dueInput.value =
               "";
 
+            activeFilter =
+              "mine";
+
+            updateButtons();
             renderTasks();
           }
         );
     };
+
 
   renderTasks();
 }
@@ -39418,24 +41604,135 @@ function renderSystemStatus(
   createPageHeader(
     parent,
     "Systemstatus",
-    "Siste registrerte kjøring for synkjobber og interne tjenester.",
-    "Drift"
+    "Teknisk status for synkjobber og interne tjenester. I normal drift holder det å se på sammendraget øverst.",
+    "System"
   );
 
   var rows =
     data.systemStatus || [];
 
-  skCreateAnalysisTable(
+  var errors =
+    rows.filter(
+      function (row) {
+        return (
+          row.status ===
+          "error"
+        );
+      }
+    );
+
+  var warnings =
+    rows.filter(
+      function (row) {
+        return (
+          row.status !==
+            "ok" &&
+          row.status !==
+            "error"
+        );
+      }
+    );
+
+  addProStatGrid(
     parent,
     [
       {
-        label: "Jobb",
-        key: "job_name"
+        label:
+          "Registrerte jobber",
+        value:
+          String(
+            rows.length
+          ),
+        tone:
+          "ok"
       },
       {
-        label: "Status",
+        label:
+          "Feil",
+        value:
+          String(
+            errors.length
+          ),
+        tone:
+          errors.length
+            ? "danger"
+            : "ok"
+      },
+      {
+        label:
+          "Advarsler",
+        value:
+          String(
+            warnings.length
+          ),
+        tone:
+          warnings.length
+            ? "warning"
+            : "ok"
+      },
+      {
+        label:
+          "Siste kjøring",
+        value:
+          formatAdminDateTime(
+            newestDate(
+              rows,
+              "started_at"
+            )
+          ),
+        tone:
+          errors.length
+            ? "warning"
+            : "ok"
+      }
+    ]
+  );
+
+  if (
+    errors.length
+  ) {
+    var alert =
+      el(
+        "div",
+        "Det finnes registrerte systemfeil. Åpne detaljene under og se på de nyeste feilradene først."
+      );
+
+    alert.className =
+      "sk-danger-zone";
+    alert.style.marginBottom =
+      "12px";
+
+    parent.appendChild(
+      alert
+    );
+  }
+
+
+  var detail =
+    createCollapsibleSection(
+      "⚙️ Tekniske kjøringer",
+      "Siste registrerte kjøringer, antall leste/skrevne rader og eventuelle feilmeldinger.",
+      errors.length > 0
+    );
+
+
+  skCreateAnalysisTable(
+    detail.body,
+    [
+      {
+        label:
+          "Jobb",
+        key:
+          "job_name"
+      },
+      {
+        label:
+          "Status",
         render:
-          function (td, row) {
+          function (
+            td,
+            row
+          ) {
             var dot =
               el("span");
 
@@ -39453,7 +41750,10 @@ function renderSystemStatus(
                     )
               );
 
-            td.appendChild(dot);
+            td.appendChild(
+              dot
+            );
+
             td.appendChild(
               document.createTextNode(
                 row.status ||
@@ -39477,30 +41777,38 @@ function renderSystemStatus(
           "Lest",
         key:
           "rows_read",
-        align: "right"
+        align:
+          "right"
       },
       {
         label:
           "Skrevet",
         key:
           "rows_written",
-        align: "right"
+        align:
+          "right"
       },
       {
         label:
           "Feil",
         key:
           "rows_failed",
-        align: "right"
+        align:
+          "right"
       },
       {
         label:
           "Melding",
-        key: "message"
+        key:
+          "message"
       }
     ],
     rows,
     "Ingen systemkjøringer er logget ennå."
+  );
+
+  parent.appendChild(
+    detail.wrap
   );
 }
 
@@ -46598,8 +48906,8 @@ function renderMarketAnalysis(
 
 function renderPortal(sb, user, data) {
     var app = renderShell(
-      "Sportskongen Admin",
-      "Drift, varer, lager, salg, pris og system samlet på én intern arbeidsflate."
+      "Mission Control",
+      "GolfKongen / Sportskongen – drift, varer, lager, salg, pris og innkjøp på ett sted."
     );
 
     addUserBar(
@@ -46709,7 +49017,7 @@ function renderPortal(sb, user, data) {
         icon: "🏠",
         group: "Oversikt",
         description:
-          "Dashboard og det som krever oppmerksomhet.",
+          "Arbeidsforsiden og det som krever oppmerksomhet.",
         render: function (parent) {
           renderOverviewDashboard(
             parent,
@@ -46723,7 +49031,7 @@ function renderPortal(sb, user, data) {
         icon: "📅",
         group: "Drift",
         description:
-          "Booking-admin og kommende aktiviteter.",
+          "Åpne bookingadministrasjonen for bookinger, regler og tidsluker.",
         render: function (parent) {
           renderBookingAdmin(parent);
         }
@@ -46734,7 +49042,7 @@ function renderPortal(sb, user, data) {
         icon: "🛒",
         group: "Varer og lager",
         description:
-          "Produktdata, oppretting og synkronisering.",
+          "Finn produkt og se lager, utsalgspris, innkjøpspris, margin og status.",
         render: function (parent) {
           renderProductsManager(
             parent,
@@ -46749,7 +49057,7 @@ function renderPortal(sb, user, data) {
         icon: "📊",
         group: "Varer og lager",
         description:
-          "Lagerverdi, dødt lager, lavt lager og innkjøpsforslag.",
+          "Hva bør kjøpes inn, hva står stille og hvor er kapital bundet.",
         render: function (parent) {
           renderInventoryAnalytics(
             parent,
@@ -46760,11 +49068,26 @@ function renderPortal(sb, user, data) {
       },
 
       productControl: {
-        label: "Mission Control",
-        icon: "🛰️",
+        label: "Kontrollsenter",
+        icon: "🛡️",
         group: "Varer og lager",
         description:
-          "Kontrollsenter for varer, lager, pris og produktdata.",
+          "Feil, avvik og godkjente unntak for varer, lager, pris og produktdata.",
+        badge: function () {
+          return (
+            data.productControlIssues ||
+            []
+          ).filter(
+            function (issue) {
+              return (
+                issue.severity ===
+                "danger"
+              );
+            }
+          ).length;
+        },
+        badgeTone:
+          "danger",
         render: function (parent) {
           renderLazyModule(
             parent,
@@ -46844,7 +49167,24 @@ function renderPortal(sb, user, data) {
         icon: "📦",
         group: "Varer og lager",
         description:
-          "Varetelling, avvik og lageroppdatering.",
+          "Aktiv telling, avvik, historikk og oppdatering mot Quickbutik.",
+        badge: function () {
+          var latest =
+            data.stockCounts &&
+            data.stockCounts[0];
+
+          if (
+            latest &&
+            latest.status ===
+              "in_progress"
+          ) {
+            return "Pågår";
+          }
+
+          return null;
+        },
+        badgeTone:
+          "warning",
         render: function (parent) {
           renderLazyModule(
             parent,
@@ -46874,7 +49214,7 @@ function renderPortal(sb, user, data) {
         icon: "🧾",
         group: "Salg og pris",
         description:
-          "Tilbudsbygger, kundetilbud og arkiv.",
+          "Lag, rediger og følg opp kundetilbud og custom print-kalkyler.",
         render: function (parent) {
           renderLazyModule(
             parent,
@@ -46907,7 +49247,7 @@ function renderPortal(sb, user, data) {
         icon: "📈",
         group: "Salg og pris",
         description:
-          "Bestselgere og dårligst selgende produkter.",
+          "Omsetning, solgte enheter, bestselgere og svake produkter per periode.",
         render: function (parent) {
           renderSalesAnalytics(
             parent,
@@ -46921,7 +49261,7 @@ function renderPortal(sb, user, data) {
         icon: "🧭",
         group: "Salg og pris",
         description:
-          "Prisnivå, konkurrentposisjon og markedsindikatorer.",
+          "Strategisk bilde av markedet, konkurrentene og utviklingen over tid.",
         render: function (parent) {
           renderMarketAnalysis(
             parent,
@@ -46936,7 +49276,7 @@ function renderPortal(sb, user, data) {
         icon: "💰",
         group: "Salg og pris",
         description:
-          "Konkurrentpriser, forslag og oppfølging.",
+          "Operativ kontroll av konkrete konkurrentpriser, forslag og oppfølging.",
         render: function (parent) {
           renderPriceCheckDashboard(
             parent,
@@ -46951,7 +49291,24 @@ function renderPortal(sb, user, data) {
         icon: "📥",
         group: "Innkjøp",
         description:
-          "Last opp faktura og oppdater reell innkjøpspris.",
+          "Last opp faktura, kontroller bare usikre linjer og oppdater reell kostpris.",
+        badge: function () {
+          return (
+            data.supplierInvoiceSummaries ||
+            []
+          ).filter(
+            function (invoice) {
+              return (
+                invoice.status !==
+                  "costed" &&
+                invoice.status !==
+                  "cancelled"
+              );
+            }
+          ).length;
+        },
+        badgeTone:
+          "warning",
         render: function (parent) {
           renderSupplierInvoicesManager(
             parent,
@@ -46966,7 +49323,7 @@ function renderPortal(sb, user, data) {
         icon: "🚚",
         group: "Innkjøp",
         description:
-          "Leverandører, kostnader og tillegg.",
+          "Leverandørregister, kontakt, valuta, MOQ og standardtillegg.",
         render: function (parent) {
           renderSuppliersAddonsManager(
             parent,
@@ -46981,7 +49338,22 @@ function renderPortal(sb, user, data) {
         icon: "✅",
         group: "Drift",
         description:
-          "Intern huskeliste og oppfølging.",
+          "Mine, åpne, forfalte og ferdige interne oppgaver.",
+        badge: function () {
+          return (
+            data.tasks ||
+            []
+          ).filter(
+            function (task) {
+              return (
+                task.status !==
+                "done"
+              );
+            }
+          ).length;
+        },
+        badgeTone:
+          "warning",
         render: function (parent) {
           renderTasksManager(
             parent,
@@ -46997,7 +49369,22 @@ function renderPortal(sb, user, data) {
         icon: "🟢",
         group: "System",
         description:
-          "Siste kjøringer, synk og feil.",
+          "Synkjobber, teknisk status og feilmeldinger.",
+        badge: function () {
+          return (
+            data.systemStatus ||
+            []
+          ).filter(
+            function (row) {
+              return (
+                row.status ===
+                "error"
+              );
+            }
+          ).length;
+        },
+        badgeTone:
+          "danger",
         render: function (parent) {
           renderSystemStatus(
             parent,
@@ -47054,12 +49441,12 @@ function renderPortal(sb, user, data) {
           );
         }
       }
-    });
+    }, data);
   }
 
   function renderNoAccess(sb) {
     var app = renderShell(
-      "Ingen tilgang",
+      "Ingen tilgang til Mission Control",
       "Du er innlogget, men brukeren din er ikke godkjent som intern admin."
     );
 
@@ -47205,7 +49592,19 @@ function renderPortal(sb, user, data) {
 
     sb
       .from("internal_inventory_value_summary_view")
+      .select("*"),
+
+    sb
+      .from(
+        "internal_supplier_invoice_review_summary_view"
+      )
       .select("*")
+      .order(
+        "invoice_date",
+        {
+          ascending: false
+        }
+      )
 
 
   ]).then(function (results) {
@@ -47367,6 +49766,14 @@ function renderPortal(sb, user, data) {
       return;
     }
 
+    if (results[25].error) {
+      renderError(
+        "Kunne ikke hente fakturastatus: " +
+          results[25].error.message
+      );
+      return;
+    }
+
     renderPortal(sb, user, {
       addons: results[0].data || [],
       products: results[1].data || [],
@@ -47400,6 +49807,8 @@ function renderPortal(sb, user, data) {
         results[23].data || [],
       inventoryValueSummary:
         results[24].data || [],
+      supplierInvoiceSummaries:
+        results[25].data || [],
       __lazyLoaded: {
         customerQuoteItems: false,
         stockCountItems: false,
