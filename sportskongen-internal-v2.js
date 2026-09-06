@@ -57,6 +57,122 @@
     return btn;
   }
 
+  function accessLevel(user) {
+    var explicit = String(
+      (user && user.access_level) || ""
+    ).toLowerCase();
+
+    if (explicit === "full" || explicit === "staff" || explicit === "viewer") {
+      return explicit;
+    }
+
+    var role = String((user && user.role) || "").toLowerCase();
+
+    if (role === "owner" || role === "admin" || role === "full") {
+      return "full";
+    }
+
+    if (role === "staff" || role === "operator" || role === "editor") {
+      return "staff";
+    }
+
+    return "viewer";
+  }
+
+  function accessLabel(user) {
+    var level = accessLevel(user);
+
+    if (level === "full") return "Full kontroll";
+    if (level === "staff") return "Enkelte funksjoner";
+    return "Lesetilgang";
+  }
+
+  function isFullControl(user) {
+    return accessLevel(user) === "full";
+  }
+
+  function canManageModule(user, moduleKey) {
+    if (isFullControl(user)) {
+      return true;
+    }
+
+    if (accessLevel(user) !== "staff") {
+      return false;
+    }
+
+    var permissionByModule = {
+      tasks: "tasks.manage",
+      offers: "offers.manage",
+      stock: "stock.manage"
+    };
+
+    var needed = permissionByModule[moduleKey];
+    var permissions = (user && user.permissions) || [];
+
+    return Boolean(needed && permissions.indexOf(needed) >= 0);
+  }
+
+  function applyPortalAccessMode(parent, moduleKey, user) {
+    if (!parent || isFullControl(user)) {
+      return;
+    }
+
+    var canManage = canManageModule(user, moduleKey);
+    var level = accessLevel(user);
+    var existing = parent.querySelector("[data-sk-access-note='true']");
+
+    if (!existing) {
+      var note = el(
+        "div",
+        canManage
+          ? "Enkelte funksjoner: Du kan arbeide med oppgaver, tilbud og varetelling. Endelig oppdatering mot Quickbutik krever full kontroll."
+          : "Lesetilgang: Du kan se, sÃ¸ke, filtrere og Ã¥pne lenker, men du kan ikke lagre eller endre data."
+      );
+      note.className = canManage ? "sk-note" : "sk-warning";
+      note.setAttribute("data-sk-access-note", "true");
+      note.style.marginBottom = "14px";
+      parent.insertBefore(note, parent.firstChild);
+    }
+
+    var mutationWords = /(lagre|opprett|slett|godkjenn|avvis|synk|importer|last opp|endre|lÃ¥s|oppdater lager|oppdater fra|marker|kjÃ¸r|nullstill|legg til|bruk forslag|bekreft|kanseller|ferdigstill|registrer|send tilbud|dupliser)/i;
+    var fullOnlyWords = /(quickbutik|oppdater internlager|oppdater lageret)/i;
+
+    Array.prototype.forEach.call(
+      parent.querySelectorAll("button"),
+      function (button) {
+        var label = String(button.textContent || "").trim();
+        var shouldLock = canManage ? fullOnlyWords.test(label) : mutationWords.test(label);
+
+        if (shouldLock) {
+          button.disabled = true;
+          button.title = level === "staff"
+            ? "Denne handlingen krever full kontroll"
+            : "Denne handlingen er ikke tilgjengelig med lesetilgang";
+          button.style.cursor = "not-allowed";
+          button.style.opacity = "0.55";
+        }
+      }
+    );
+
+    if (!canManage) {
+      Array.prototype.forEach.call(
+        parent.querySelectorAll("input, textarea, [contenteditable='true']"),
+        function (control) {
+          var type = String(control.type || "").toLowerCase();
+          var hint = String(control.placeholder || "").toLowerCase();
+          var isSearch = type === "search" || /sÃ¸k|finn|filter/.test(hint);
+
+          if (!isSearch) {
+            control.disabled = true;
+            if (control.removeAttribute) {
+              control.removeAttribute("contenteditable");
+            }
+          }
+        }
+      );
+    }
+  }
+
 
   var skAdminV4ResizeBound = false;
   var skAdminV4LayoutObserver = null;
@@ -109,8 +225,8 @@
     /*
      * Quickbutik-temaet legger innholdet i en smal
      * kolonne og kan klippe negative marginer.
-     * På admin-siden gjør vi kun våre egne forfedre
-     * bredere og lar resten av nettbutikken være urørt.
+     * PÃ¥ admin-siden gjÃ¸r vi kun vÃ¥re egne forfedre
+     * bredere og lar resten av nettbutikken vÃ¦re urÃ¸rt.
      */
     var common = hiddenSidebar
       ? findCommonAncestor(
@@ -247,7 +363,7 @@
     );
 
     /*
-     * Mål etter at forfedrene er utvidet.
+     * MÃ¥l etter at forfedrene er utvidet.
      */
     root.style.removeProperty(
       "left"
@@ -294,7 +410,7 @@
     var labels = [
       "Dartpiler",
       "Dartskiver",
-      "Dart Tilbehør",
+      "Dart TilbehÃ¸r",
       "Golfutstyr",
       "Golfballer",
       "Bager og sekker",
@@ -445,8 +561,8 @@
       root.getBoundingClientRect().top;
 
     var labels = [
-      "søk produkt",
-      "ønskeliste",
+      "sÃ¸k produkt",
+      "Ã¸nskeliste",
       "logg inn",
       "sekken",
       "fri frakt"
@@ -516,11 +632,11 @@
 
   function hideStoreFooterForAdmin() {
     var labels = [
-      "meld deg på vårt nyhetsbrev",
+      "meld deg pÃ¥ vÃ¥rt nyhetsbrev",
       "kundeservice",
       "informasjon",
       "sosiale medier",
-      "vilkår og betingelser"
+      "vilkÃ¥r og betingelser"
     ];
 
     var candidates =
@@ -581,9 +697,9 @@
 
     /*
      * Viktig: aldri beregn ny top-forskyvning mens brukeren har begynt
-     * å scrolle. getBoundingClientRect().top er viewport-relativ, og den
-     * gamle løsningen kunne derfor flytte hele adminroten tilbake mot
-     * toppen på første scroll og gi synlig blink/hopp.
+     * Ã¥ scrolle. getBoundingClientRect().top er viewport-relativ, og den
+     * gamle lÃ¸sningen kunne derfor flytte hele adminroten tilbake mot
+     * toppen pÃ¥ fÃ¸rste scroll og gi synlig blink/hopp.
      */
     if (window.scrollY > 4) {
       return;
@@ -599,8 +715,8 @@
 
     /*
      * Etter at butikkheaderen er skjult kan temaet fortsatt
-     * reservere tom høyde. Flytt kun adminroten visuelt opp,
-     * men lås resultatet så snart brukeren begynner å scrolle.
+     * reservere tom hÃ¸yde. Flytt kun adminroten visuelt opp,
+     * men lÃ¥s resultatet sÃ¥ snart brukeren begynner Ã¥ scrolle.
      */
     if (top > 12) {
       setImportantStyle(
@@ -667,7 +783,7 @@
     fitAdminRootToTop();
 
     /*
-     * Quickbutik kan justere DOM-en rett etter sideinnlasting. Noen få
+     * Quickbutik kan justere DOM-en rett etter sideinnlasting. Noen fÃ¥
      * kontrollerte oppfriskninger er nok. Vi skal ikke observere alle
      * class/style-endringer permanent; det gjorde hele adminflaten tung
      * og kunne trigge layoutarbeid under scrolling og vanlig bruk.
@@ -718,8 +834,8 @@
 
       /*
        * Kun strukturelle endringer utenfor adminroten er interessante.
-       * Attributt-/style-observasjon på hele body skapte en feedback-loop
-       * når admin selv oppdaterte klasser og inline-stiler.
+       * Attributt-/style-observasjon pÃ¥ hele body skapte en feedback-loop
+       * nÃ¥r admin selv oppdaterte klasser og inline-stiler.
        */
       skAdminV4LayoutObserver.observe(
         document.body,
@@ -1289,7 +1405,7 @@
   }
 
   function addMobileAdvice(parent) {
-    var note = el("div", "Tips: Portalen fungerer på mobil, men store oppgaver som tilbud, produktvedlikehold og varetelling med mange linjer anbefales på PC for best oversikt.");
+    var note = el("div", "Tips: Portalen fungerer pÃ¥ mobil, men store oppgaver som tilbud, produktvedlikehold og varetelling med mange linjer anbefales pÃ¥ PC for best oversikt.");
     note.className = "sk-note";
     note.style.marginBottom = "16px";
     parent.appendChild(note);
@@ -1299,15 +1415,15 @@
     if (value === "draft") return "Utkast";
     if (value === "sent") return "Sendt";
     if (value === "accepted") return "Akseptert";
-    if (value === "declined") return "Avslått";
-    if (value === "expired") return "Utløpt";
-    if (value === "locked") return "Låst";
-    if (value === "in_progress") return "Pågår";
+    if (value === "declined") return "AvslÃ¥tt";
+    if (value === "expired") return "UtlÃ¸pt";
+    if (value === "locked") return "LÃ¥st";
+    if (value === "in_progress") return "PÃ¥gÃ¥r";
     return value || "-";
   }
 
   function renderQuotesArchive(parent, data) {
-    createPageHeader(parent, "Kalkyler og tilbudsarkiv", "Oversikt over lagrede kalkyler og tilbud. Bruk kundetilbud-seksjonen for å skrive ut, kopiere eller redigere tilbud.");
+    createPageHeader(parent, "Kalkyler og tilbudsarkiv", "Oversikt over lagrede kalkyler og tilbud. Bruk kundetilbud-seksjonen for Ã¥ skrive ut, kopiere eller redigere tilbud.");
 
     addTable(parent, [
       { key: "quote_number", label: "Tilbud" },
@@ -1676,8 +1792,8 @@
 
     addDashboardSectionTitle(
       parent,
-      "Dette bør du se på nå",
-      "Røde kort først. Alt er klikkbart og fører til riktig arbeidsområde."
+      "Dette bÃ¸r du se pÃ¥ nÃ¥",
+      "RÃ¸de kort fÃ¸rst. Alt er klikkbart og fÃ¸rer til riktig arbeidsomrÃ¥de."
     );
 
     var attention =
@@ -1689,7 +1805,7 @@
     createDashboardActionCard(
       attention,
       criticalIssues.length,
-      "Må fikses",
+      "MÃ¥ fikses",
       criticalIssues.length
         ? "Kritiske avvik i Kontrollsenter."
         : "Ingen kritiske avvik.",
@@ -1704,8 +1820,8 @@
       invoicesNeedingWork.length,
       "Fakturaer som venter",
       invoicesNeedingWork.length
-        ? "Leverandørfakturaer som ikke er ferdige."
-        : "Alle leverandørfakturaer er ferdige.",
+        ? "LeverandÃ¸rfakturaer som ikke er ferdige."
+        : "Alle leverandÃ¸rfakturaer er ferdige.",
       invoicesNeedingWork.length
         ? "warning"
         : "ok",
@@ -1728,8 +1844,8 @@
     createDashboardActionCard(
       attention,
       lowStock.length,
-      "Populære med lavt lager",
-      "Varer som selger og kan gå tomme snart.",
+      "PopulÃ¦re med lavt lager",
+      "Varer som selger og kan gÃ¥ tomme snart.",
       lowStock.length
         ? "warning"
         : "ok",
@@ -1742,8 +1858,8 @@
         priceFollowUpNow.length +
         waitingPriceSuggestions.length
       ),
-      "Prisoppfølging",
-      "Priskoblinger eller forslag som bør vurderes.",
+      "PrisoppfÃ¸lging",
+      "Priskoblinger eller forslag som bÃ¸r vurderes.",
       (
         priceFollowUpNow.length +
         waitingPriceSuggestions.length
@@ -1774,7 +1890,7 @@
     addDashboardSectionTitle(
       parent,
       "Drift i korte trekk",
-      "Nøkkeltall du ofte trenger uten å åpne en analyserapport."
+      "NÃ¸kkeltall du ofte trenger uten Ã¥ Ã¥pne en analyserapport."
     );
 
     addProStatGrid(
@@ -1782,7 +1898,7 @@
       [
         {
           label:
-            "Omsetning · 7 dager",
+            "Omsetning Â· 7 dager",
           value:
             skFormatMoney(
               revenue7
@@ -1791,7 +1907,7 @@
         },
         {
           label:
-            "Omsetning · 30 dager",
+            "Omsetning Â· 30 dager",
           value:
             skFormatMoney(
               revenue30
@@ -1800,7 +1916,7 @@
         },
         {
           label:
-            "Solgte enheter · 30 dager",
+            "Solgte enheter Â· 30 dager",
           value:
             String(
               Math.round(
@@ -1829,7 +1945,7 @@
         },
         {
           label:
-            "Åpne tilbud",
+            "Ã…pne tilbud",
           value:
             String(
               openQuotes.length
@@ -1858,49 +1974,49 @@
     [
       {
         label:
-          "🛡️ Kontrollsenter",
+          "ðŸ›¡ï¸ Kontrollsenter",
         key:
           "productControl"
       },
       {
         label:
-          "📥 Leverandørfaktura",
+          "ðŸ“¥ LeverandÃ¸rfaktura",
         key:
           "supplierInvoices"
       },
       {
         label:
-          "🛒 Finn produkt",
+          "ðŸ›’ Finn produkt",
         key:
           "products"
       },
       {
         label:
-          "📊 Lageranalyse",
+          "ðŸ“Š Lageranalyse",
         key:
           "inventoryAnalytics"
       },
       {
         label:
-          "✅ Oppgaver",
+          "âœ… Oppgaver",
         key:
           "tasks"
       },
       {
         label:
-          "📅 Booking",
+          "ðŸ“… Booking",
         key:
           "booking"
       },
       {
         label:
-          "💰 Prissjekk",
+          "ðŸ’° Prissjekk",
         key:
           "priceCheck"
       },
       {
         label:
-          "📈 Salgsanalyse",
+          "ðŸ“ˆ Salgsanalyse",
         key:
           "salesAnalytics"
       }
@@ -1948,8 +2064,8 @@
 
     var workload =
       createCollapsibleSection(
-        "📌 Arbeidskø",
-        "Ting som ikke er kritiske, men som kan være smart å ta.",
+        "ðŸ“Œ ArbeidskÃ¸",
+        "Ting som ikke er kritiske, men som kan vÃ¦re smart Ã¥ ta.",
         true
       );
 
@@ -1958,7 +2074,7 @@
       [
         {
           label:
-            "Åpne oppgaver",
+            "Ã…pne oppgaver",
           value:
             String(
               openTasks.length
@@ -1970,7 +2086,7 @@
         },
         {
           label:
-            "Innkjøpsforslag",
+            "InnkjÃ¸psforslag",
           value:
             String(
               purchaseSuggestions.length
@@ -2018,7 +2134,7 @@
 
     var recent =
       createCollapsibleSection(
-        "🧾 Siste tilbud",
+        "ðŸ§¾ Siste tilbud",
         "De siste kundetilbudene.",
         false
       );
@@ -2067,7 +2183,7 @@
 
     var system =
       createCollapsibleSection(
-        "⚙️ Data og system",
+        "âš™ï¸ Data og system",
         "Kort status. Tekniske detaljer ligger under Systemstatus.",
         true
       );
@@ -2112,7 +2228,7 @@
             (
               latestStock
                 .quickbutik_updated_at
-                ? " · Quickbutik oppdatert"
+                ? " Â· Quickbutik oppdatert"
                 : ""
             )
           )
@@ -2143,8 +2259,8 @@
 
     var help =
       createCollapsibleSection(
-        "🧭 Hva brukes sidene til?",
-        "Kort forklaring når du er usikker på hvor noe ligger.",
+        "ðŸ§­ Hva brukes sidene til?",
+        "Kort forklaring nÃ¥r du er usikker pÃ¥ hvor noe ligger.",
         false
       );
 
@@ -2165,7 +2281,7 @@
       ],
       [
         "Lageranalyse",
-        "Hva bør kjøpes inn, hva står stille, og hvor er kapital bundet?"
+        "Hva bÃ¸r kjÃ¸pes inn, hva stÃ¥r stille, og hvor er kapital bundet?"
       ],
       [
         "Salgsanalyse",
@@ -2180,7 +2296,7 @@
         "Operativ kontroll av konkrete konkurrentpriser."
       ],
       [
-        "Leverandørfakturaer",
+        "LeverandÃ¸rfakturaer",
         "Last opp faktura, kontroller usikre linjer og oppdater kost."
       ]
     ].forEach(
@@ -2213,24 +2329,166 @@
   }
 
   function renderOffersHub(parent, data, sb) {
-    createPageHeader(parent, "Tilbud", "Lag og følg opp kundetilbud. Custom print og arkiv ligger på samme side, men er lukket til du trenger dem.", "Salg og pris");
+    createPageHeader(parent, "Tilbud", "Lag og fÃ¸lg opp kundetilbud. Custom print og arkiv ligger pÃ¥ samme side, men er lukket til du trenger dem.", "Salg og pris");
     addMobileAdvice(parent);
 
-    var standard = createCollapsibleSection("🧾 Lag nytt tilbud", "Vanlig tilbudsbygger med produkter, frakt, rabatt og manuelle linjer.", true);
+    var standard = createCollapsibleSection("ðŸ§¾ Lag nytt tilbud", "Vanlig tilbudsbygger med produkter, frakt, rabatt og manuelle linjer.", true);
     renderStandardQuoteBuilder(standard.body, data, sb);
     parent.appendChild(standard.wrap);
 
-    var custom = createCollapsibleSection("🥏 Custom print-tilbud", "Kalkulator for custom stamp og klubb-/firmadisker.", false);
+    var custom = createCollapsibleSection("ðŸ¥ Custom print-tilbud", "Kalkulator for custom stamp og klubb-/firmadisker.", false);
     renderCustomStamp(custom.body, data, sb);
     parent.appendChild(custom.wrap);
 
-    var customer = createCollapsibleSection("📄 Kundetilbud", "Vis, rediger, dupliser, skriv ut og kopier lagrede tilbud.", false);
+    var customer = createCollapsibleSection("ðŸ“„ Kundetilbud", "Vis, rediger, dupliser, skriv ut og kopier lagrede tilbud.", false);
     renderCustomerOffer(customer.body, data, sb);
     parent.appendChild(customer.wrap);
 
-    var archive = createCollapsibleSection("📚 Kalkyler og tilbudsarkiv", "Tabell over lagrede kalkyler og tilbud.", false);
+    var archive = createCollapsibleSection("ðŸ“š Kalkyler og tilbudsarkiv", "Tabell over lagrede kalkyler og tilbud.", false);
     renderQuotesArchive(archive.body, data);
     parent.appendChild(archive.wrap);
+  }
+
+  function renderAccessManagement(parent, sb, currentUser) {
+    var section = createCollapsibleSection(
+      "ðŸ” TilgangsnivÃ¥er",
+      "Fullkontroll-brukere kan velge nivÃ¥ for Kristian, Sindre og Nikolai.",
+      true
+    );
+
+    var explanation = el(
+      "div",
+      "Lesetilgang kan se og sÃ¸ke. Enkelte funksjoner kan i tillegg arbeide med oppgaver, tilbud og varetelling, men kan ikke oppdatere Quickbutik. Full kontroll gir alle handlinger og tilgang til endringsloggen."
+    );
+    explanation.className = "sk-note";
+    explanation.style.marginBottom = "12px";
+    section.body.appendChild(explanation);
+
+    var host = el("div");
+    section.body.appendChild(host);
+    parent.appendChild(section.wrap);
+
+    var manageable = {
+      "kristian@golfkongen.no": true,
+      "sindre@golfkongen.no": true,
+      "nikolai@golfkongen.no": true
+    };
+
+    function loadUsers() {
+      clear(host);
+      var loading = el("div", "Henter brukere og tilgangsnivÃ¥erâ€¦");
+      loading.className = "sk-note";
+      host.appendChild(loading);
+
+      sb.rpc("internal_list_admin_users").then(function (result) {
+        clear(host);
+
+        if (result.error) {
+          var error = el("div", "Kunne ikke hente brukere: " + result.error.message);
+          error.className = "sk-warning";
+          host.appendChild(error);
+          return;
+        }
+
+        var rows = result.data || [];
+        var wrap = el("div");
+        wrap.style.overflowX = "auto";
+        wrap.style.border = "1px solid #e5e7eb";
+        wrap.style.borderRadius = "12px";
+
+        var table = el("table");
+        table.style.width = "100%";
+        table.style.borderCollapse = "collapse";
+        table.style.fontSize = "13px";
+
+        var head = el("tr");
+        ["Bruker", "Innlogging", "Sist inne", "TilgangsnivÃ¥", "Handling"].forEach(function (label) {
+          var th = el("th", label);
+          th.style.padding = "10px";
+          th.style.textAlign = "left";
+          th.style.background = "#f8fafc";
+          th.style.borderBottom = "1px solid #e5e7eb";
+          head.appendChild(th);
+        });
+
+        var thead = el("thead");
+        thead.appendChild(head);
+        table.appendChild(thead);
+
+        var tbody = el("tbody");
+
+        rows.forEach(function (adminUser) {
+          var tr = el("tr");
+          var email = String(adminUser.email || "").toLowerCase();
+          var canEdit = manageable[email] === true;
+
+          function addCell(node) {
+            var td = el("td");
+            td.style.padding = "10px";
+            td.style.borderBottom = "1px solid #f1f5f9";
+            td.style.verticalAlign = "middle";
+            td.appendChild(node);
+            tr.appendChild(td);
+          }
+
+          var identity = el("div");
+          identity.appendChild(el("strong", adminUser.name || adminUser.email || "-"));
+          var emailNode = el("div", adminUser.email || "-");
+          emailNode.style.fontSize = "11px";
+          emailNode.style.color = "#64748b";
+          identity.appendChild(emailNode);
+          addCell(identity);
+
+          var loginStatus = el("strong", adminUser.user_id ? "Klar" : "Venter pÃ¥ fÃ¸rste innlogging");
+          loginStatus.style.color = adminUser.user_id ? "#166534" : "#92400e";
+          addCell(loginStatus);
+
+          addCell(el("span", adminUser.last_login_at ? formatAdminDateTime(adminUser.last_login_at) : "Aldri"));
+
+          var select = el("select");
+          addOption(select, "viewer", "Lesetilgang");
+          addOption(select, "staff", "Enkelte funksjoner");
+          addOption(select, "full", "Full kontroll");
+          select.value = adminUser.access_level || "viewer";
+          select.disabled = !canEdit;
+          select.style.minWidth = "180px";
+          addCell(select);
+
+          var save = createPrimaryButton(canEdit ? "Lagre nivÃ¥" : "Beskyttet fullkonto");
+          save.disabled = !canEdit;
+          save.style.padding = "8px 10px";
+
+          save.onclick = function () {
+            save.disabled = true;
+            save.textContent = "Lagrerâ€¦";
+
+            sb.rpc("internal_set_admin_user_access", {
+              p_email: adminUser.email,
+              p_access_level: select.value
+            }).then(function (saveResult) {
+              if (saveResult.error) {
+                save.disabled = false;
+                save.textContent = "Lagre nivÃ¥";
+                alert("Kunne ikke endre tilgang: " + saveResult.error.message);
+                return;
+              }
+
+              alert("Tilgangen for " + adminUser.email + " er oppdatert.");
+              loadUsers();
+            });
+          };
+
+          addCell(save);
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        host.appendChild(wrap);
+      });
+    }
+
+    loadUsers();
   }
 
   function renderSettingsManager(parent, data, sb, user) {
@@ -2238,7 +2496,7 @@
 
     var settings = settingsMap(data.settings || []);
 
-    var note = el("div", "Endringer her bør gjøres rolig og bevisst. Verdiene brukes som standard i tilbud, utskrift og kundedokumenter. Lagring går via en trygg Supabase-RPC som bare godkjente admin-brukere kan bruke.");
+    var note = el("div", "Endringer her bÃ¸r gjÃ¸res rolig og bevisst. Verdiene brukes som standard i tilbud, utskrift og kundedokumenter. Lagring gÃ¥r via en trygg Supabase-RPC som bare godkjente admin-brukere kan bruke.");
     note.className = "sk-warning";
     note.style.marginBottom = "16px";
     parent.appendChild(note);
@@ -2246,7 +2504,7 @@
     var userEmailLower = String((user && user.email) || "").toLowerCase();
     var contactPrefix = userEmailLower.indexOf("alejandro") >= 0 || userEmailLower.indexOf("aaruffo") >= 0 ? "contact_alejandro" : "contact_kristoffer";
 
-    var userSection = createCollapsibleSection("👤 Innlogget bruker / tilbudskontakt", "Kontaktinformasjonen kan brukes som standard kontaktperson på tilbud.", true);
+    var userSection = createCollapsibleSection("ðŸ‘¤ Innlogget bruker / tilbudskontakt", "Kontaktinformasjonen kan brukes som standard kontaktperson pÃ¥ tilbud.", true);
     var userGrid = el("div");
     userGrid.style.display = "grid";
     userGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
@@ -2278,7 +2536,11 @@
     userSection.body.appendChild(userGrid);
     parent.appendChild(userSection.wrap);
 
-    var company = createCollapsibleSection("🏢 Firmainfo", "Navn, adresse, org.nr, logo og felles kontaktinfo.", true);
+    if (isFullControl(user)) {
+      renderAccessManagement(parent, sb, user);
+    }
+
+    var company = createCollapsibleSection("ðŸ¢ Firmainfo", "Navn, adresse, org.nr, logo og felles kontaktinfo.", true);
     var companyGrid = el("div");
     companyGrid.style.display = "grid";
     companyGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(240px, 1fr))";
@@ -2305,7 +2567,7 @@
     company.body.appendChild(companyGrid);
     parent.appendChild(company.wrap);
 
-    var quote = createCollapsibleSection("🧾 Tilbud og standarder", "Standard gyldighet, MVA, margin og tekst i kundetilbud.", true);
+    var quote = createCollapsibleSection("ðŸ§¾ Tilbud og standarder", "Standard gyldighet, MVA, margin og tekst i kundetilbud.", true);
     var quoteGrid = el("div");
     quoteGrid.style.display = "grid";
     quoteGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(220px, 1fr))";
@@ -2389,10 +2651,10 @@
 
     parent.appendChild(quote.wrap);
 
-    var system = createCollapsibleSection("⚙️ Systeminfo", "Data portalen bruker akkurat nå.", false);
+    var system = createCollapsibleSection("âš™ï¸ Systeminfo", "Data portalen bruker akkurat nÃ¥.", false);
     addProStatGrid(system.body, [
       { label: "Produkter", value: String((data.products || []).length) },
-      { label: "Leverandører", value: String((data.suppliers || []).length) },
+      { label: "LeverandÃ¸rer", value: String((data.suppliers || []).length) },
       { label: "Tillegg", value: String((data.addons || []).length) },
       { label: "Kunder", value: String((data.customers || []).length) },
       { label: "Varetellinger", value: String((data.stockCounts || []).length) }
@@ -2402,7 +2664,7 @@
     security.className = "sk-note";
     security.style.marginTop = "14px";
     security.textContent =
-      "Sikkerhet: Portalen bruker Supabase-innlogging, sjekker internal_admin_users før data vises, bruker kun publishable key i frontend og service-role ligger ikke i nettleseren. Siden bør fortsatt være fjernet fra offentlig meny og ha noindex.";
+      "Sikkerhet: Portalen bruker Supabase-innlogging, sjekker internal_admin_users fÃ¸r data vises, bruker kun publishable key i frontend og service-role ligger ikke i nettleseren. Siden bÃ¸r fortsatt vÃ¦re fjernet fra offentlig meny og ha noindex.";
     system.body.appendChild(security);
 
     parent.appendChild(system.wrap);
@@ -2431,7 +2693,7 @@
     left.appendChild(h1);
     left.appendChild(p);
 
-    var badge = el("div", "🔒 Sportskongen intern");
+    var badge = el("div", "ðŸ”’ Sportskongen intern");
     badge.className = "sk-badge";
 
     top.appendChild(left);
@@ -2444,7 +2706,7 @@
   }
 
   function renderLoading() {
-    renderShell("Mission Control", "Laster kontrollsenteret…");
+    renderShell("Mission Control", "Laster kontrollsenteretâ€¦");
   }
 
   function renderError(message) {
@@ -2454,7 +2716,7 @@
   function renderLogin(sb) {
     var app = renderShell(
       "Mission Control",
-      "Logg inn med e-post og engangskoden du får på e-post."
+      "Logg inn med e-post og engangskoden du fÃ¥r pÃ¥ e-post."
     );
 
     var form = el("div");
@@ -2531,7 +2793,7 @@
 
     var note = el(
       "p",
-      "Samme innlogging som Min Bag. Du får en engangskode på e-post. Kun godkjente interne admin-brukere får tilgang til adminportalen."
+      "Samme innlogging som Min Bag. Du fÃ¥r en engangskode pÃ¥ e-post. Kun godkjente interne admin-brukere fÃ¥r tilgang til adminportalen."
     );
     note.style.marginTop = "12px";
     note.style.color = "#6b7280";
@@ -2557,7 +2819,7 @@
 
       if (!email) {
         alert(
-          "Skriv inn e-postadressen din først."
+          "Skriv inn e-postadressen din fÃ¸rst."
         );
         return;
       }
@@ -2566,7 +2828,7 @@
 
       sendButton.disabled = true;
       sendButton.textContent =
-        "Sender kode…";
+        "Sender kodeâ€¦";
 
       sb.auth.signInWithOtp({
         email: email
@@ -2606,7 +2868,7 @@
 
         if (
           sendButton.textContent ===
-          "Sender kode…"
+          "Sender kodeâ€¦"
         ) {
           sendButton.textContent =
             "Send innloggingskode";
@@ -2625,7 +2887,7 @@
 
       if (!sentEmail) {
         alert(
-          "Send en kode til e-posten din først."
+          "Send en kode til e-posten din fÃ¸rst."
         );
         return;
       }
@@ -2639,7 +2901,7 @@
 
       verifyButton.disabled = true;
       verifyButton.textContent =
-        "Logger inn…";
+        "Logger innâ€¦";
 
       sb.auth.verifyOtp({
         email: sentEmail,
@@ -2659,13 +2921,13 @@
           !result.data.session
         ) {
           alert(
-            "Koden ble godkjent, men ingen innlogget session ble opprettet. Prøv på nytt."
+            "Koden ble godkjent, men ingen innlogget session ble opprettet. PrÃ¸v pÃ¥ nytt."
           );
           return;
         }
 
         codeStatus.textContent =
-          "Innlogging godkjent. Åpner adminportalen…";
+          "Innlogging godkjent. Ã…pner adminportalenâ€¦";
 
         window.location.reload();
       }).catch(function (error) {
@@ -2728,8 +2990,8 @@
     var meta = el(
       "div",
       user.email +
-        " · " +
-        user.role
+        " Â· " +
+        accessLabel(user)
     );
 
     meta.style.color = "#64748b";
@@ -2755,7 +3017,7 @@
     app.appendChild(bar);
   }
 
-  function createTabs(app, tabs, data) {
+  function createTabs(app, tabs, data, user) {
     var layout = el("div");
     layout.className =
       "sk-v4-layout";
@@ -2776,7 +3038,7 @@
       el("strong", "Mission Control");
 
     var mobileClose =
-      createButton("✕ Lukk");
+      createButton("âœ• Lukk");
     mobileClose.className =
       "sk-v4-mobile-close";
 
@@ -2794,7 +3056,7 @@
     var search = el("input");
     search.type = "search";
     search.placeholder =
-      "Finn side eller produkt…";
+      "Finn side eller produktâ€¦";
     search.className =
       "sk-v4-nav-search";
 
@@ -2848,7 +3110,7 @@
     );
 
     var mobileToggle =
-      createButton("☰ Meny");
+      createButton("â˜° Meny");
 
     mobileToggle.className =
       "sk-v4-mobile-toggle";
@@ -2887,13 +3149,31 @@
     app.appendChild(layout);
 
     var buttons = {};
+    var activeModuleKey = "overview";
+    var accessRefreshTimer = null;
+
+    function refreshAccessMode() {
+      if (accessRefreshTimer) {
+        clearTimeout(accessRefreshTimer);
+      }
+
+      accessRefreshTimer = setTimeout(function () {
+        applyPortalAccessMode(content, activeModuleKey, user);
+      }, 0);
+    }
+
+    var accessObserver = new MutationObserver(refreshAccessMode);
+    accessObserver.observe(content, {
+      childList: true,
+      subtree: true
+    });
 
     var groupOrder = [
       "Oversikt",
       "Drift",
       "Varer og lager",
       "Salg og pris",
-      "Innkjøp",
+      "InnkjÃ¸p",
       "System"
     ];
 
@@ -3039,6 +3319,10 @@
               function (key) {
                 var tab = tabs[key];
 
+                if (tab.fullOnly === true && !isFullControl(user)) {
+                  return false;
+                }
+
                 if (
                   (
                     tab.group ||
@@ -3109,7 +3393,7 @@
               var icon =
                 el(
                   "span",
-                  tab.icon || "•"
+                  tab.icon || "â€¢"
                 );
 
               icon.className =
@@ -3217,7 +3501,7 @@
               var icon =
                 el(
                   "span",
-                  "🛒"
+                  "ðŸ›’"
                 );
 
               icon.className =
@@ -3263,7 +3547,7 @@
                       : ""
                   ]
                     .filter(Boolean)
-                    .join(" · ")
+                    .join(" Â· ")
                 );
 
               meta.style.display =
@@ -3387,6 +3671,12 @@
         key = "overview";
       }
 
+      if (tabs[key].fullOnly === true && !isFullControl(user)) {
+        key = "overview";
+      }
+
+      activeModuleKey = key;
+
       localStorage.setItem(
         "sk_internal_active_tab",
         key
@@ -3415,6 +3705,8 @@
         content,
         activate
       );
+
+      refreshAccessMode();
 
       closeMobileNavigation();
 
@@ -3668,7 +3960,7 @@
     h2.style.marginTop = "0";
     parent.appendChild(h2);
 
-    var note = el("p", "Dette er v2-strukturen. Kalkulatoren regner på interne testprodukter og tillegg.");
+    var note = el("p", "Dette er v2-strukturen. Kalkulatoren regner pÃ¥ interne testprodukter og tillegg.");
     note.style.color = "#6b7280";
     parent.appendChild(note);
 
@@ -3725,13 +4017,13 @@ customerCompanyInput.placeholder = "Klubb / firma";
     addField(grid, "Kundenavn", customerNameInput);
 addField(grid, "Kunde e-post", customerEmailInput);
 addField(grid, "Kunde / klubb / firma", customerCompanyInput);
-    addField(grid, "Leverandør", supplierSelect);
+    addField(grid, "LeverandÃ¸r", supplierSelect);
     addField(grid, "Produkt", productSelect);
     addField(grid, "Antall", qtyInput);
     addField(grid, "Frakt eks. mva", shippingInput);
     addField(grid, "Oppstartskostnad eks. mva", setupInput);
     addField(grid, "Ekstra tillegg eks. mva", extraInput);
-    addField(grid, "Påslag / fortjeneste", marginSelect);
+    addField(grid, "PÃ¥slag / fortjeneste", marginSelect);
     addField(grid, "Manuell totalpris inkl. mva", manualInput);
 
     panel.appendChild(grid);
@@ -3757,7 +4049,7 @@ panel.appendChild(saveButton);
       }
     });
 
-    addOption(supplierSelect, "", "Velg leverandør");
+    addOption(supplierSelect, "", "Velg leverandÃ¸r");
 
     Object.keys(suppliers).forEach(function (id) {
       addOption(supplierSelect, id, suppliers[id]);
@@ -3790,7 +4082,7 @@ panel.appendChild(saveButton);
       var product = getProduct();
 
       if (!product) {
-        result.appendChild(el("strong", "Velg leverandør og produkt."));
+        result.appendChild(el("strong", "Velg leverandÃ¸r og produkt."));
         return;
       }
 
@@ -3815,11 +4107,11 @@ panel.appendChild(saveButton);
 
       addStatGrid(result, [
         { label: "Kost eks. mva", value: money(totalCostEx) + " kr" },
-        { label: "Foreslått salg inkl.", value: money(suggestedInc) + " kr" },
+        { label: "ForeslÃ¥tt salg inkl.", value: money(suggestedInc) + " kr" },
         { label: "Endelig salg inkl.", value: money(finalInc) + " kr" },
         { label: "Pris per stk inkl.", value: money(unitInc) + " kr" },
         { label: "Fortjeneste eks.", value: money(profitEx) + " kr" },
-        { label: "Påslag", value: margin + " %" }
+        { label: "PÃ¥slag", value: margin + " %" }
       ]);
 
       var details = el("ul");
@@ -3851,14 +4143,14 @@ panel.appendChild(saveButton);
   var product = getProduct();
 
   if (!product) {
-    alert("Velg produkt først.");
+    alert("Velg produkt fÃ¸rst.");
     return;
   }
 
   var customerName = customerNameInput.value.trim();
 
   if (!customerName) {
-    alert("Skriv inn kundenavn først.");
+    alert("Skriv inn kundenavn fÃ¸rst.");
     return;
   }
 
@@ -4057,7 +4349,7 @@ ensureOfferPrintStyle();
   h2.style.marginTop = "0";
   parent.appendChild(h2);
 
-  var intro = el("p", "Velg et lagret tilbud for å vise et rent kundedokument uten innkjøpspris, margin eller interne notater.");
+  var intro = el("p", "Velg et lagret tilbud for Ã¥ vise et rent kundedokument uten innkjÃ¸pspris, margin eller interne notater.");
   intro.style.color = "#6b7280";
   parent.appendChild(intro);
 
@@ -4075,7 +4367,7 @@ ensureOfferPrintStyle();
   select.style.marginBottom = "18px";
 
   quotes.forEach(function (q) {
-    var label = q.quote_number + " – " + (q.customer_name || "Ukjent kunde");
+    var label = q.quote_number + " â€“ " + (q.customer_name || "Ukjent kunde");
 
     if (q.customer_company) {
       label += " / " + q.customer_company;
@@ -4106,8 +4398,8 @@ statusSelect.style.borderRadius = "10px";
 addOption(statusSelect, "draft", "Utkast");
 addOption(statusSelect, "sent", "Sendt");
 addOption(statusSelect, "accepted", "Akseptert");
-addOption(statusSelect, "declined", "Avslått");
-addOption(statusSelect, "expired", "Utløpt");
+addOption(statusSelect, "declined", "AvslÃ¥tt");
+addOption(statusSelect, "expired", "UtlÃ¸pt");
 
 var statusBtn = createButton("Oppdater status");
 
@@ -4189,7 +4481,7 @@ addField(priceGrid, "Endelig kundepris inkl. mva", editFinalPriceInc);
 var savePriceBtn = createButton("Lagre kundepris");
 savePriceBtn.style.marginTop = "10px";
 
-var priceNote = el("p", "Dette oppdaterer kundepris på tilbudet. Interne kostnader beholdes, men fortjeneste beregnes på nytt.");
+var priceNote = el("p", "Dette oppdaterer kundepris pÃ¥ tilbudet. Interne kostnader beholdes, men fortjeneste beregnes pÃ¥ nytt.");
 priceNote.style.color = "#6b7280";
 priceNote.style.fontSize = "13px";
 priceNote.style.marginTop = "8px";
@@ -4427,7 +4719,7 @@ editCustomerCompany.value = quote.customer_company || "";
       desc.style.borderBottom = "1px solid #f3f4f6";
 
       var name = el("strong", item.name || "-");
-      var meta = el("div", (item.brand || "") + (item.category ? " · " + item.category : ""));
+      var meta = el("div", (item.brand || "") + (item.category ? " Â· " + item.category : ""));
       meta.style.color = "#6b7280";
       meta.style.fontSize = "13px";
       meta.style.marginTop = "3px";
@@ -4526,14 +4818,14 @@ if (savedQuoteId) {
   };
 
 pdfBtn.onclick = function () {
-  printElementAsPdf("sk-customer-offer-document", "Velg ‘Lagre som PDF’ i utskriftsvinduet for å laste ned tilbudet som PDF.");
+  printElementAsPdf("sk-customer-offer-document", "Velg â€˜Lagre som PDFâ€™ i utskriftsvinduet for Ã¥ laste ned tilbudet som PDF.");
 };
 
 duplicateBtn.onclick = function () {
   var quote = selectedQuote();
 
   if (!quote) {
-    alert("Velg tilbud først.");
+    alert("Velg tilbud fÃ¸rst.");
     return;
   }
 
@@ -4577,7 +4869,7 @@ savePriceBtn.onclick = function () {
   var quote = selectedQuote();
 
   if (!quote) {
-    alert("Velg tilbud først.");
+    alert("Velg tilbud fÃ¸rst.");
     return;
   }
 
@@ -4589,7 +4881,7 @@ savePriceBtn.onclick = function () {
   }
 
   var confirmPrice = confirm(
-    "Vil du oppdatere kundepris på " +
+    "Vil du oppdatere kundepris pÃ¥ " +
     quote.quote_number +
     " til " +
     money(price) +
@@ -4627,14 +4919,14 @@ savePriceBtn.onclick = function () {
   var quote = selectedQuote();
 
   if (!quote) {
-    alert("Velg tilbud først.");
+    alert("Velg tilbud fÃ¸rst.");
     return;
   }
 
   var customerName = editCustomerName.value.trim();
 
   if (!customerName) {
-    alert("Kundenavn må fylles ut.");
+    alert("Kundenavn mÃ¥ fylles ut.");
     return;
   }
 
@@ -4664,7 +4956,7 @@ savePriceBtn.onclick = function () {
   var quote = selectedQuote();
 
   if (!quote) {
-    alert("Velg tilbud først.");
+    alert("Velg tilbud fÃ¸rst.");
     return;
   }
 
@@ -4691,7 +4983,7 @@ savePriceBtn.onclick = function () {
   var quote = selectedQuote();
 
   if (!quote) {
-    alert("Velg tilbud først.");
+    alert("Velg tilbud fÃ¸rst.");
     return;
   }
 
@@ -4719,7 +5011,7 @@ savePriceBtn.onclick = function () {
   var quote = selectedQuote();
 
   if (!quote) {
-    alert("Velg tilbud først.");
+    alert("Velg tilbud fÃ¸rst.");
     return;
   }
 
@@ -4736,7 +5028,7 @@ savePriceBtn.onclick = function () {
 
   lines.push("Hei!");
   lines.push("");
-  lines.push("Takk for forespørselen. Her er vårt tilbud:");
+  lines.push("Takk for forespÃ¸rselen. Her er vÃ¥rt tilbud:");
   lines.push("");
   lines.push("Tilbudsnummer: " + quote.quote_number);
   lines.push("Dato: " + formatDateNorwegian(quote.created_at));
@@ -4761,7 +5053,7 @@ savePriceBtn.onclick = function () {
       money(item.quantity) +
       " stk " +
       (item.name || "-") +
-      " à " +
+      " Ã  " +
       money(item.unit_sales_price_inc_vat) +
       " kr inkl. mva = " +
       money(item.line_sales_price_inc_vat) +
@@ -4883,6 +5175,36 @@ savePriceBtn.onclick = function () {
       );
     }
 
+    function breakEvenInfo(product) {
+      var purchaseEx = Number(product.purchase_price_ex_vat);
+      var salesInc = Number(product.sales_price_inc_vat);
+      var vatRate = Number(product.vat_rate);
+
+      if (!Number.isFinite(purchaseEx) || purchaseEx <= 0) {
+        return { missingCost: true };
+      }
+
+      if (!Number.isFinite(vatRate) || vatRate < 0) {
+        vatRate = 25;
+      }
+
+      var breakEvenInc = purchaseEx * (1 + vatRate / 100);
+      var availableDiscount = Number.isFinite(salesInc)
+        ? salesInc - breakEvenInc
+        : null;
+      var discountPercent =
+        Number.isFinite(salesInc) && salesInc > 0 && availableDiscount !== null
+          ? (Math.max(0, availableDiscount) / salesInc) * 100
+          : null;
+
+      return {
+        missingCost: false,
+        breakEvenInc: breakEvenInc,
+        availableDiscount: availableDiscount,
+        discountPercent: discountPercent
+      };
+    }
+
     (issues || []).forEach(
       function (issue) {
         if (!issue.product_id) {
@@ -4936,7 +5258,7 @@ savePriceBtn.onclick = function () {
     searchInput.type =
       "search";
     searchInput.placeholder =
-      "Søk produkt, merke, SKU eller Quickbutik-ID…";
+      "SÃ¸k produkt, merke, SKU eller Quickbutik-IDâ€¦";
     searchInput.value =
       initialSearch;
 
@@ -4970,7 +5292,7 @@ savePriceBtn.onclick = function () {
       ],
       [
         "purchase_price_ex_vat",
-        "Sorter: Innkjøpspris"
+        "Sorter: InnkjÃ¸pspris"
       ],
       [
         "profit_margin_percent",
@@ -4978,7 +5300,7 @@ savePriceBtn.onclick = function () {
       ],
       [
         "supplier_name",
-        "Sorter: Leverandør"
+        "Sorter: LeverandÃ¸r"
       ]
     ].forEach(
       function (item) {
@@ -4997,13 +5319,13 @@ savePriceBtn.onclick = function () {
     addOption(
       dirSelect,
       "asc",
-      "Lavest / A–Å"
+      "Lavest / Aâ€“Ã…"
     );
 
     addOption(
       dirSelect,
       "desc",
-      "Høyest / Å–A"
+      "HÃ¸yest / Ã…â€“A"
     );
 
     controls.appendChild(
@@ -5019,6 +5341,14 @@ savePriceBtn.onclick = function () {
     parent.appendChild(
       controls
     );
+
+    var breakEvenNote = el(
+      "div",
+      "Nullpunkt inkl. mva viser registrert varekost med produktets mva. Maks avslag viser hvor mye dagens utsalgspris kan reduseres fÃ¸r varefortjenesten blir 0. Ordrefrakt og betalingsgebyrer er ikke med."
+    );
+    breakEvenNote.className = "sk-note";
+    breakEvenNote.style.marginBottom = "12px";
+    parent.appendChild(breakEvenNote);
 
 
     var filterRow =
@@ -5391,7 +5721,7 @@ savePriceBtn.onclick = function () {
           String(
             critical.length
           ) +
-          " må fikses";
+          " mÃ¥ fikses";
         badge.style.background =
           "#fee2e2";
         badge.style.color =
@@ -5528,7 +5858,7 @@ savePriceBtn.onclick = function () {
         var empty =
           el(
             "div",
-            "Ingen produkter matcher søket eller filteret."
+            "Ingen produkter matcher sÃ¸ket eller filteret."
           );
 
         empty.className =
@@ -5576,8 +5906,10 @@ savePriceBtn.onclick = function () {
         "Lager",
         "Utsalg",
         "Innpris eks.",
+        "Nullpunkt inkl.",
+        "Maks avslag",
         "Margin",
-        "Leverandør",
+        "LeverandÃ¸r",
         "Handling"
       ].forEach(
         function (label) {
@@ -5691,7 +6023,7 @@ savePriceBtn.onclick = function () {
                   : ""
               ]
                 .filter(Boolean)
-                .join(" · ")
+                .join(" Â· ")
             );
 
           meta.style.marginTop =
@@ -5767,6 +6099,65 @@ savePriceBtn.onclick = function () {
                 " kr"
             )
           );
+
+
+          var zeroInfo = breakEvenInfo(product);
+          var zeroNode = el("div");
+
+          if (zeroInfo.missingCost) {
+            zeroNode.textContent = "Mangler kostpris";
+            zeroNode.style.color = "#92400e";
+            zeroNode.style.fontWeight = "800";
+          } else {
+            zeroNode.appendChild(
+              el("strong", money(zeroInfo.breakEvenInc) + " kr")
+            );
+
+            var zeroMeta = el(
+              "div",
+              "inkl. " + money(Number(product.vat_rate || 25)) + " % mva"
+            );
+            zeroMeta.style.marginTop = "3px";
+            zeroMeta.style.fontSize = "11px";
+            zeroMeta.style.color = "#64748b";
+            zeroNode.appendChild(zeroMeta);
+          }
+
+          tdNode(zeroNode);
+
+
+          var discountNode = el("div");
+
+          if (zeroInfo.missingCost || zeroInfo.availableDiscount === null) {
+            discountNode.textContent = "Kan ikke beregnes";
+            discountNode.style.color = "#92400e";
+          } else if (zeroInfo.availableDiscount < 0) {
+            discountNode.appendChild(el("strong", "Ingen"));
+            discountNode.style.color = "#991b1b";
+
+            var below = el(
+              "div",
+              money(Math.abs(zeroInfo.availableDiscount)) + " kr under nullpunkt"
+            );
+            below.style.marginTop = "3px";
+            below.style.fontSize = "11px";
+            discountNode.appendChild(below);
+          } else {
+            discountNode.appendChild(
+              el("strong", money(zeroInfo.availableDiscount) + " kr")
+            );
+
+            var discountMeta = el(
+              "div",
+              money(zeroInfo.discountPercent) + " % avslag"
+            );
+            discountMeta.style.marginTop = "3px";
+            discountMeta.style.fontSize = "11px";
+            discountMeta.style.color = "#166534";
+            discountNode.appendChild(discountMeta);
+          }
+
+          tdNode(discountNode);
 
 
           var margin =
@@ -5935,14 +6326,14 @@ savePriceBtn.onclick = function () {
 
 function renderProductSyncBox(parent, sb) {
   var section = createCollapsibleSection(
-    "🔄 Oppdater fra nettbutikken",
+    "ðŸ”„ Oppdater fra nettbutikken",
     "Henter produkter, priser, innpris, lager og status fra Quickbutik/GolfKongen.no.",
     false
   );
 
   var box = section.body;
 
-  var info = el("p", "Denne oppdateringen bruker innloggingen din og kan bare kjøres av godkjente admin-brukere.");
+  var info = el("p", "Denne oppdateringen bruker innloggingen din og kan bare kjÃ¸res av godkjente admin-brukere.");
   info.style.color = "#6b7280";
   info.style.marginTop = "0";
   box.appendChild(info);
@@ -5965,7 +6356,7 @@ function renderProductSyncBox(parent, sb) {
   offsetInput.min = "0";
 
   var dryRunSelect = el("select");
-  addOption(dryRunSelect, "true", "Test først");
+  addOption(dryRunSelect, "true", "Test fÃ¸rst");
   addOption(dryRunSelect, "false", "Oppdater faktisk");
 
   addField(controls, "Antall per pulje", limitInput);
@@ -5980,7 +6371,7 @@ function renderProductSyncBox(parent, sb) {
   buttonRow.style.flexWrap = "wrap";
   buttonRow.style.marginTop = "10px";
 
-  var runBtn = createPrimaryButton("Kjør én pulje");
+  var runBtn = createPrimaryButton("KjÃ¸r Ã©n pulje");
   var runAllBtn = createPrimaryButton("Synk alle produkter");
   var stopBtn = createButton("Stopp");
   stopBtn.disabled = true;
@@ -6017,7 +6408,7 @@ function renderProductSyncBox(parent, sb) {
     runAllBtn.disabled = isRunning;
     stopBtn.disabled = !isRunning;
 
-    runBtn.textContent = isRunning ? "Kjører..." : "Kjør én pulje";
+    runBtn.textContent = isRunning ? "KjÃ¸rer..." : "KjÃ¸r Ã©n pulje";
     runAllBtn.textContent = isRunning ? "Synker..." : "Synk alle produkter";
   }
 
@@ -6064,7 +6455,7 @@ function renderProductSyncBox(parent, sb) {
   runBtn.onclick = function () {
     shouldStop = false;
     setRunning(true);
-    showProgress("Kjører én pulje...");
+    showProgress("KjÃ¸rer Ã©n pulje...");
     resultBox.style.display = "none";
 
     getToken().then(function (token) {
@@ -6081,13 +6472,13 @@ function renderProductSyncBox(parent, sb) {
         showProgress(
           "Ferdig. Opprettet: " +
           (data.created || 0) +
-          " · Oppdatert: " +
+          " Â· Oppdatert: " +
           (data.updated || 0) +
-          " · Feil: " +
+          " Â· Feil: " +
           (data.failed || 0)
         );
 
-        if (confirm("Oppdatering ferdig. Vil du laste siden på nytt for å se endringene?")) {
+        if (confirm("Oppdatering ferdig. Vil du laste siden pÃ¥ nytt for Ã¥ se endringene?")) {
           localStorage.setItem("sk_internal_active_tab", "products");
           window.location.reload();
         }
@@ -6106,7 +6497,7 @@ function renderProductSyncBox(parent, sb) {
     var dryRun = dryRunSelect.value !== "false";
 
     if (dryRun) {
-      alert("Velg 'Oppdater faktisk' før du bruker Synk alle produkter.");
+      alert("Velg 'Oppdater faktisk' fÃ¸r du bruker Synk alle produkter.");
       return;
     }
 
@@ -6146,7 +6537,7 @@ function renderProductSyncBox(parent, sb) {
           "Synker produkter..." +
           "\nPulje: " + batches +
           "\nOffset: " + offset +
-          "\nBehandlet så langt: " + totalProcessed +
+          "\nBehandlet sÃ¥ langt: " + totalProcessed +
           "\nOpprettet: " + totalCreated +
           "\nOppdatert: " + totalUpdated +
           "\nFeil: " + totalFailed
@@ -6208,7 +6599,7 @@ function renderProductSyncBox(parent, sb) {
       }
 
       showProgress(
-        "Synk ferdig ✅" +
+        "Synk ferdig âœ…" +
         "\nPuljer: " + batches +
         "\nBehandlet: " + totalProcessed +
         "\nOpprettet: " + totalCreated +
@@ -6226,13 +6617,13 @@ function renderProductSyncBox(parent, sb) {
         siste_pulje: lastResult
       });
 
-      if (confirm("Alle produkter er synket. Vil du laste siden på nytt nå?")) {
+      if (confirm("Alle produkter er synket. Vil du laste siden pÃ¥ nytt nÃ¥?")) {
         localStorage.setItem("sk_internal_active_tab", "products");
         window.location.reload();
       }
     }).catch(function (error) {
       setRunning(false);
-      showProgress("Sync stoppet på grunn av feil.");
+      showProgress("Sync stoppet pÃ¥ grunn av feil.");
       resultBox.style.display = "block";
       resultBox.textContent = "Feil: " + (error.message || String(error));
     });
@@ -6241,7 +6632,7 @@ function renderProductSyncBox(parent, sb) {
   stopBtn.onclick = function () {
     shouldStop = true;
     stopBtn.disabled = true;
-    showProgress("Stopper etter pågående pulje...");
+    showProgress("Stopper etter pÃ¥gÃ¥ende pulje...");
   };
 
   parent.appendChild(section.wrap);
@@ -6249,7 +6640,7 @@ function renderProductSyncBox(parent, sb) {
 
 function renderDeleteManualProductSection(parent, data, sb) {
   var section = createCollapsibleSection(
-    "🗑️ Slett selvlaget produkt",
+    "ðŸ—‘ï¸ Slett selvlaget produkt",
     "Slett eller deaktiver produkter som er opprettet manuelt i internportalen. Quickbutik-produkter kan ikke slettes her.",
     false
   );
@@ -6275,7 +6666,7 @@ function renderDeleteManualProductSection(parent, data, sb) {
     var label = p.name || "Ukjent produkt";
 
     if (p.brand) {
-      label += " – " + p.brand;
+      label += " â€“ " + p.brand;
     }
 
     if (p.category) {
@@ -6315,7 +6706,7 @@ function renderDeleteManualProductSection(parent, data, sb) {
     var productId = productSelect.value;
 
     if (!productId) {
-      alert("Velg et produkt først.");
+      alert("Velg et produkt fÃ¸rst.");
       return;
     }
 
@@ -6336,11 +6727,11 @@ function renderDeleteManualProductSection(parent, data, sb) {
       "Dette gjelder kun selvlagde produkter.\n\n" +
       "Produkt: " + selected.name + "\n\n" +
       "Hvis produktet er brukt i tilbud eller varetelling, blir det deaktivert i stedet for slettet.\n\n" +
-      "Skriv SLETT PRODUKT for å bekrefte:"
+      "Skriv SLETT PRODUKT for Ã¥ bekrefte:"
     );
 
     if (confirmText !== "SLETT PRODUKT") {
-      alert("Produktet ble ikke slettet. Du må skrive nøyaktig SLETT PRODUKT.");
+      alert("Produktet ble ikke slettet. Du mÃ¥ skrive nÃ¸yaktig SLETT PRODUKT.");
       return;
     }
 
@@ -6384,7 +6775,7 @@ function renderDeleteManualProductSection(parent, data, sb) {
   createPageHeader(
     parent,
     "Produkter",
-    "Finn og kontroller ett produkt. Produktoversikten viser lager, pris, kost, margin og eventuelle varsler på samme sted.",
+    "Finn og kontroller ett produkt. Produktoversikten viser lager, pris, kost, margin og eventuelle varsler pÃ¥ samme sted.",
     "Varer og lager"
   );
 
@@ -6437,7 +6828,7 @@ function renderDeleteManualProductSection(parent, data, sb) {
       },
       {
         label:
-          "Leverandører i produktregisteret",
+          "LeverandÃ¸rer i produktregisteret",
         value:
           String(
             Object.keys(
@@ -6488,8 +6879,8 @@ function renderDeleteManualProductSection(parent, data, sb) {
 
   var productListSection =
     createCollapsibleSection(
-      "📦 Produktoversikt",
-      "Søk produkt og gå direkte til Quickbutik, nettbutikken eller varslene.",
+      "ðŸ“¦ Produktoversikt",
+      "SÃ¸k produkt og gÃ¥ direkte til Quickbutik, nettbutikken eller varslene.",
       true
     );
 
@@ -6526,8 +6917,8 @@ function renderDeleteManualProductSection(parent, data, sb) {
   );
 
     var createSection = createCollapsibleSection(
-  "➕ Nytt produkt",
-  "Opprett nye produkter med innpris, valuta, kategori og leverandør.",
+  "âž• Nytt produkt",
+  "Opprett nye produkter med innpris, valuta, kategori og leverandÃ¸r.",
   false
 );
 
@@ -6556,7 +6947,7 @@ addOption(newCategory, "utkastplate", "Utkastplate");
 addOption(newCategory, "annet", "Annet");
 
 var newSupplier = el("select");
-addOption(newSupplier, "", "Ingen / ukjent leverandør");
+addOption(newSupplier, "", "Ingen / ukjent leverandÃ¸r");
 
 var supplierMap = {};
 
@@ -6603,8 +6994,8 @@ newVat.step = "0.01";
 newVat.value = "25";
 
 var newLocked = el("select");
-addOption(newLocked, "false", "🔓 Åpen");
-addOption(newLocked, "true", "🔒 Låst");
+addOption(newLocked, "false", "ðŸ”“ Ã…pen");
+addOption(newLocked, "true", "ðŸ”’ LÃ¥st");
 
 var newUrl = el("input");
 newUrl.type = "text";
@@ -6622,7 +7013,7 @@ newNotes.placeholder = "Intern kommentar";
 addField(createGrid, "Produktnavn", newName);
 addField(createGrid, "Merke", newBrand);
 addField(createGrid, "Kategori", newCategory);
-addField(createGrid, "Leverandør", newSupplier);
+addField(createGrid, "LeverandÃ¸r", newSupplier);
 addField(createGrid, "Utsalgspris inkl. mva", newSalesInc);
 addField(createGrid, "Innpris eks. mva", newPurchaseEx);
 addField(createGrid, "Innpris inkl. mva", newPurchaseInc);
@@ -6644,8 +7035,8 @@ createWrap.appendChild(createGrid);
 createWrap.appendChild(createBtn);
 parent.appendChild(createSection.wrap);
   var editSection = createCollapsibleSection(
-  "✏️ Manuell kostjustering",
-  "Bruk bare når kost må korrigeres manuelt uten leverandørfaktura.",
+  "âœï¸ Manuell kostjustering",
+  "Bruk bare nÃ¥r kost mÃ¥ korrigeres manuelt uten leverandÃ¸rfaktura.",
   false
 );
 
@@ -6677,8 +7068,8 @@ var editor = editSection.body;
   vatInput.value = "25";
 
   var lockedSelect = el("select");
-  addOption(lockedSelect, "true", "🔒 Låst");
-  addOption(lockedSelect, "false", "🔓 Åpen");
+  addOption(lockedSelect, "true", "ðŸ”’ LÃ¥st");
+  addOption(lockedSelect, "false", "ðŸ”“ Ã…pen");
 
   var notesInput = el("textarea");
   notesInput.style.minHeight = "80px";
@@ -6687,7 +7078,7 @@ var editor = editSection.body;
   addOption(productSelect, "", "Velg produkt");
 
   (data.products || []).forEach(function (p) {
-    var label = (p.brand ? p.brand + " – " : "") + p.name;
+    var label = (p.brand ? p.brand + " â€“ " : "") + p.name;
     addOption(productSelect, p.id, label);
   });
 
@@ -6730,7 +7121,7 @@ createBtn.onclick = function () {
   var name = newName.value.trim();
 
   if (!name) {
-    alert("Produktnavn må fylles ut.");
+    alert("Produktnavn mÃ¥ fylles ut.");
     return;
   }
 
@@ -6820,7 +7211,7 @@ createBtn.onclick = function () {
     var p = getSelectedProduct();
 
     if (!p) {
-      alert("Velg produkt først.");
+      alert("Velg produkt fÃ¸rst.");
       return;
     }
 
@@ -6829,7 +7220,7 @@ createBtn.onclick = function () {
     var vat = Number(vatInput.value || 25);
 
     if (ex < 0 || inc < 0) {
-      alert("Pris kan ikke være negativ.");
+      alert("Pris kan ikke vÃ¦re negativ.");
       return;
     }
 
@@ -6868,12 +7259,12 @@ createBtn.onclick = function () {
 
   function renderDeleteAddonSection(parent, data, sb) {
   var section = createCollapsibleSection(
-    "🗑️ Slett / deaktiver tillegg",
+    "ðŸ—‘ï¸ Slett / deaktiver tillegg",
     "Slett tillegg som ikke er brukt tidligere. Tillegg som er brukt i tilbud blir deaktivert i stedet.",
     false
   );
 
-  var info = el("p", "Velg et tillegg du ønsker å fjerne. Hvis tillegget er brukt tidligere, blir det deaktivert slik at historikken beholdes.");
+  var info = el("p", "Velg et tillegg du Ã¸nsker Ã¥ fjerne. Hvis tillegget er brukt tidligere, blir det deaktivert slik at historikken beholdes.");
   info.style.color = "#6b7280";
   section.body.appendChild(info);
 
@@ -6894,7 +7285,7 @@ createBtn.onclick = function () {
     var label = a.addon_name || "Ukjent tillegg";
 
     if (a.supplier_name) {
-      label += " – " + a.supplier_name;
+      label += " â€“ " + a.supplier_name;
     }
 
     if (a.amount_ex_vat !== null && a.amount_ex_vat !== undefined) {
@@ -6902,7 +7293,7 @@ createBtn.onclick = function () {
     }
 
     if (a.addon_is_active === false) {
-  label += " – deaktivert";
+  label += " â€“ deaktivert";
 }
 
     addOption(addonSelect, a.addon_id, label);
@@ -6938,7 +7329,7 @@ createBtn.onclick = function () {
     var addonId = addonSelect.value;
 
     if (!addonId) {
-      alert("Velg et tillegg først.");
+      alert("Velg et tillegg fÃ¸rst.");
       return;
     }
 
@@ -6959,11 +7350,11 @@ createBtn.onclick = function () {
       "Dette vil slette eller deaktivere tillegget.\n\n" +
       "Tillegg: " + selected.addon_name + "\n\n" +
       "Hvis tillegget er brukt tidligere, blir det deaktivert i stedet for slettet.\n\n" +
-      "Skriv SLETT TILLEGG for å bekrefte:"
+      "Skriv SLETT TILLEGG for Ã¥ bekrefte:"
     );
 
     if (confirmText !== "SLETT TILLEGG") {
-      alert("Tillegget ble ikke slettet. Du må skrive nøyaktig SLETT TILLEGG.");
+      alert("Tillegget ble ikke slettet. Du mÃ¥ skrive nÃ¸yaktig SLETT TILLEGG.");
       return;
     }
 
@@ -7011,14 +7402,14 @@ createBtn.onclick = function () {
   ) {
     createPageHeader(
       parent,
-      "Leverandørfakturaer",
-      "Last opp faktura, kontroller bare det systemet er usikkert på, og oppdater kostpris.",
-      "Innkjøp"
+      "LeverandÃ¸rfakturaer",
+      "Last opp faktura, kontroller bare det systemet er usikkert pÃ¥, og oppdater kostpris.",
+      "InnkjÃ¸p"
     );
 
     var info = el(
       "div",
-      "1. Last opp PDF  →  2. Rett bare eventuelle usikre linjer  →  3. Trykk «Oppdater faktura». Ny vektet innkjøpspris synkes automatisk til Quickbutik. Lager og salgspris endres ikke."
+      "1. Last opp PDF  â†’  2. Rett bare eventuelle usikre linjer  â†’  3. Trykk Â«Oppdater fakturaÂ». Ny vektet innkjÃ¸pspris synkes automatisk til Quickbutik. Lager og salgspris endres ikke."
     );
     info.className = "sk-note";
     parent.appendChild(info);
@@ -7053,8 +7444,8 @@ createBtn.onclick = function () {
       pdfJsPromise: null,
 
       /*
-       * Fakturalisten starter alltid med alle leverandører sortert etter
-       * fakturadato. Brukeren kan filtrere til én leverandør eller lukke
+       * Fakturalisten starter alltid med alle leverandÃ¸rer sortert etter
+       * fakturadato. Brukeren kan filtrere til Ã©n leverandÃ¸r eller lukke
        * selve listen uten at opplastingsfeltet forsvinner.
        */
       invoiceSupplierFilter: "",
@@ -7077,7 +7468,7 @@ createBtn.onclick = function () {
 
       var confirmed =
         window.confirm(
-          "Oppdatere intern innkjøpspris fra HISTORISK VEKTET kost?\n\n" +
+          "Oppdatere intern innkjÃ¸pspris fra HISTORISK VEKTET kost?\n\n" +
           "Dette bruker alle dokumenterte 2026-fakturaer og mengdevekter landed cost.\n\n" +
           "For produkter med varianter oppdateres variantkostene separat. Parent-kost beregnes fra variantene / historisk produktkost.\n\n" +
           "Lagerantall endres ikke.\n\n" +
@@ -7100,7 +7491,7 @@ createBtn.onclick = function () {
       if (button) {
         button.disabled = true;
         button.textContent =
-          "Oppdaterer vektede kostpriser…";
+          "Oppdaterer vektede kostpriserâ€¦";
       }
 
       sb.rpc(
@@ -7125,7 +7516,7 @@ createBtn.onclick = function () {
             }
 
             var message =
-              "Vektet innkjøpspris er oppdatert i internregisteret.\n\n" +
+              "Vektet innkjÃ¸pspris er oppdatert i internregisteret.\n\n" +
               "Produkter oppdatert: " +
               String(
                 row.products_updated ||
@@ -7155,7 +7546,7 @@ createBtn.onclick = function () {
               ) +
               "\n\n" +
               "Lagerantall er ikke endret.\n" +
-              "Quickbutik er ikke oppdatert ennå.";
+              "Quickbutik er ikke oppdatert ennÃ¥.";
 
             alert(
               message
@@ -7169,7 +7560,7 @@ createBtn.onclick = function () {
         .catch(
           function (error) {
             alert(
-              "Kunne ikke oppdatere vektede innkjøpspriser: " +
+              "Kunne ikke oppdatere vektede innkjÃ¸pspriser: " +
                 skReadableError(
                   error &&
                   error.message
@@ -7211,13 +7602,13 @@ createBtn.onclick = function () {
 
       button.disabled = true;
       button.textContent =
-        "Tester Quickbutik…";
+        "Tester Quickbutikâ€¦";
 
       if (resultBox) {
         resultBox.style.display =
           "block";
         resultBox.textContent =
-          "Henter innlogget session og kjører dry-run. Ingen Quickbutik-priser endres.";
+          "Henter innlogget session og kjÃ¸rer dry-run. Ingen Quickbutik-priser endres.";
       }
 
       sb.auth.getSession()
@@ -7309,8 +7700,8 @@ createBtn.onclick = function () {
                 result.data.count ||
                 0
               ) +
-              " kostmål for Quickbutik-produkt 324.\n\n" +
-              "Send meg resultatet i boksen før vi gjør en ekte oppdatering."
+              " kostmÃ¥l for Quickbutik-produkt 324.\n\n" +
+              "Send meg resultatet i boksen fÃ¸r vi gjÃ¸r en ekte oppdatering."
             );
           }
         )
@@ -7364,8 +7755,8 @@ createBtn.onclick = function () {
       var confirmed =
         window.confirm(
           "Dette er en EKTE Quickbutik-test.\n\n" +
-          "Kun Quickbutik-produkt 324 · Champion Mako3 blir forsøkt oppdatert.\n" +
-          "Forventet innkjøpspris eks. mva.: 118,26 kr.\n\n" +
+          "Kun Quickbutik-produkt 324 Â· Champion Mako3 blir forsÃ¸kt oppdatert.\n" +
+          "Forventet innkjÃ¸pspris eks. mva.: 118,26 kr.\n\n" +
           "Lager, salgspris og andre produktfelter skal ikke endres.\n\n" +
           "Vil du fortsette?"
         );
@@ -7382,13 +7773,13 @@ createBtn.onclick = function () {
 
       button.disabled = true;
       button.textContent =
-        "Oppdaterer Champion Mako3…";
+        "Oppdaterer Champion Mako3â€¦";
 
       if (resultBox) {
         resultBox.style.display =
           "block";
         resultBox.textContent =
-          "Kjører ekte én-vare-test mot Quickbutik. Venter på write + verifisering…";
+          "KjÃ¸rer ekte Ã©n-vare-test mot Quickbutik. Venter pÃ¥ write + verifiseringâ€¦";
       }
 
       sb.auth.getSession()
@@ -7472,8 +7863,8 @@ createBtn.onclick = function () {
 
             alert(
               "Champion Mako3 ble sendt til Quickbutik og Worker-en bekreftet oppdateringen.\n\n" +
-              "Åpne nå produkt 324 i Quickbutik og kontroller at innkjøpspris eks. mva. står som 118,26 kr.\n\n" +
-              "Ikke kjør full synk før vi har bekreftet dette manuelt."
+              "Ã…pne nÃ¥ produkt 324 i Quickbutik og kontroller at innkjÃ¸pspris eks. mva. stÃ¥r som 118,26 kr.\n\n" +
+              "Ikke kjÃ¸r full synk fÃ¸r vi har bekreftet dette manuelt."
             );
           }
         )
@@ -7515,10 +7906,10 @@ createBtn.onclick = function () {
 
       var confirmed =
         window.confirm(
-          "Dette kjører FULL SYNK av alle gjenstående dokumenterte vektede innkjøpspriser til Quickbutik.\n\n" +
-          "Kun purchase_price (innkjøpspris eks. mva.) sendes.\n" +
+          "Dette kjÃ¸rer FULL SYNK av alle gjenstÃ¥ende dokumenterte vektede innkjÃ¸pspriser til Quickbutik.\n\n" +
+          "Kun purchase_price (innkjÃ¸pspris eks. mva.) sendes.\n" +
           "Lager, salgspris, synlighet og andre produktfelter endres ikke.\n\n" +
-          "Synken går i små batcher og stopper automatisk hvis Quickbutik eller Sportskongen returnerer feil.\n\n" +
+          "Synken gÃ¥r i smÃ¥ batcher og stopper automatisk hvis Quickbutik eller Sportskongen returnerer feil.\n\n" +
           "Vil du fortsette?"
         );
 
@@ -7534,13 +7925,13 @@ createBtn.onclick = function () {
 
       button.disabled = true;
       button.textContent =
-        "Starter full Quickbutik-synk…";
+        "Starter full Quickbutik-synkâ€¦";
 
       if (resultBox) {
         resultBox.style.display =
           "block";
         resultBox.textContent =
-          "Starter full kostsynk. Henter innlogget session…";
+          "Starter full kostsynk. Henter innlogget sessionâ€¦";
       }
 
       var totalMarked =
@@ -7599,15 +7990,15 @@ createBtn.onclick = function () {
           String(
             batchNumber
           ) +
-          "…";
+          "â€¦";
 
         updateProgress(
           "Batch " +
             String(
               batchNumber
             ) +
-            " kjører.\n\n" +
-            "Totalt sendt så langt: " +
+            " kjÃ¸rer.\n\n" +
+            "Totalt sendt sÃ¥ langt: " +
             String(
               totalRequested
             ) +
@@ -7618,7 +8009,7 @@ createBtn.onclick = function () {
             ) +
             (
               latestSummary
-                ? "\nGjenstår ifølge siste svar: " +
+                ? "\nGjenstÃ¥r ifÃ¸lge siste svar: " +
                   String(
                     latestSummary.needs_sync
                   )
@@ -7776,17 +8167,17 @@ createBtn.onclick = function () {
                 batchNumber
               ) +
               "\n" +
-              "Kostmål sendt: " +
+              "KostmÃ¥l sendt: " +
               String(
                 totalRequested
               ) +
               "\n" +
-              "Kostmål markert synket: " +
+              "KostmÃ¥l markert synket: " +
               String(
                 totalMarked
               ) +
               "\n" +
-              "Gjenstår: " +
+              "GjenstÃ¥r: " +
               String(
                 remaining === null
                   ? "ukjent"
@@ -7798,19 +8189,19 @@ createBtn.onclick = function () {
 
             alert(
               "Full Quickbutik-kostsynk er ferdig.\n\n" +
-              "Kostmål markert synket: " +
+              "KostmÃ¥l markert synket: " +
               String(
                 totalMarked
               ) +
               "\n" +
-              "Gjenstår: " +
+              "GjenstÃ¥r: " +
               String(
                 remaining === null
                   ? "ukjent"
                   : remaining
               ) +
               "\n\n" +
-              "Send meg resultatet før vi rydder bort testknappene."
+              "Send meg resultatet fÃ¸r vi rydder bort testknappene."
             );
           }
         )
@@ -7823,12 +8214,12 @@ createBtn.onclick = function () {
                 batchNumber
               ) +
               "\n" +
-              "Sendt før stopp: " +
+              "Sendt fÃ¸r stopp: " +
               String(
                 totalRequested
               ) +
               "\n" +
-              "Markert synket før stopp: " +
+              "Markert synket fÃ¸r stopp: " +
               String(
                 totalMarked
               ) +
@@ -7850,7 +8241,7 @@ createBtn.onclick = function () {
                   : String(error)
               ) +
               "\n\n" +
-              "Allerede vellykkede batcher er bevart. Ikke start på nytt før vi har kontrollert feilen."
+              "Allerede vellykkede batcher er bevart. Ikke start pÃ¥ nytt fÃ¸r vi har kontrollert feilen."
             );
           }
         )
@@ -7885,7 +8276,7 @@ createBtn.onclick = function () {
       var title =
         el(
           "div",
-          "💰 Oppdater innkjøpsprisene"
+          "ðŸ’° Oppdater innkjÃ¸psprisene"
         );
 
       title.style.fontWeight =
@@ -7900,7 +8291,7 @@ createBtn.onclick = function () {
       var sub =
         el(
           "div",
-          "Førstegangsjobb: skriver historisk MENGDEVEKTET reell kost fra alle dokumenterte 2026-fakturaer til produkt- og variantregisteret. Lagerantall endres ikke, og Quickbutik oppdateres ikke i dette steget."
+          "FÃ¸rstegangsjobb: skriver historisk MENGDEVEKTET reell kost fra alle dokumenterte 2026-fakturaer til produkt- og variantregisteret. Lagerantall endres ikke, og Quickbutik oppdateres ikke i dette steget."
         );
 
       sub.className =
@@ -7916,7 +8307,7 @@ createBtn.onclick = function () {
 
       var button =
         createPrimaryButton(
-          "↻ Oppdater intern kost · vektet baseline"
+          "â†» Oppdater intern kost Â· vektet baseline"
         );
 
       button.onclick =
@@ -7932,7 +8323,7 @@ createBtn.onclick = function () {
 
       var qbTestButton =
         createButton(
-          "🧪 Test Quickbutik · Champion Mako3"
+          "ðŸ§ª Test Quickbutik Â· Champion Mako3"
         );
 
       qbTestButton.style.marginLeft =
@@ -7941,7 +8332,7 @@ createBtn.onclick = function () {
       var qbTestInfo =
         el(
           "div",
-          "Testen er kun dry-run. Den leser hvilke kostmål Worker-en vil sende for Quickbutik-produkt 324, men endrer ingenting."
+          "Testen er kun dry-run. Den leser hvilke kostmÃ¥l Worker-en vil sende for Quickbutik-produkt 324, men endrer ingenting."
         );
 
       qbTestInfo.className =
@@ -7988,7 +8379,7 @@ createBtn.onclick = function () {
 
       var qbApplyButton =
         createPrimaryButton(
-          "✅ Ekte test · Champion Mako3 → 118,26"
+          "âœ… Ekte test Â· Champion Mako3 â†’ 118,26"
         );
 
       qbApplyButton.style.marginTop =
@@ -8027,7 +8418,7 @@ createBtn.onclick = function () {
       var fullSyncInfo =
         el(
           "div",
-          "Når Champion Mako3-testen er bekreftet riktig kan du synke alle gjenstående vektede kostpriser. Synken går sekvensielt i batcher på 20 og stopper ved første feil."
+          "NÃ¥r Champion Mako3-testen er bekreftet riktig kan du synke alle gjenstÃ¥ende vektede kostpriser. Synken gÃ¥r sekvensielt i batcher pÃ¥ 20 og stopper ved fÃ¸rste feil."
         );
 
       fullSyncInfo.className =
@@ -8041,7 +8432,7 @@ createBtn.onclick = function () {
 
       var fullSyncButton =
         createPrimaryButton(
-          "🚀 Synk alle gjenstående kostpriser til Quickbutik"
+          "ðŸš€ Synk alle gjenstÃ¥ende kostpriser til Quickbutik"
         );
 
       var fullSyncResult =
@@ -8092,7 +8483,7 @@ createBtn.onclick = function () {
     /*
      * Historisk baseline og full Quickbutik-synk er ferdig.
      * Test-/baseline-panelet rendres derfor ikke lenger.
-     * Fremover brukes kun "Oppdater faktura" på den enkelte faktura.
+     * Fremover brukes kun "Oppdater faktura" pÃ¥ den enkelte faktura.
      */
 
 
@@ -8127,7 +8518,7 @@ createBtn.onclick = function () {
       var parsed = maybeNum(value);
 
       if (parsed === null) {
-        return "–";
+        return "â€“";
       }
 
       return parsed.toLocaleString(
@@ -8145,7 +8536,7 @@ createBtn.onclick = function () {
       var parsed = maybeNum(value);
 
       if (parsed === null) {
-        return "–";
+        return "â€“";
       }
 
       return parsed.toLocaleString(
@@ -8164,7 +8555,7 @@ createBtn.onclick = function () {
       var parsed = maybeNum(value);
 
       if (parsed === null) {
-        return "–";
+        return "â€“";
       }
 
       return parsed.toLocaleString(
@@ -8180,7 +8571,7 @@ createBtn.onclick = function () {
 
     function fmtDate(value) {
       if (!value) {
-        return "–";
+        return "â€“";
       }
 
       var parts =
@@ -8238,7 +8629,7 @@ createBtn.onclick = function () {
 
       if (status === "posted") {
         return {
-          label: "Bokført",
+          label: "BokfÃ¸rt",
           tone: "green"
         };
       }
@@ -8331,7 +8722,7 @@ createBtn.onclick = function () {
 
       var box = el(
         "div",
-        text || "Laster…"
+        text || "Lasterâ€¦"
       );
 
       box.className =
@@ -8349,7 +8740,7 @@ createBtn.onclick = function () {
       )
         .toLowerCase()
         .replace(
-          /[^a-z0-9æøå]+/g,
+          /[^a-z0-9Ã¦Ã¸Ã¥]+/g,
           " "
         )
         .replace(
@@ -8376,7 +8767,7 @@ createBtn.onclick = function () {
             " "
           )
           .replace(
-            /[−–—]/g,
+            /[âˆ’â€“â€”]/g,
             "-"
           )
           .replace(
@@ -8482,7 +8873,7 @@ createBtn.onclick = function () {
                 function () {
                   reject(
                     new Error(
-                      "PDF-leseren brukte for lang tid på å laste."
+                      "PDF-leseren brukte for lang tid pÃ¥ Ã¥ laste."
                     )
                   );
                 },
@@ -8723,7 +9114,7 @@ createBtn.onclick = function () {
       /*
        * Permanent Latitude-normalisering.
        *
-       * Vi har nå sett flere generasjoner av samme Latitude-faktura:
+       * Vi har nÃ¥ sett flere generasjoner av samme Latitude-faktura:
        *
        * A) SKU + EAN + dato:
        *   118078 EAN: 733... 2026-04-14 2 pcs 94,50 189,00
@@ -8731,7 +9122,7 @@ createBtn.onclick = function () {
        * B) SKU UTEN EAN + dato:
        *   120648 2026-04-14 2 pcs 120,00 240,00
        *
-       * C) dato først + SKU/EAN til slutt:
+       * C) dato fÃ¸rst + SKU/EAN til slutt:
        *   2026-02-17 2 pcs 124,50 30% 174,30 117490 EAN: 733...
        *
        * D) som C, men SKU kan ligge limt rett etter summen i PDF-tekstlaget.
@@ -8744,7 +9135,7 @@ createBtn.onclick = function () {
        *   [2] antall
        *   [3] enhetspris
        *   [4] faktisk linjesum
-       *   [5] leverandørens artikkelnummer
+       *   [5] leverandÃ¸rens artikkelnummer
        *   [6] EAN eller null
        */
 
@@ -8785,11 +9176,11 @@ createBtn.onclick = function () {
 
 
       /*
-       * Enkelte PDF-tekstlag limer SKU rett på linjesummen:
+       * Enkelte PDF-tekstlag limer SKU rett pÃ¥ linjesummen:
        *   ... 174,30117490 EAN: ...
        *
-       * Denne varianten brukes bare når EAN finnes, slik at skillet mellom
-       * beløp og artikkelnummer fortsatt er entydig.
+       * Denne varianten brukes bare nÃ¥r EAN finnes, slik at skillet mellom
+       * belÃ¸p og artikkelnummer fortsatt er entydig.
        */
       var dateFirstJoined =
         compact.match(
@@ -8835,7 +9226,7 @@ createBtn.onclick = function () {
        *   1 pcs 100,00 100,00 90002
        *   1 pcs 2 595,00 2 595,00 90000
        *
-       * PDF.js kan også flytte artikkelnummeret først eller legge inn dato.
+       * PDF.js kan ogsÃ¥ flytte artikkelnummeret fÃ¸rst eller legge inn dato.
        */
       var patterns = [
         /^1(?:\s+pcs)?\s+([\d\s]+,\d{2})\s+([\d\s]+,\d{2})\s+(90000|90002)$/i,
@@ -8979,13 +9370,13 @@ createBtn.onclick = function () {
 
       var dueDateMatch =
         fullText.match(
-          /Förfallodatum\s*:?\s*(\d{4}-\d{2}-\d{2})/i
+          /FÃ¶rfallodatum\s*:?\s*(\d{4}-\d{2}-\d{2})/i
         );
 
       /*
-       * På enkelte DiscGolfPark-PDF-er ligger kolonneoverskriftene
-       * "Kundnr.  Datum  Sida" på én tekstlinje og verdiene
-       * "C10847  2026-08-18  1 av 1" på neste. Da står ikke ordet
+       * PÃ¥ enkelte DiscGolfPark-PDF-er ligger kolonneoverskriftene
+       * "Kundnr.  Datum  Sida" pÃ¥ Ã©n tekstlinje og verdiene
+       * "C10847  2026-08-18  1 av 1" pÃ¥ neste. Da stÃ¥r ikke ordet
        * Datum direkte foran datoen i PDF-teksten.
        */
       if (!invoiceDateMatch) {
@@ -9020,7 +9411,7 @@ createBtn.onclick = function () {
 
       /*
        * Samme kolonnelogikk brukes for
-       * "Förfallodatum  Betalningsvillkor".
+       * "FÃ¶rfallodatum  Betalningsvillkor".
        */
       if (!dueDateMatch) {
         for (
@@ -9029,7 +9420,7 @@ createBtn.onclick = function () {
           fd += 1
         ) {
           if (
-            /Förfallodatum/i.test(
+            /FÃ¶rfallodatum/i.test(
               allLines[fd]
             )
           ) {
@@ -9051,10 +9442,10 @@ createBtn.onclick = function () {
 
       /*
        * Siste sikkerhetsnett for akkurat denne fakturatypen:
-       * - leveringsdatoene på varelinjene er ofte dagen før fakturadato
+       * - leveringsdatoene pÃ¥ varelinjene er ofte dagen fÃ¸r fakturadato
        * - forfallsdato er senere enn fakturadato
        *
-       * Vi bruker kun dette når de eksplisitte headerforsøkene feiler.
+       * Vi bruker kun dette nÃ¥r de eksplisitte headerforsÃ¸kene feiler.
        */
       if (
         !invoiceDateMatch ||
@@ -9134,10 +9525,10 @@ createBtn.onclick = function () {
 
       /*
        * ------------------------------------------------------------
-       * TYPE A: ordinære Latitude-/House of Discs-varefakturaer.
+       * TYPE A: ordinÃ¦re Latitude-/House of Discs-varefakturaer.
        *
-       * Dette er den gamle parseren som allerede brukes på f.eks.
-       * faktura 2010943. Den beholdes uendret som første forsøk.
+       * Dette er den gamle parseren som allerede brukes pÃ¥ f.eks.
+       * faktura 2010943. Den beholdes uendret som fÃ¸rste forsÃ¸k.
        * ------------------------------------------------------------
        */
       (pages || []).forEach(
@@ -9145,13 +9536,13 @@ createBtn.onclick = function () {
           var inItems = false;
 
           /*
-           * Latitude-PDF-er finnes i minst to tekst-rekkefølger:
+           * Latitude-PDF-er finnes i minst to tekst-rekkefÃ¸lger:
            *
            * 1) beskrivelse -> tallrad -> HS/COO
            * 2) tallrad -> beskrivelse -> HS/COO
            *
            * Faktura 2008760 bruker nr. 2 selv om den visuelt ser lik ut.
-           * Vi støtter derfor begge uten å gjette.
+           * Vi stÃ¸tter derfor begge uten Ã¥ gjette.
            */
           var pendingDescription = [];
           var openNumericMatch = null;
@@ -9175,8 +9566,8 @@ createBtn.onclick = function () {
 
             /*
              * Importmotoren krever beskrivelse. Vi skal normalt alltid ha
-             * funnet den fra PDF-en. Fallbacken gjør likevel at en uvanlig
-             * tekststrøm ikke stopper hele fakturaen; SKU/EAN gjør fortsatt
+             * funnet den fra PDF-en. Fallbacken gjÃ¸r likevel at en uvanlig
+             * tekststrÃ¸m ikke stopper hele fakturaen; SKU/EAN gjÃ¸r fortsatt
              * produktkoblingen mulig.
              */
             if (!description) {
@@ -9285,8 +9676,8 @@ createBtn.onclick = function () {
                 )
               ) {
                 /*
-                 * I tallrad-først-formatet markerer HS/COO slutten på
-                 * beskrivelsen til den åpne varen.
+                 * I tallrad-fÃ¸rst-formatet markerer HS/COO slutten pÃ¥
+                 * beskrivelsen til den Ã¥pne varen.
                  */
                 if (openNumericMatch) {
                   finishLatitudeRow(
@@ -9308,7 +9699,7 @@ createBtn.onclick = function () {
 
               if (match) {
                 /*
-                 * Hvis forrige tallrad fortsatt er åpen, avslutt den først.
+                 * Hvis forrige tallrad fortsatt er Ã¥pen, avslutt den fÃ¸rst.
                  * Dette er sikkerhetsnett for PDF-er uten egen HS/COO-linje.
                  */
                 if (openNumericMatch) {
@@ -9322,8 +9713,8 @@ createBtn.onclick = function () {
                 }
 
                 /*
-                 * Har vi allerede tekst før tallraden, er dette det gamle
-                 * beskrivelse-først-formatet og raden kan lagres nå.
+                 * Har vi allerede tekst fÃ¸r tallraden, er dette det gamle
+                 * beskrivelse-fÃ¸rst-formatet og raden kan lagres nÃ¥.
                  */
                 if (
                   pendingDescription.length > 0
@@ -9338,8 +9729,8 @@ createBtn.onclick = function () {
                 }
 
                 /*
-                 * Ellers bruker PDF-en tallrad først. Vent på beskrivelsen
-                 * som kommer på neste linje(r).
+                 * Ellers bruker PDF-en tallrad fÃ¸rst. Vent pÃ¥ beskrivelsen
+                 * som kommer pÃ¥ neste linje(r).
                  */
                 openNumericMatch =
                   match;
@@ -9354,7 +9745,7 @@ createBtn.onclick = function () {
           );
 
           /*
-           * Sikkerhetsnett for siste vare på siden dersom PDF-en ikke har
+           * Sikkerhetsnett for siste vare pÃ¥ siden dersom PDF-en ikke har
            * HS/COO etter den.
            */
           if (openNumericMatch) {
@@ -9454,8 +9845,8 @@ createBtn.onclick = function () {
       /*
        * Ekstra robust fallback for 90000/90002:
        * enkelte Latitude-PDF-er grupperer logistikkradene annerledes enn
-       * ordinære varelinjer. Søk derfor også direkte i hele tekstlaget.
-       * Deduplisering skjer på artikkelnummer.
+       * ordinÃ¦re varelinjer. SÃ¸k derfor ogsÃ¥ direkte i hele tekstlaget.
+       * Deduplisering skjer pÃ¥ artikkelnummer.
        */
       if (
         rows.length > 0
@@ -9587,12 +9978,12 @@ createBtn.onclick = function () {
        *
        * Her skal:
        *   - betalte hovedvarer bli varelinjer
-       *   - 0-kroners komponenter ignoreres (de følger hovedvaren)
+       *   - 0-kroners komponenter ignoreres (de fÃ¸lger hovedvaren)
        *   - concrete base / jordfeste bli tilleggskost
        *   - handling bli tilleggskost
        *   - shipping bli frakt
        *
-       * Dermed blir hele fakturabeløpet med i reell kost, uten at
+       * Dermed blir hele fakturabelÃ¸pet med i reell kost, uten at
        * komponentene blir egne GolfKongen-produkter.
        * ------------------------------------------------------------
        */
@@ -9650,7 +10041,7 @@ createBtn.onclick = function () {
               .trim();
 
           /*
-           * Artikkel først, EAN valgfri.
+           * Artikkel fÃ¸rst, EAN valgfri.
            */
           var match =
             compact.match(
@@ -9683,7 +10074,7 @@ createBtn.onclick = function () {
           }
 
           /*
-           * Noen PDF-er kan plassere datoen først.
+           * Noen PDF-er kan plassere datoen fÃ¸rst.
            */
           match =
             compact.match(
@@ -9774,7 +10165,7 @@ createBtn.onclick = function () {
 
             if (current) {
               /*
-               * EAN kan ligge på egen PDF-tekstlinje.
+               * EAN kan ligge pÃ¥ egen PDF-tekstlinje.
                */
               var eanOnly =
                 line.match(
@@ -9805,8 +10196,8 @@ createBtn.onclick = function () {
 
 
         /*
-         * Ekstra fallback når PDF-en har artikkelnummer og resten av
-         * tallkolonnene på én tekstlinje, men beskrivelsen på neste.
+         * Ekstra fallback nÃ¥r PDF-en har artikkelnummer og resten av
+         * tallkolonnene pÃ¥ Ã©n tekstlinje, men beskrivelsen pÃ¥ neste.
          */
         if (
           equipmentRaw.length === 0
@@ -9963,9 +10354,9 @@ createBtn.onclick = function () {
                   amount,
 
                 /*
-                 * På disse DiscGolfPark-fakturaene er kostnadene en del
-                 * av den ferdige målkurven. by_value gjør også løsningen
-                 * trygg hvis en senere faktura har flere betalte måltyper.
+                 * PÃ¥ disse DiscGolfPark-fakturaene er kostnadene en del
+                 * av den ferdige mÃ¥lkurven. by_value gjÃ¸r ogsÃ¥ lÃ¸sningen
+                 * trygg hvis en senere faktura har flere betalte mÃ¥ltyper.
                  */
                 allocation_method:
                   "by_value"
@@ -10090,7 +10481,7 @@ createBtn.onclick = function () {
             : "latitude64-v2",
 
         parser_label:
-          "Latitude 64 / House of Discs · v5",
+          "Latitude 64 / House of Discs Â· v5",
 
         supplier_hint:
           "Latitude 64",
@@ -10123,7 +10514,7 @@ createBtn.onclick = function () {
           goodsTotal,
 
         /*
-         * UI-feltet heter Frakt/tillegg. Derfor skal dette være SUMMEN
+         * UI-feltet heter Frakt/tillegg. Derfor skal dette vÃ¦re SUMMEN
          * av concrete base + handling + shipping, ikke bare shipping.
          */
         shipping_total:
@@ -10231,10 +10622,10 @@ createBtn.onclick = function () {
 
       /*
        * Sune Sport-PDF-en legger ofte tabellcellene i separate PDF-tekst-
-       * elementer. Derfor kan vi ikke kreve at en hel varelinje ligger på
-       * én visuell tekstlinje.
+       * elementer. Derfor kan vi ikke kreve at en hel varelinje ligger pÃ¥
+       * Ã©n visuell tekstlinje.
        *
-       * Vi lager i stedet en tokenstrøm og leser strukturen:
+       * Vi lager i stedet en tokenstrÃ¸m og leser strukturen:
        *
        * SKU -> beskrivelse -> antall -> STK -> pris -> MVA -> rabatt -> total
        */
@@ -10349,8 +10740,8 @@ createBtn.onclick = function () {
         var descriptionTokens = [];
 
         /*
-         * Beskrivelsen varer frem til første tall med to desimaler som
-         * umiddelbart etterfølges av STK.
+         * Beskrivelsen varer frem til fÃ¸rste tall med to desimaler som
+         * umiddelbart etterfÃ¸lges av STK.
          */
         while (
           i < stopIndex &&
@@ -10366,7 +10757,7 @@ createBtn.onclick = function () {
           )
         ) {
           /*
-           * Hvis vi møter en ny SKU før antall/STK, var forrige kandidat
+           * Hvis vi mÃ¸ter en ny SKU fÃ¸r antall/STK, var forrige kandidat
            * ikke en gyldig varelinje.
            */
           if (
@@ -10441,7 +10832,7 @@ createBtn.onclick = function () {
         }
 
         /*
-         * Rabatt kan være 0%, 15% eller andre prosenter.
+         * Rabatt kan vÃ¦re 0%, 15% eller andre prosenter.
          * Sune kan levere den som "15%" eller "15 %".
          */
         var discountPercent = 0;
@@ -10519,9 +10910,9 @@ createBtn.onclick = function () {
         }
 
         /*
-         * Fakturaens "Pris" er før linjerabatt. For kostmotoren vil vi lagre
+         * Fakturaens "Pris" er fÃ¸r linjerabatt. For kostmotoren vil vi lagre
          * faktisk nettopris per enhet, slik at 15 % rabatt blir med i
-         * innkjøpsprisen. Linjesummen er fasiten fordi den også fanger
+         * innkjÃ¸psprisen. Linjesummen er fasiten fordi den ogsÃ¥ fanger
          * fakturaens avrunding.
          */
         var netUnitPrice =
@@ -10553,22 +10944,22 @@ createBtn.onclick = function () {
 
       var exVatMatch =
         fullText.match(
-          /Beløp ekskl\.\s*MVA\s*(?:\n\s*)?([\d,]+\.\d{2})/i
+          /BelÃ¸p ekskl\.\s*MVA\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
       var vatMatch =
         fullText.match(
-          /Totalt MVA beløp\s*(?:\n\s*)?([\d,]+\.\d{2})/i
+          /Totalt MVA belÃ¸p\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
       var grossMatch =
         fullText.match(
-          /Å betale\s+([A-Z]{3})\s*(?:\n\s*)?([\d,]+\.\d{2})/i
+          /Ã… betale\s+([A-Z]{3})\s*(?:\n\s*)?([\d,]+\.\d{2})/i
         );
 
       /*
        * Sune Sport kan legge frakt som egen linje, f.eks.
-       * "Freight 423.00". Dette er en direkte innkjøpskost og skal derfor
+       * "Freight 423.00". Dette er en direkte innkjÃ¸pskost og skal derfor
        * tas med i kostgrunnlaget, men IKKE som varelinje.
        */
       var freightMatch =
@@ -10680,7 +11071,7 @@ createBtn.onclick = function () {
         invoice_total:
           exVatTotal,
         total_label:
-          "Beløp ekskl. MVA",
+          "BelÃ¸p ekskl. MVA",
         vat_total:
           vatTotal,
         gross_total:
@@ -10747,7 +11138,7 @@ createBtn.onclick = function () {
        *   Dato       30.08.2026
        *   Forfallsdato 09.09.2026
        *
-       * Feltene kan havne på samme eller separate PDF-tekstlinjer.
+       * Feltene kan havne pÃ¥ samme eller separate PDF-tekstlinjer.
        */
       var invoiceNoMatch =
         fullText.match(
@@ -10800,7 +11191,7 @@ createBtn.onclick = function () {
        *   #Frakt Bring - Frakt          100,00  1 25 %   125,00
        *
        * Sum-kolonnen er inkl. MVA, mens Enhetspris er eks. MVA.
-       * Kostmotoren skal derfor bruke Enhetspris × Antall som vare-/fraktkost.
+       * Kostmotoren skal derfor bruke Enhetspris Ã— Antall som vare-/fraktkost.
        *
        * Vi flater ut PDF-tekstlinjene fordi tabellcellene kan deles opp
        * forskjellig fra PDF til PDF.
@@ -10809,7 +11200,7 @@ createBtn.onclick = function () {
         fullLines.join(" ");
 
       var rowPattern =
-        /#(.+?)\s+-\s+(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})(?=\s+#|\s+Netto\b|\s+Mva\b|\s+Å betale\b|$)/gi;
+        /#(.+?)\s+-\s+(.+?)\s+(\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+(\d[\d\s.]*,\d{2})(?=\s+#|\s+Netto\b|\s+Mva\b|\s+Ã… betale\b|$)/gi;
 
       var rows = [];
       var costs = [];
@@ -10952,7 +11343,7 @@ createBtn.onclick = function () {
 
       var grossMatch =
         fullText.match(
-          /Å betale(?:\s+NOK)?\s+(\d[\d\s.]*,\d{2})/i
+          /Ã… betale(?:\s+NOK)?\s+(\d[\d\s.]*,\d{2})/i
         );
 
       var goodsTotal =
@@ -11173,13 +11564,13 @@ createBtn.onclick = function () {
        *   Frakt                       346,00    1   25 %     432,50
        *   Postnord pakke til bedrift
        *
-       *   Øreavrunding                  0,25    1    0 %       0,25
+       *   Ã˜reavrunding                  0,25    1    0 %       0,25
        *
-       * Sum-kolonnen er inkl. MVA. Reell varekost er Enhetspris × Antall,
-       * altså eks. MVA. Tekstlinjen under tall-linjen hører til samme vare.
+       * Sum-kolonnen er inkl. MVA. Reell varekost er Enhetspris Ã— Antall,
+       * altsÃ¥ eks. MVA. Tekstlinjen under tall-linjen hÃ¸rer til samme vare.
        */
       var numberTailPattern =
-        /^(.+?)\s+([−–—-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([−–—-]?\d[\d\s.]*,\d{2})$/i;
+        /^(.+?)\s+([âˆ’â€“â€”-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([âˆ’â€“â€”-]?\d[\d\s.]*,\d{2})$/i;
 
       function isTableHeader(
         line
@@ -11210,13 +11601,13 @@ createBtn.onclick = function () {
           /^Mva\b/i.test(
             line
           ) ||
-          /^Å betale\b/i.test(
+          /^Ã… betale\b/i.test(
             line
           ) ||
-          /^Alle beløp er oppgitt/i.test(
+          /^Alle belÃ¸p er oppgitt/i.test(
             line
           ) ||
-          /^Fortsetter på neste side/i.test(
+          /^Fortsetter pÃ¥ neste side/i.test(
             line
           ) ||
           /^DiscGolfShop AS\b/i.test(
@@ -11254,7 +11645,7 @@ createBtn.onclick = function () {
 
         /*
          * Den nederste tekstlinjen inneholder normalt det spesifikke
-         * produktnavnet (f.eks. "Neutron Trail - Goliath"), mens øverste
+         * produktnavnet (f.eks. "Neutron Trail - Goliath"), mens Ã¸verste
          * linje gir MVP/Axiom/plastfamilie. Vi beholder begge for smartmatch.
          */
         if (
@@ -11318,7 +11709,7 @@ createBtn.onclick = function () {
           );
 
         var isRounding =
-          /øreavrunding/i.test(
+          /Ã¸reavrunding/i.test(
             combinedLower
           ) ||
           /avrunding/i.test(
@@ -11386,8 +11777,8 @@ createBtn.onclick = function () {
 
           /*
            * DiscGolfShop-fakturaene har ikke eget varenummer i tabellen.
-           * Produktmatch skjer derfor på produktnavn, og bekreftede navn
-           * kan gjenbrukes av smartmatcheren på senere fakturaer.
+           * Produktmatch skjer derfor pÃ¥ produktnavn, og bekreftede navn
+           * kan gjenbrukes av smartmatcheren pÃ¥ senere fakturaer.
            */
           supplier_sku:
             null,
@@ -11482,10 +11873,10 @@ createBtn.onclick = function () {
                   /^Netto\b/i.test(
                     line
                   ) ||
-                  /^Alle beløp/i.test(
+                  /^Alle belÃ¸p/i.test(
                     line
                   ) ||
-                  /^Fortsetter på neste side/i.test(
+                  /^Fortsetter pÃ¥ neste side/i.test(
                     line
                   )
                 ) {
@@ -11553,7 +11944,7 @@ createBtn.onclick = function () {
                 !/^Kontonr\./i.test(
                   line
                 ) &&
-                !/^Å betale\b/i.test(
+                !/^Ã… betale\b/i.test(
                   line
                 )
               ) {
@@ -11572,7 +11963,7 @@ createBtn.onclick = function () {
 
 
       /*
-       * Fallback for PDF-er der tabellkolonnene blir slått sammen annerledes:
+       * Fallback for PDF-er der tabellkolonnene blir slÃ¥tt sammen annerledes:
        * finn alle tekstsekvenser som slutter med pris + antall + MVA + sum.
        */
       if (
@@ -11582,7 +11973,7 @@ createBtn.onclick = function () {
           fullLines.join(" ");
 
         var flatPattern =
-          /(.+?)\s+([−–—-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([−–—-]?\d[\d\s.]*,\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|Øreavrunding\b|Netto\b|Mva\b|Å betale\b|$))/gi;
+          /(.+?)\s+([âˆ’â€“â€”-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([âˆ’â€“â€”-]?\d[\d\s.]*,\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|Ã˜reavrunding\b|Netto\b|Mva\b|Ã… betale\b|$))/gi;
 
         var flatMatch;
 
@@ -11642,7 +12033,7 @@ createBtn.onclick = function () {
 
       var grossMatch =
         fullText.match(
-          /Å betale\s+(\d[\d\s.]*,\d{2})/i
+          /Ã… betale\s+(\d[\d\s.]*,\d{2})/i
         );
 
       var goodsTotal =
@@ -11857,12 +12248,12 @@ createBtn.onclick = function () {
        *   Designation Quantity PPU Total
        *   Big Z Luna - 170-172 grams 6,00 13,00 78,00
        *
-       * Produktnavnet kan inneholde årstall, bindestrek, gram og "Vary".
+       * Produktnavnet kan inneholde Ã¥rstall, bindestrek, gram og "Vary".
        * Derfor leser vi alltid de TRE siste tallfeltene som:
        *
        *   Quantity | PPU | Total
        *
-       * og lar alt foran være produktbeskrivelsen.
+       * og lar alt foran vÃ¦re produktbeskrivelsen.
        */
       (pages || []).forEach(
         function (page) {
@@ -12006,7 +12397,7 @@ createBtn.onclick = function () {
        *
        * "Rate 9,315230" er OTBs svenske regnskapskurs, IKKE NOK-kurs.
        * Den skal derfor ikke brukes. Systemet henter i stedet historisk
-       * USD/NOK fra Norges Bank på fakturadatoen.
+       * USD/NOK fra Norges Bank pÃ¥ fakturadatoen.
        */
       var footerMatch =
         fullText.match(
@@ -12094,7 +12485,7 @@ createBtn.onclick = function () {
           "otb-europe-v1",
 
         parser_label:
-          "OTB Europe AB · v1",
+          "OTB Europe AB Â· v1",
 
         supplier_hint:
           "OTB Europe AB",
@@ -12689,7 +13080,7 @@ createBtn.onclick = function () {
                           ""
                         ).trim(),
                       source:
-                        "Norges Bank – daglig valutakurs",
+                        "Norges Bank â€“ daglig valutakurs",
                       source_reference:
                         "EXR/B." +
                         code +
@@ -12735,7 +13126,7 @@ createBtn.onclick = function () {
             }
 
             /*
-             * Lagre kursen i vår egen historikk så neste faktura på samme
+             * Lagre kursen i vÃ¥r egen historikk sÃ¥ neste faktura pÃ¥ samme
              * dato slipper nytt API-kall. Hvis RLS eller nettverk skulle
              * stoppe lagringen, brukes kursen fortsatt i denne importen.
              */
@@ -12818,7 +13209,7 @@ createBtn.onclick = function () {
       }
 
       /*
-       * 1) Prøv først vår egen valutahistorikk.
+       * 1) PrÃ¸v fÃ¸rst vÃ¥r egen valutahistorikk.
        *
        * Tabellen bruker source_label/source_reference. Tidligere frontend
        * spurte feilaktig etter kolonnen "source", som ikke finnes.
@@ -12879,7 +13270,7 @@ createBtn.onclick = function () {
 
               /*
                * Maks 7 dager dekker helg/helligdag, men hindrer at en gammel
-               * lagret kurs brukes på en ny fakturadato.
+               * lagret kurs brukes pÃ¥ en ny fakturadato.
                */
               if (
                 dayDiff >= 0 &&
@@ -12904,8 +13295,8 @@ createBtn.onclick = function () {
 
             /*
              * 2) Mangler kursen lokalt: hent automatisk fra Norges Banks
-             * åpne API. Ved helg/helligdag brukes seneste publiserte kurs
-             * opptil 7 dager før fakturadatoen.
+             * Ã¥pne API. Ved helg/helligdag brukes seneste publiserte kurs
+             * opptil 7 dager fÃ¸r fakturadatoen.
              */
             return fetchNorgesBankFxRate(
               code,
@@ -12918,7 +13309,7 @@ createBtn.onclick = function () {
             localError
           ) {
             console.warn(
-              "Lokal valutakursoppslag feilet, prøver Norges Bank direkte:",
+              "Lokal valutakursoppslag feilet, prÃ¸ver Norges Bank direkte:",
               localError
             );
 
@@ -13062,9 +13453,9 @@ createBtn.onclick = function () {
       var shipmentReference =
         (
           options.supplierName +
-          " · " +
+          " Â· " +
           options.invoiceDate +
-          " · " +
+          " Â· " +
           referenceParts.join(" + ")
         ).slice(
           0,
@@ -13081,7 +13472,7 @@ createBtn.onclick = function () {
           p_shipment_date:
             options.invoiceDate,
           p_notes:
-            "Felles forsendelse opprettet fra PDF-import. Frakt/tillegg stod på faktura " +
+            "Felles forsendelse opprettet fra PDF-import. Frakt/tillegg stod pÃ¥ faktura " +
             options.currentInvoiceNumber +
             "."
         }
@@ -13312,14 +13703,14 @@ createBtn.onclick = function () {
       section.appendChild(
         el(
           "h3",
-          "📄 Ny faktura fra PDF"
+          "ðŸ“„ Ny faktura fra PDF"
         )
       );
 
       var intro =
         el(
           "div",
-          "Kontroller at leverandør, fakturanummer, dato, valuta, varelinjer og frakt ser riktig ut. Velg «Felles forsendelse» bare når flere fakturaer faktisk kom i samme levering."
+          "Kontroller at leverandÃ¸r, fakturanummer, dato, valuta, varelinjer og frakt ser riktig ut. Velg Â«Felles forsendelseÂ» bare nÃ¥r flere fakturaer faktisk kom i samme levering."
         );
 
       intro.className =
@@ -13335,7 +13726,7 @@ createBtn.onclick = function () {
         var unsupported =
           el(
             "div",
-            "Dette PDF-formatet støttes ikke automatisk ennå. Ingenting er importert."
+            "Dette PDF-formatet stÃ¸ttes ikke automatisk ennÃ¥. Ingenting er importert."
           );
 
         unsupported.className =
@@ -13459,7 +13850,7 @@ createBtn.onclick = function () {
       var emptyOption =
         el(
           "option",
-          "Velg leverandør"
+          "Velg leverandÃ¸r"
         );
       emptyOption.value = "";
       supplierSelect.appendChild(
@@ -13501,7 +13892,7 @@ createBtn.onclick = function () {
       );
 
       makeField(
-        "Leverandør",
+        "LeverandÃ¸r",
         supplierSelect
       );
 
@@ -13569,7 +13960,7 @@ createBtn.onclick = function () {
       var fxInfo =
         el(
           "div",
-          "Sjekker kjent valutakurs…"
+          "Sjekker kjent valutakursâ€¦"
         );
 
       fxInfo.className =
@@ -13598,7 +13989,7 @@ createBtn.onclick = function () {
           invoiceDate.value;
 
         fxInfo.textContent =
-          "Sjekker kjent valutakurs…";
+          "Sjekker kjent valutakursâ€¦";
 
         safeKnownFxRate(
           code,
@@ -13626,11 +14017,11 @@ createBtn.onclick = function () {
                   ) +
                   " NOK/" +
                   code +
-                  " · " +
+                  " Â· " +
                   fmtDate(
                     known.rate_date
                   ) +
-                  " · " +
+                  " Â· " +
                   String(
                     known.source ||
                     "Norges Bank"
@@ -13650,7 +14041,7 @@ createBtn.onclick = function () {
                   fxInfo.textContent =
                     "Fant ikke valutakurs automatisk hos Norges Bank. Du kan skrive inn NOK per 1 " +
                     code +
-                    " før import.";
+                    " fÃ¸r import.";
                 }
               }
             }
@@ -13796,7 +14187,7 @@ createBtn.onclick = function () {
         var vatNote =
           el(
             "div",
-            "MVA holdes utenfor reell innkjøpskost. Fakturaen viser " +
+            "MVA holdes utenfor reell innkjÃ¸pskost. Fakturaen viser " +
               fmtCurrency(
                 parsed.vat_total,
                 parsed.currency
@@ -13812,7 +14203,7 @@ createBtn.onclick = function () {
                       parsed.gross_total,
                       parsed.currency
                     ) +
-                    " å betale."
+                    " Ã¥ betale."
                   : "."
               )
           );
@@ -13875,7 +14266,7 @@ createBtn.onclick = function () {
         shipmentBox.appendChild(
           el(
             "div",
-            "🚚 Frakt / felles forsendelse"
+            "ðŸšš Frakt / felles forsendelse"
           )
         ).className =
           "sk-shipment-title";
@@ -13931,7 +14322,7 @@ createBtn.onclick = function () {
         localText.appendChild(
           el(
             "div",
-            "Hele frakten fordeles bare på varelinjene i faktura " +
+            "Hele frakten fordeles bare pÃ¥ varelinjene i faktura " +
               (
                 invoiceNo.value ||
                 "denne fakturaen"
@@ -13983,7 +14374,7 @@ createBtn.onclick = function () {
         sharedText.appendChild(
           el(
             "div",
-            "Frakten fordeles etter vareverdi på alle valgte fakturaer i samme fysiske levering."
+            "Frakten fordeles etter vareverdi pÃ¥ alle valgte fakturaer i samme fysiske levering."
           )
         ).className =
           "sk-invoice-small";
@@ -14101,11 +14492,11 @@ createBtn.onclick = function () {
                   String(
                     candidate.invoice_number
                   ) +
-                    " · " +
+                    " Â· " +
                     fmtDate(
                       candidate.invoice_date
                     ) +
-                    " · " +
+                    " Â· " +
                     (
                       candidate.status ===
                       "costed"
@@ -14130,7 +14521,7 @@ createBtn.onclick = function () {
           candidatesWrap.appendChild(
             el(
               "div",
-              "Ingen tidligere faktura fra samme leverandør de siste 7 dagene er tilgjengelig å koble til."
+              "Ingen tidligere faktura fra samme leverandÃ¸r de siste 7 dagene er tilgjengelig Ã¥ koble til."
             )
           ).className =
             "sk-invoice-small";
@@ -14180,11 +14571,11 @@ createBtn.onclick = function () {
 
       var rowSection =
         createCollapsibleSection(
-          "Varelinjer · " +
+          "Varelinjer Â· " +
             String(
               parsed.rows.length
             ),
-          "Kontroller at varelinjene ser riktige ut før import.",
+          "Kontroller at varelinjene ser riktige ut fÃ¸r import.",
           false
         );
 
@@ -14239,8 +14630,8 @@ createBtn.onclick = function () {
             row.line_number,
             row.description,
             row.supplier_sku ||
-              "–",
-            row.ean || "–",
+              "â€“",
+            row.ean || "â€“",
             fmtNumber(
               row.quantity,
               0
@@ -14257,7 +14648,7 @@ createBtn.onclick = function () {
                     0
                   ) + "%"
                 )
-              : "–",
+              : "â€“",
             fmtCurrency(
               row.line_total,
               parsed.currency
@@ -14337,7 +14728,7 @@ createBtn.onclick = function () {
 
           if (!supplierId) {
             alert(
-              "Velg leverandør."
+              "Velg leverandÃ¸r."
             );
             return;
           }
@@ -14366,7 +14757,7 @@ createBtn.onclick = function () {
             )
           ) {
             alert(
-              "Valuta må være en trebokstavskode, for eksempel SEK eller EUR."
+              "Valuta mÃ¥ vÃ¦re en trebokstavskode, for eksempel SEK eller EUR."
             );
             return;
           }
@@ -14379,7 +14770,7 @@ createBtn.onclick = function () {
             )
           ) {
             alert(
-              "Legg inn riktig valutakurs til NOK før import."
+              "Legg inn riktig valutakurs til NOK fÃ¸r import."
             );
             return;
           }
@@ -14419,7 +14810,7 @@ createBtn.onclick = function () {
             sharedInvoiceIds.length === 0
           ) {
             alert(
-              "Velg minst én annen faktura som tilhører samme fysiske forsendelse."
+              "Velg minst Ã©n annen faktura som tilhÃ¸rer samme fysiske forsendelse."
             );
             return;
           }
@@ -14450,7 +14841,7 @@ createBtn.onclick = function () {
                           parsed.shipping_total,
                           code
                         ) +
-                        " blir fordelt kun på denne fakturaen."
+                        " blir fordelt kun pÃ¥ denne fakturaen."
                       )
                 )
               : "";
@@ -14474,7 +14865,7 @@ createBtn.onclick = function () {
           importBtn.disabled =
             true;
           importBtn.textContent =
-            "Importerer…";
+            "Importererâ€¦";
 
           var costRows =
             shipmentDecision.mode ===
@@ -14548,7 +14939,7 @@ createBtn.onclick = function () {
                 file.type ||
                 "application/pdf",
               p_notes:
-                "PDF-import via Admin v5.11 · " +
+                "PDF-import via Admin v5.11 Â· " +
                 parsed.parser,
               p_rows:
                 parsed.rows,
@@ -14596,7 +14987,7 @@ createBtn.onclick = function () {
                                 .linked_invoice_count ||
                               0
                             ) +
-                            " fakturaer. Frakten beregnes over hele forsendelsen når kostpris ferdigstilles."
+                            " fakturaer. Frakten beregnes over hele forsendelsen nÃ¥r kostpris ferdigstilles."
                           )
                         : "";
 
@@ -14606,7 +14997,7 @@ createBtn.onclick = function () {
                           row.auto_confirmed_lines ||
                           0
                         ) +
-                        " linjer ble automatisk bekreftet fra tidligere SKU/EAN-læring, " +
+                        " linjer ble automatisk bekreftet fra tidligere SKU/EAN-lÃ¦ring, " +
                         String(
                           row.suggested_lines ||
                           0
@@ -14616,7 +15007,7 @@ createBtn.onclick = function () {
                           row.unmatched_lines ||
                           0
                         ) +
-                        " var ukjente ved råimport." +
+                        " var ukjente ved rÃ¥import." +
                         (
                           smartSuggestionInfo.added > 0
                             ? (
@@ -14632,7 +15023,7 @@ createBtn.onclick = function () {
                         String(
                           smartSuggestionInfo.still_unmatched
                         ) +
-                        " linjer står fortsatt uten sikker produktmatch." +
+                        " linjer stÃ¥r fortsatt uten sikker produktmatch." +
                         shipmentText +
                         " Lagerantall er ikke endret."
                     );
@@ -14710,7 +15101,7 @@ createBtn.onclick = function () {
                                     ? shipmentError.message
                                     : shipmentError
                                 ) +
-                                ". Ikke ferdigstill kostpris før dette er rettet."
+                                ". Ikke ferdigstill kostpris fÃ¸r dette er rettet."
                             );
 
                             state.pdfImport =
@@ -14856,7 +15247,7 @@ createBtn.onclick = function () {
 
       setLoading(
         right,
-        "Leser PDF og finner fakturalinjer…"
+        "Leser PDF og finner fakturalinjerâ€¦"
       );
 
       extractPdfText(file)
@@ -14909,12 +15300,12 @@ createBtn.onclick = function () {
     ) {
       setLoading(
         left,
-        "Laster fakturaer…"
+        "Laster fakturaerâ€¦"
       );
 
       setLoading(
         right,
-        "Laster fakturakontroll…"
+        "Laster fakturakontrollâ€¦"
       );
 
       Promise.all([
@@ -15006,7 +15397,7 @@ createBtn.onclick = function () {
 
               var empty = el(
                 "div",
-                "Det ligger ingen leverandørfakturaer i systemet ennå."
+                "Det ligger ingen leverandÃ¸rfakturaer i systemet ennÃ¥."
               );
 
               empty.className =
@@ -15025,7 +15416,7 @@ createBtn.onclick = function () {
 
             var box = el(
               "div",
-              "Kunne ikke laste leverandørfakturaer: " +
+              "Kunne ikke laste leverandÃ¸rfakturaer: " +
                 skReadableError(
                   error &&
                   error.message
@@ -15088,7 +15479,7 @@ createBtn.onclick = function () {
       uploadBox.appendChild(
         el(
           "div",
-          "Ny leverandørfaktura"
+          "Ny leverandÃ¸rfaktura"
         )
       ).className =
         "sk-invoice-upload-title";
@@ -15096,7 +15487,7 @@ createBtn.onclick = function () {
       var uploadInfo =
         el(
           "div",
-          "Last opp leverandørens PDF. Kjente formater leses automatisk, og ukjente formater stoppes før noe lagres."
+          "Last opp leverandÃ¸rens PDF. Kjente formater leses automatisk, og ukjente formater stoppes fÃ¸r noe lagres."
         );
 
       uploadInfo.className =
@@ -15117,7 +15508,7 @@ createBtn.onclick = function () {
 
       var uploadBtn =
         createPrimaryButton(
-          "＋ Last opp PDF"
+          "ï¼‹ Last opp PDF"
         );
 
       uploadBtn.onclick =
@@ -15157,10 +15548,10 @@ createBtn.onclick = function () {
        * Fakturafilter
        *
        * Standard:
-       *   Alle leverandører, nyeste fakturadato først.
+       *   Alle leverandÃ¸rer, nyeste fakturadato fÃ¸rst.
        *
-       * Ved valg av leverandør:
-       *   Bare den leverandørens fakturaer, fortsatt nyeste først.
+       * Ved valg av leverandÃ¸r:
+       *   Bare den leverandÃ¸rens fakturaer, fortsatt nyeste fÃ¸rst.
        * ------------------------------------------------------------
        */
 
@@ -15258,7 +15649,7 @@ createBtn.onclick = function () {
 
       allOption.value = "";
       allOption.textContent =
-        "Alle leverandører · nyeste først";
+        "Alle leverandÃ¸rer Â· nyeste fÃ¸rst";
 
       supplierSelect.appendChild(
         allOption
@@ -15353,7 +15744,7 @@ createBtn.onclick = function () {
           state.invoiceListOpen
             ? "Skjul fakturaer"
             : (
-                "Vis fakturaer · " +
+                "Vis fakturaer Â· " +
                 visibleSummaries.length
               )
         );
@@ -15445,7 +15836,7 @@ createBtn.onclick = function () {
             var emptyFiltered =
               el(
                 "div",
-                "Ingen fakturaer for valgt leverandør."
+                "Ingen fakturaer for valgt leverandÃ¸r."
               );
 
             emptyFiltered.className =
@@ -15549,9 +15940,9 @@ createBtn.onclick = function () {
               "strong",
               (
                 summary.supplier_name ||
-                "Leverandør"
+                "LeverandÃ¸r"
               ) +
-                " · " +
+                " Â· " +
                 (
                   summary.invoice_number ||
                   "uten nr."
@@ -15597,12 +15988,12 @@ createBtn.onclick = function () {
               fmtDate(
                 summary.invoice_date
               ) +
-                " · " +
+                " Â· " +
                 String(
                   summary.currency ||
                   ""
                 ) +
-                " · " +
+                " Â· " +
                 String(
                   readyLineCount
                 ) +
@@ -15907,7 +16298,7 @@ createBtn.onclick = function () {
             ).invoice_number ||
             ""
           ) +
-          "…"
+          "â€¦"
       );
 
       Promise.all([
@@ -16108,9 +16499,9 @@ createBtn.onclick = function () {
           "h2",
           (
             summary.supplier_name ||
-            "Leverandør"
+            "LeverandÃ¸r"
           ) +
-            " · faktura " +
+            " Â· faktura " +
             (
               summary.invoice_number ||
               "uten nr."
@@ -16128,12 +16519,12 @@ createBtn.onclick = function () {
           fmtDate(
             summary.invoice_date
           ) +
-            " · " +
+            " Â· " +
             String(
               summary.currency ||
               ""
             ) +
-            " · kurs " +
+            " Â· kurs " +
             fmtNumber(
               summary.exchange_rate_to_nok,
               4
@@ -16194,13 +16585,13 @@ createBtn.onclick = function () {
             .goods_total_currency,
           summary.currency
         ) +
-        " · frakt/tillegg " +
+        " Â· frakt/tillegg " +
         fmtCurrency(
           importSummary
             .extra_cost_total_currency,
           summary.currency
         ) +
-        " · total " +
+        " Â· total " +
         fmtCurrency(
           foreignTotal,
           summary.currency
@@ -16212,7 +16603,7 @@ createBtn.onclick = function () {
           ).toUpperCase() !== "NOK" &&
           nokTotal !== null
             ? (
-                " · ca. " +
+                " Â· ca. " +
                 fmtMoneyNok(
                   nokTotal
                 )
@@ -16301,24 +16692,24 @@ createBtn.onclick = function () {
         el(
           "div",
           state.selectedInvoiceApplied
-            ? "✅ Ferdig oppdatert"
+            ? "âœ… Ferdig oppdatert"
             : (
                 historicalBaselineInvoice
-                  ? "✅ Historisk faktura ferdig"
+                  ? "âœ… Historisk faktura ferdig"
                   : (
                       remainingLines > 0
                         ? (
-                            "⚠️ " +
+                            "âš ï¸ " +
                             String(
                               remainingLines
                             ) +
                             (
                               remainingLines === 1
-                                ? " linje må kontrolleres"
-                                : " linjer må kontrolleres"
+                                ? " linje mÃ¥ kontrolleres"
+                                : " linjer mÃ¥ kontrolleres"
                             )
                           )
-                        : "✅ Klar til oppdatering"
+                        : "âœ… Klar til oppdatering"
                     )
               )
         );
@@ -16336,10 +16727,10 @@ createBtn.onclick = function () {
         el(
           "div",
           state.selectedInvoiceApplied
-            ? "Vektet innkjøpspris er beregnet og endringene er synket til Quickbutik."
+            ? "Vektet innkjÃ¸pspris er beregnet og endringene er synket til Quickbutik."
             : (
                 historicalBaselineInvoice
-                  ? "Denne fakturaen inngår i den historiske kostbaselinen og skal ikke behandles som et nytt mottak."
+                  ? "Denne fakturaen inngÃ¥r i den historiske kostbaselinen og skal ikke behandles som et nytt mottak."
                   : (
                       remainingLines > 0
                         ? (
@@ -16350,14 +16741,14 @@ createBtn.onclick = function () {
                             String(
                               totalLines
                             ) +
-                            " linjer er klare. Rett bare linjene nedenfor som systemet ikke kunne avgjøre sikkert."
+                            " linjer er klare. Rett bare linjene nedenfor som systemet ikke kunne avgjÃ¸re sikkert."
                           )
                         : (
                             "Alle " +
                             String(
                               totalLines
                             ) +
-                            " linjer er klare. Trykk «Oppdater faktura» for å beregne ny vektet kost og synke til Quickbutik."
+                            " linjer er klare. Trykk Â«Oppdater fakturaÂ» for Ã¥ beregne ny vektet kost og synke til Quickbutik."
                           )
                     )
               )
@@ -16390,7 +16781,7 @@ createBtn.onclick = function () {
 
       /*
        * Sikre forslag godkjennes samlet fra handlingsknappen.
-       * Godkjente linjer vises ikke som egen tabell – de er ferdige og
+       * Godkjente linjer vises ikke som egen tabell â€“ de er ferdige og
        * trenger ikke ta plass i normal arbeidsflyt.
        */
 
@@ -16598,7 +16989,7 @@ createBtn.onclick = function () {
           "Oppdatere faktura " +
             invoiceNumber +
             "?\n\n" +
-            "Ny vektet innkjøpspris beregnes og endringer synkes til Quickbutik.\n\n" +
+            "Ny vektet innkjÃ¸pspris beregnes og endringer synkes til Quickbutik.\n\n" +
             "Lager og salgspris endres ikke."
         );
 
@@ -16611,7 +17002,7 @@ createBtn.onclick = function () {
 
       button.disabled = true;
       button.textContent =
-        "Oppdaterer faktura…";
+        "Oppdaterer fakturaâ€¦";
 
       var finalizeRow = null;
       var shipmentResult = null;
@@ -16622,7 +17013,7 @@ createBtn.onclick = function () {
 
       function finalizeCost() {
         button.textContent =
-          "1/4 · Lagrer kost…";
+          "1/4 Â· Lagrer kostâ€¦";
 
         return sb.rpc(
           "internal_supplier_invoice_finalize_cost_only",
@@ -16665,11 +17056,11 @@ createBtn.onclick = function () {
                 ) > 0
               ) {
                 throw new Error(
-                  "Denne fakturaen inngår i en felles forsendelse, men " +
+                  "Denne fakturaen inngÃ¥r i en felles forsendelse, men " +
                     String(
                       shipmentResult.skipped_invoices
                     ) +
-                    " tilknyttet faktura(er) er ikke ferdigstilt ennå. Ferdigstill/kontroller alle fakturaene i samme forsendelse før kostprisen oppdateres."
+                    " tilknyttet faktura(er) er ikke ferdigstilt ennÃ¥. Ferdigstill/kontroller alle fakturaene i samme forsendelse fÃ¸r kostprisen oppdateres."
                 );
               }
             }
@@ -16679,7 +17070,7 @@ createBtn.onclick = function () {
 
       function previewWeightedUpdate() {
         button.textContent =
-          "2/4 · Kontrollerer vekting…";
+          "2/4 Â· Kontrollerer vektingâ€¦";
 
         return sb.rpc(
           "internal_preview_invoice_weighted_update",
@@ -16723,7 +17114,7 @@ createBtn.onclick = function () {
                   String(
                     variantProblems.length
                   ) +
-                    " kostlinje(r) gjelder produkter med varianter uten konkret variantfordeling. Fordel disse på riktige varianter før du trykker Oppdater faktura."
+                    " kostlinje(r) gjelder produkter med varianter uten konkret variantfordeling. Fordel disse pÃ¥ riktige varianter fÃ¸r du trykker Oppdater faktura."
                 );
               }
 
@@ -16763,7 +17154,7 @@ createBtn.onclick = function () {
         }
 
         button.textContent =
-          "3/4 · Beregner ny kost…";
+          "3/4 Â· Beregner ny kostâ€¦";
 
         return sb.rpc(
           "internal_apply_invoice_weighted_update",
@@ -16790,7 +17181,7 @@ createBtn.onclick = function () {
 
       function syncQuickbutik() {
         button.textContent =
-          "4/4 · Synker Quickbutik…";
+          "4/4 Â· Synker Quickbutikâ€¦";
 
         return syncPendingQuickbutikPurchasePricesForInvoice()
           .then(
@@ -16805,11 +17196,11 @@ createBtn.onclick = function () {
                 ) > 0
               ) {
                 throw new Error(
-                  "Quickbutik-synken stoppet før alt var ferdig. " +
+                  "Quickbutik-synken stoppet fÃ¸r alt var ferdig. " +
                     String(
                       result.remaining
                     ) +
-                    " kostmål gjenstår."
+                    " kostmÃ¥l gjenstÃ¥r."
                 );
               }
             }
@@ -16842,7 +17233,7 @@ createBtn.onclick = function () {
               );
 
             var message =
-              "✅ Faktura " +
+              "âœ… Faktura " +
               invoiceNumber +
               " er ferdig.\n\n";
 
@@ -16894,7 +17285,7 @@ createBtn.onclick = function () {
                     ? error.message
                     : error
                 ) +
-                "\n\nLager er ikke endret. Rett feilen og trykk «Oppdater faktura» igjen."
+                "\n\nLager er ikke endret. Rett feilen og trykk Â«Oppdater fakturaÂ» igjen."
             );
           }
         )
@@ -16927,7 +17318,7 @@ createBtn.onclick = function () {
       if (safeCount > 0) {
         var accept =
           createPrimaryButton(
-            "✅ Godkjenn " +
+            "âœ… Godkjenn " +
               String(safeCount) +
               " sikre treff"
           );
@@ -16947,7 +17338,7 @@ createBtn.onclick = function () {
             accept.disabled =
               true;
             accept.textContent =
-              "Godkjenner…";
+              "Godkjennerâ€¦";
 
             sb.rpc(
               "internal_supplier_invoice_accept_safe_suggestions",
@@ -16980,7 +17371,7 @@ createBtn.onclick = function () {
                             row.still_requires_review ||
                             0
                           ) +
-                          " står igjen til kontroll."
+                          " stÃ¥r igjen til kontroll."
                         )
                       : "Trygge forslag ble godkjent."
                   );
@@ -17039,7 +17430,7 @@ createBtn.onclick = function () {
       ) {
         var updateInvoice =
           createPrimaryButton(
-            "✅ Oppdater faktura"
+            "âœ… Oppdater faktura"
           );
 
         updateInvoice.onclick =
@@ -17064,8 +17455,8 @@ createBtn.onclick = function () {
           el(
             "span",
             state.selectedInvoiceApplied
-              ? "✅ Ferdig"
-              : "✅ Historisk ferdig"
+              ? "âœ… Ferdig"
+              : "âœ… Historisk ferdig"
           );
 
         doneBadge.style.display =
@@ -17099,7 +17490,7 @@ createBtn.onclick = function () {
       ) {
         var smartMatch =
           createButton(
-            "✨ Finn flere treff"
+            "âœ¨ Finn flere treff"
           );
 
         smartMatch.onclick =
@@ -17107,7 +17498,7 @@ createBtn.onclick = function () {
             smartMatch.disabled =
               true;
             smartMatch.textContent =
-              "Søker smart…";
+              "SÃ¸ker smartâ€¦";
 
             sb.rpc(
               "internal_supplier_invoice_apply_smart_suggestions",
@@ -17129,7 +17520,7 @@ createBtn.onclick = function () {
                       : {};
 
                   alert(
-                    "Smart produktsøk fant " +
+                    "Smart produktsÃ¸k fant " +
                       String(
                         smartRow.suggestions_added ||
                         0
@@ -17139,7 +17530,7 @@ createBtn.onclick = function () {
                         smartRow.still_unmatched ||
                         0
                       ) +
-                      " linjer står fortsatt uten sikker produktmatch."
+                      " linjer stÃ¥r fortsatt uten sikker produktmatch."
                   );
 
                   refreshAll(
@@ -17152,10 +17543,10 @@ createBtn.onclick = function () {
                   smartMatch.disabled =
                     false;
                   smartMatch.textContent =
-                    "✨ Finn flere treff";
+                    "âœ¨ Finn flere treff";
 
                   alert(
-                    "Smart produktsøk feilet: " +
+                    "Smart produktsÃ¸k feilet: " +
                       skReadableError(
                         error &&
                         error.message
@@ -17209,7 +17600,7 @@ createBtn.onclick = function () {
           )
       );
 
-      return parts.join(" · ");
+      return parts.join(" Â· ");
     }
 
     function confirmRow(
@@ -17220,7 +17611,7 @@ createBtn.onclick = function () {
     ) {
       if (!productId) {
         alert(
-          "Velg produkt først."
+          "Velg produkt fÃ¸rst."
         );
         return;
       }
@@ -17229,7 +17620,7 @@ createBtn.onclick = function () {
       var oldText =
         button.textContent;
       button.textContent =
-        "Godkjenner…";
+        "Godkjennerâ€¦";
 
       sb.rpc(
         "internal_supplier_invoice_confirm_row",
@@ -17281,7 +17672,7 @@ createBtn.onclick = function () {
     ) {
       if (!productId) {
         alert(
-          "Velg produkt først."
+          "Velg produkt fÃ¸rst."
         );
         return;
       }
@@ -17291,7 +17682,7 @@ createBtn.onclick = function () {
         !allocations.length
       ) {
         alert(
-          "Legg inn antall på minst én variant."
+          "Legg inn antall pÃ¥ minst Ã©n variant."
         );
         return;
       }
@@ -17300,7 +17691,7 @@ createBtn.onclick = function () {
       var oldText =
         button.textContent;
       button.textContent =
-        "Godkjenner…";
+        "Godkjennerâ€¦";
 
       sb.rpc(
         "internal_supplier_invoice_confirm_row_variant_split",
@@ -17363,7 +17754,7 @@ createBtn.onclick = function () {
               row.quantity,
               0
             ) +
-            " stk på varianter"
+            " stk pÃ¥ varianter"
         );
 
       title.className =
@@ -17373,12 +17764,12 @@ createBtn.onclick = function () {
       var help =
         el(
           "div",
-          "Legg inn hvor mange av hver Quickbutik-variant som faktisk kom på denne fakturalinjen. Summen må være nøyaktig " +
+          "Legg inn hvor mange av hver Quickbutik-variant som faktisk kom pÃ¥ denne fakturalinjen. Summen mÃ¥ vÃ¦re nÃ¸yaktig " +
             fmtNumber(
               row.quantity,
               0
             ) +
-            " stk. Dette brukes bare til kosthistorikk – lagerantall endres ikke."
+            " stk. Dette brukes bare til kosthistorikk â€“ lagerantall endres ikke."
         );
 
       help.className =
@@ -17594,7 +17985,7 @@ createBtn.onclick = function () {
             ) >= 0.000001
           ) {
             alert(
-              "Variantantallene må summere til nøyaktig " +
+              "Variantantallene mÃ¥ summere til nÃ¸yaktig " +
                 fmtNumber(
                   wanted,
                   0
@@ -17661,8 +18052,8 @@ createBtn.onclick = function () {
     ) {
       var reason =
         window.prompt(
-          "Hvorfor skal linjen utelates fra produktkost? Linjen beholdes på fakturaen.",
-          "Ikke lagerført produkt / skal ikke påvirke produktkost"
+          "Hvorfor skal linjen utelates fra produktkost? Linjen beholdes pÃ¥ fakturaen.",
+          "Ikke lagerfÃ¸rt produkt / skal ikke pÃ¥virke produktkost"
         );
 
       if (reason === null) {
@@ -17671,7 +18062,7 @@ createBtn.onclick = function () {
 
       if (
         !window.confirm(
-          "Utelate denne fakturalinjen fra produktkost? Den beholdes på fakturaen og dens andel av frakt/tillegg blir ikke flyttet over på andre varer."
+          "Utelate denne fakturalinjen fra produktkost? Den beholdes pÃ¥ fakturaen og dens andel av frakt/tillegg blir ikke flyttet over pÃ¥ andre varer."
         )
       ) {
         return;
@@ -17681,7 +18072,7 @@ createBtn.onclick = function () {
       var oldText =
         button.textContent;
       button.textContent =
-        "Utelater…";
+        "Utelaterâ€¦";
 
       sb.rpc(
         "internal_supplier_invoice_ignore_row",
@@ -17757,7 +18148,7 @@ createBtn.onclick = function () {
       section.appendChild(
         el(
           "h3",
-          "Kontroller disse linjene · " +
+          "Kontroller disse linjene Â· " +
             String(rows.length)
         )
       );
@@ -17765,7 +18156,7 @@ createBtn.onclick = function () {
       var desc =
         el(
           "div",
-          "Systemet var ikke sikkert nok på disse. Velg riktig produkt/variant, fordel på flere varianter ved behov, eller utelat linjen."
+          "Systemet var ikke sikkert nok pÃ¥ disse. Velg riktig produkt/variant, fordel pÃ¥ flere varianter ved behov, eller utelat linjen."
         );
 
       desc.className =
@@ -17819,7 +18210,7 @@ createBtn.onclick = function () {
             String(
               row.line_number
             ) +
-            " · " +
+            " Â· " +
             row.supplier_description
         );
 
@@ -17846,7 +18237,7 @@ createBtn.onclick = function () {
           "Varenr. " +
             (
               row.supplier_sku ||
-              "–"
+              "â€“"
             )
         )
       );
@@ -17857,7 +18248,7 @@ createBtn.onclick = function () {
           "EAN " +
             (
               row.ean ||
-              "–"
+              "â€“"
             )
         )
       );
@@ -17896,7 +18287,7 @@ createBtn.onclick = function () {
           "Produkt: " +
             (
               row.resolved_product_name ||
-              "–"
+              "â€“"
             )
         )
       );
@@ -17904,7 +18295,7 @@ createBtn.onclick = function () {
       var help =
         el(
           "div",
-          "Velg én variant hvis hele fakturaantallet gjelder samme variant, eller fordel antallet på flere varianter dersom leveransen er assortert."
+          "Velg Ã©n variant hvis hele fakturaantallet gjelder samme variant, eller fordel antallet pÃ¥ flere varianter dersom leveransen er assortert."
         );
 
       help.className =
@@ -17924,7 +18315,7 @@ createBtn.onclick = function () {
       var label = el("label");
       label.appendChild(
         document.createTextNode(
-          "Én variant"
+          "Ã‰n variant"
         )
       );
 
@@ -17991,7 +18382,7 @@ createBtn.onclick = function () {
 
       var confirm =
         createPrimaryButton(
-          "Godkjenn én variant"
+          "Godkjenn Ã©n variant"
         );
 
       confirm.onclick =
@@ -18028,7 +18419,7 @@ createBtn.onclick = function () {
 
         var splitToggle =
           createButton(
-            "Fordel på flere varianter"
+            "Fordel pÃ¥ flere varianter"
           );
 
         splitToggle.onclick =
@@ -18038,7 +18429,7 @@ createBtn.onclick = function () {
             ) {
               splitEditor.close();
               splitToggle.textContent =
-                "Fordel på flere varianter";
+                "Fordel pÃ¥ flere varianter";
             } else {
               splitEditor.open();
               splitToggle.textContent =
@@ -18141,7 +18532,7 @@ createBtn.onclick = function () {
             String(
               row.line_number
             ) +
-            " · " +
+            " Â· " +
             row.supplier_description
         );
 
@@ -18168,7 +18559,7 @@ createBtn.onclick = function () {
           "Varenr. " +
             (
               row.supplier_sku ||
-              "–"
+              "â€“"
             )
         )
       );
@@ -18179,7 +18570,7 @@ createBtn.onclick = function () {
           "EAN " +
             (
               row.ean ||
-              "–"
+              "â€“"
             )
         )
       );
@@ -18204,7 +18595,7 @@ createBtn.onclick = function () {
       match.appendChild(
         el(
           "div",
-          "Finn riktig produkt. Har leveransen flere varianter, fordel antallet på de variantene som faktisk kom."
+          "Finn riktig produkt. Har leveransen flere varianter, fordel antallet pÃ¥ de variantene som faktisk kom."
         )
       );
 
@@ -18223,7 +18614,7 @@ createBtn.onclick = function () {
 
       searchLabel.appendChild(
         document.createTextNode(
-          "Søk produkt"
+          "SÃ¸k produkt"
         )
       );
 
@@ -18243,7 +18634,7 @@ createBtn.onclick = function () {
         ).split(" / ")[0];
 
       var searchBtn =
-        createButton("Søk");
+        createButton("SÃ¸k");
 
       searchRow.appendChild(
         searchInput
@@ -18276,7 +18667,7 @@ createBtn.onclick = function () {
       addOption(
         productSelect,
         "",
-        "Søk først"
+        "SÃ¸k fÃ¸rst"
       );
 
       productLabel.appendChild(
@@ -18292,7 +18683,7 @@ createBtn.onclick = function () {
 
       variantLabel.appendChild(
         document.createTextNode(
-          "Én variant"
+          "Ã‰n variant"
         )
       );
 
@@ -18302,7 +18693,7 @@ createBtn.onclick = function () {
       addOption(
         variantSelect,
         "",
-        "Velg produkt først"
+        "Velg produkt fÃ¸rst"
       );
 
       variantSelect.disabled =
@@ -18343,7 +18734,7 @@ createBtn.onclick = function () {
           addOption(
             variantSelect,
             "",
-            "Ingen variant nødvendig"
+            "Ingen variant nÃ¸dvendig"
           );
 
           variantSelect.disabled =
@@ -18398,7 +18789,7 @@ createBtn.onclick = function () {
           splitToggle.style.display =
             "";
           splitToggle.textContent =
-            "Fordel på flere varianter";
+            "Fordel pÃ¥ flere varianter";
         } else {
           splitToggle.disabled =
             true;
@@ -18421,7 +18812,7 @@ createBtn.onclick = function () {
         searchBtn.disabled =
           true;
         searchBtn.textContent =
-          "Søker smart…";
+          "SÃ¸ker smartâ€¦";
 
         sb.rpc(
           "internal_invoice_smart_candidates_text",
@@ -18439,7 +18830,7 @@ createBtn.onclick = function () {
               searchBtn.disabled =
                 false;
               searchBtn.textContent =
-                "Søk";
+                "SÃ¸k";
 
               clear(productSelect);
 
@@ -18463,18 +18854,18 @@ createBtn.onclick = function () {
                       String(
                         candidate.candidate_rank
                       ) +
-                      " · " +
+                      " Â· " +
                       (
                         candidate.product_name ||
                         "Produkt"
                       ) +
                       (
                         candidate.brand
-                          ? " · " +
+                          ? " Â· " +
                             candidate.brand
                           : ""
                       ) +
-                      " · treff " +
+                      " Â· treff " +
                       fmtNumber(
                         candidate.match_score,
                         1
@@ -18488,7 +18879,7 @@ createBtn.onclick = function () {
                 var fallbackTokens =
                   term
                     .replace(
-                      /[^A-Za-zÆØÅæøå0-9]+/g,
+                      /[^A-Za-zÃ†Ã˜Ã…Ã¦Ã¸Ã¥0-9]+/g,
                       " "
                     )
                     .split(/\s+/)
@@ -18568,7 +18959,7 @@ createBtn.onclick = function () {
                             ) +
                               (
                                 product.brand
-                                  ? " · " +
+                                  ? " Â· " +
                                     product.brand
                                   : ""
                               )
@@ -18585,10 +18976,10 @@ createBtn.onclick = function () {
               searchBtn.disabled =
                 false;
               searchBtn.textContent =
-                "Søk";
+                "SÃ¸k";
 
               alert(
-                "Produktsøk feilet: " +
+                "ProduktsÃ¸k feilet: " +
                   skReadableError(
                     error &&
                     error.message
@@ -18633,7 +19024,7 @@ createBtn.onclick = function () {
           addOption(
             variantSelect,
             "",
-            "Laster varianter…"
+            "Laster varianterâ€¦"
           );
 
           loadVariantsForChosenProduct(
@@ -18678,7 +19069,7 @@ createBtn.onclick = function () {
         function () {
           if (!chosen.productId) {
             alert(
-              "Velg produkt først."
+              "Velg produkt fÃ¸rst."
             );
             return;
           }
@@ -18694,7 +19085,7 @@ createBtn.onclick = function () {
 
       var splitToggle =
         createButton(
-          "Fordel på flere varianter"
+          "Fordel pÃ¥ flere varianter"
         );
 
       splitToggle.disabled =
@@ -18713,7 +19104,7 @@ createBtn.onclick = function () {
           ) {
             splitEditor.close();
             splitToggle.textContent =
-              "Fordel på flere varianter";
+              "Fordel pÃ¥ flere varianter";
           } else {
             splitEditor.open();
             splitToggle.textContent =
@@ -18723,7 +19114,7 @@ createBtn.onclick = function () {
 
       var productsBtn =
         createButton(
-          "Gå til Produkter"
+          "GÃ¥ til Produkter"
         );
 
       productsBtn.onclick =
@@ -18800,9 +19191,9 @@ createBtn.onclick = function () {
 
       var section =
         createCollapsibleSection(
-          "✅ Trygge forslag · " +
+          "âœ… Trygge forslag Â· " +
             String(rows.length),
-          "Entydige forslag som kan godkjennes samlet. Åpne listen hvis du vil kontrollere dem først.",
+          "Entydige forslag som kan godkjennes samlet. Ã…pne listen hvis du vil kontrollere dem fÃ¸rst.",
           false
         );
 
@@ -18865,7 +19256,7 @@ createBtn.onclick = function () {
             el(
               "td",
               row.resolved_product_name ||
-              "–"
+              "â€“"
             )
           );
 
@@ -18875,7 +19266,7 @@ createBtn.onclick = function () {
               row.suggested_variant_sku ||
               (
                 row.active_variant_count > 0
-                  ? "–"
+                  ? "â€“"
                   : "Ingen variant"
               )
             )
@@ -18933,9 +19324,9 @@ createBtn.onclick = function () {
 
       var section =
         createCollapsibleSection(
-          "🟢 Godkjente linjer · " +
+          "ðŸŸ¢ Godkjente linjer Â· " +
             String(rows.length),
-          "Disse linjene er koblet og klare. Ingen lager- eller kostoppdatering er utført.",
+          "Disse linjene er koblet og klare. Ingen lager- eller kostoppdatering er utfÃ¸rt.",
           false
         );
 
@@ -18997,7 +19388,7 @@ createBtn.onclick = function () {
             el(
               "td",
               row.resolved_product_name ||
-              "–"
+              "â€“"
             )
           );
 
@@ -19106,13 +19497,13 @@ createBtn.onclick = function () {
 
       var section =
         createCollapsibleSection(
-          "💰 Kostoversikt · " +
+          "ðŸ’° Kostoversikt Â· " +
             fmtMoneyNok(
               totalRealCost
             ),
           state.selectedInvoiceApplied
-            ? "Kostgrunnlaget er brukt og kostprisene er oppdatert. Åpne bare hvis du vil kontrollere detaljene."
-            : "Valgfritt: åpne for å kontrollere reell kost per vare før du oppdaterer fakturaen.",
+            ? "Kostgrunnlaget er brukt og kostprisene er oppdatert. Ã…pne bare hvis du vil kontrollere detaljene."
+            : "Valgfritt: Ã¥pne for Ã¥ kontrollere reell kost per vare fÃ¸r du oppdaterer fakturaen.",
           false
         );
 
@@ -19266,7 +19657,7 @@ createBtn.onclick = function () {
                   "td",
                   review.resolved_product_name ||
                   row.supplier_description ||
-                  "–"
+                  "â€“"
                 )
               );
 
@@ -19363,9 +19754,9 @@ createBtn.onclick = function () {
   function renderSuppliersAddonsManager(parent, data, sb) {
   createPageHeader(
     parent,
-    "Leverandører",
-    "Leverandørregister, standardkostnader og tillegg samlet på ett sted.",
-    "Innkjøp"
+    "LeverandÃ¸rer",
+    "LeverandÃ¸rregister, standardkostnader og tillegg samlet pÃ¥ ett sted.",
+    "InnkjÃ¸p"
   );
 
   var supplierRows =
@@ -19398,7 +19789,7 @@ createBtn.onclick = function () {
     [
       {
         label:
-          "Aktive leverandører",
+          "Aktive leverandÃ¸rer",
         value:
           String(
             activeSuppliers.length
@@ -19442,7 +19833,7 @@ createBtn.onclick = function () {
 
   var overview =
     createCollapsibleSection(
-      "🚚 Leverandøroversikt",
+      "ðŸšš LeverandÃ¸roversikt",
       "Kontakt, valuta, MOQ og normal leveringstid.",
       true
     );
@@ -19452,7 +19843,7 @@ createBtn.onclick = function () {
     [
       {
         label:
-          "Leverandør",
+          "LeverandÃ¸r",
         key:
           "name"
       },
@@ -19494,13 +19885,13 @@ createBtn.onclick = function () {
                 ""
             ]
               .filter(Boolean)
-              .join(" · ") ||
+              .join(" Â· ") ||
               "-";
           }
       }
     ],
     activeSuppliers,
-    "Ingen leverandører registrert."
+    "Ingen leverandÃ¸rer registrert."
   );
 
   parent.appendChild(
@@ -19549,8 +19940,8 @@ createBtn.onclick = function () {
   }
 
   function lockedOptions(select) {
-    addOption(select, "false", "🔓 Åpen");
-    addOption(select, "true", "🔒 Låst");
+    addOption(select, "false", "ðŸ”“ Ã…pen");
+    addOption(select, "true", "ðŸ”’ LÃ¥st");
   }
 
   function activeOptions(select) {
@@ -19573,8 +19964,8 @@ createBtn.onclick = function () {
   }
 
   var createSupplierSection = createCollapsibleSection(
-    "➕ Ny leverandør",
-    "Legg inn en ny leverandør med valuta, MOQ, setup og leveringstid.",
+    "âž• Ny leverandÃ¸r",
+    "Legg inn en ny leverandÃ¸r med valuta, MOQ, setup og leveringstid.",
     false
   );
 
@@ -19584,7 +19975,7 @@ createBtn.onclick = function () {
   supplierCreateGrid.style.gap = "12px";
 
   var supName = el("input");
-  supName.placeholder = "Leverandørnavn";
+  supName.placeholder = "LeverandÃ¸rnavn";
 
   var supBrand = el("input");
   supBrand.placeholder = "Merkegruppe";
@@ -19606,13 +19997,13 @@ createBtn.onclick = function () {
   supSetup.value = "0";
 
   var supLead = el("input");
-  supLead.placeholder = "F.eks. 3–6 uker";
+  supLead.placeholder = "F.eks. 3â€“6 uker";
 
   var supNotes = el("textarea");
   supNotes.style.minHeight = "80px";
   supNotes.placeholder = "Intern kommentar";
 
-  addField(supplierCreateGrid, "Leverandør", supName);
+  addField(supplierCreateGrid, "LeverandÃ¸r", supName);
   addField(supplierCreateGrid, "Merkegruppe", supBrand);
   addField(supplierCreateGrid, "Valuta", supCurrency);
   addField(supplierCreateGrid, "MOQ", supMoq);
@@ -19621,7 +20012,7 @@ createBtn.onclick = function () {
   addField(supplierCreateGrid, "Leveringstid", supLead);
   addField(supplierCreateGrid, "Intern kommentar", supNotes);
 
-  var createSupplierBtn = createPrimaryButton("Opprett leverandør");
+  var createSupplierBtn = createPrimaryButton("Opprett leverandÃ¸r");
   createSupplierBtn.style.marginTop = "12px";
 
   createSupplierSection.body.appendChild(supplierCreateGrid);
@@ -19630,7 +20021,7 @@ createBtn.onclick = function () {
 
   createSupplierBtn.onclick = function () {
     if (!supName.value.trim()) {
-      alert("Leverandørnavn må fylles ut.");
+      alert("LeverandÃ¸rnavn mÃ¥ fylles ut.");
       return;
     }
 
@@ -19648,22 +20039,22 @@ createBtn.onclick = function () {
       p_internal_notes: supNotes.value.trim() || null
     }).then(function (result) {
       createSupplierBtn.disabled = false;
-      createSupplierBtn.textContent = "Opprett leverandør";
+      createSupplierBtn.textContent = "Opprett leverandÃ¸r";
 
       if (result.error) {
-        alert("Kunne ikke opprette leverandør: " + result.error.message);
+        alert("Kunne ikke opprette leverandÃ¸r: " + result.error.message);
         return;
       }
 
       localStorage.setItem("sk_internal_active_tab", "suppliers");
-      alert("Leverandør opprettet.");
+      alert("LeverandÃ¸r opprettet.");
       window.location.reload();
     });
   };
 
   var editSupplierSection = createCollapsibleSection(
-    "✏️ Rediger / deaktiver leverandør",
-    "Endre leverandørinfo eller deaktiver leverandører som ikke skal brukes videre.",
+    "âœï¸ Rediger / deaktiver leverandÃ¸r",
+    "Endre leverandÃ¸rinfo eller deaktiver leverandÃ¸rer som ikke skal brukes videre.",
     false
   );
 
@@ -19673,9 +20064,9 @@ createBtn.onclick = function () {
   supplierEditGrid.style.gap = "12px";
 
   var editSupSelect = el("select");
-  addOption(editSupSelect, "", "Velg leverandør");
+  addOption(editSupSelect, "", "Velg leverandÃ¸r");
   (data.suppliers || []).forEach(function (s) {
-    addOption(editSupSelect, s.supplier_id || s.id, (s.name || "Ukjent") + (s.is_active === false ? " – inaktiv" : ""));
+    addOption(editSupSelect, s.supplier_id || s.id, (s.name || "Ukjent") + (s.is_active === false ? " â€“ inaktiv" : ""));
   });
 
   var editSupName = el("input");
@@ -19695,8 +20086,8 @@ createBtn.onclick = function () {
   var editSupNotes = el("textarea");
   editSupNotes.style.minHeight = "80px";
 
-  addField(supplierEditGrid, "Velg leverandør", editSupSelect);
-  addField(supplierEditGrid, "Leverandør", editSupName);
+  addField(supplierEditGrid, "Velg leverandÃ¸r", editSupSelect);
+  addField(supplierEditGrid, "LeverandÃ¸r", editSupName);
   addField(supplierEditGrid, "Merkegruppe", editSupBrand);
   addField(supplierEditGrid, "Valuta", editSupCurrency);
   addField(supplierEditGrid, "MOQ", editSupMoq);
@@ -19706,10 +20097,10 @@ createBtn.onclick = function () {
   addField(supplierEditGrid, "Status", editSupActive);
   addField(supplierEditGrid, "Intern kommentar", editSupNotes);
 
-  var saveSupplierBtn = createPrimaryButton("Lagre leverandør");
+  var saveSupplierBtn = createPrimaryButton("Lagre leverandÃ¸r");
   saveSupplierBtn.style.marginTop = "12px";
 
-  var deleteSupplierBtn = createButton("Slett / deaktiver leverandør");
+  var deleteSupplierBtn = createButton("Slett / deaktiver leverandÃ¸r");
   deleteSupplierBtn.style.marginTop = "12px";
   deleteSupplierBtn.style.marginLeft = "8px";
   deleteSupplierBtn.style.background = "#991b1b";
@@ -19754,7 +20145,7 @@ createBtn.onclick = function () {
     var supplier = selectedSupplierById(editSupSelect.value);
 
     if (!supplier) {
-      alert("Velg leverandør først.");
+      alert("Velg leverandÃ¸r fÃ¸rst.");
       return;
     }
 
@@ -19774,15 +20165,15 @@ createBtn.onclick = function () {
       p_is_active: editSupActive.value === "true"
     }).then(function (result) {
       saveSupplierBtn.disabled = false;
-      saveSupplierBtn.textContent = "Lagre leverandør";
+      saveSupplierBtn.textContent = "Lagre leverandÃ¸r";
 
       if (result.error) {
-        alert("Kunne ikke lagre leverandør: " + result.error.message);
+        alert("Kunne ikke lagre leverandÃ¸r: " + result.error.message);
         return;
       }
 
       localStorage.setItem("sk_internal_active_tab", "suppliers");
-      alert("Leverandør lagret.");
+      alert("LeverandÃ¸r lagret.");
       window.location.reload();
     });
   };
@@ -19791,14 +20182,14 @@ createBtn.onclick = function () {
     var supplier = selectedSupplierById(editSupSelect.value);
 
     if (!supplier) {
-      alert("Velg leverandør først.");
+      alert("Velg leverandÃ¸r fÃ¸rst.");
       return;
     }
 
-    var confirmText = prompt("Skriv SLETT LEVERANDØR for å slette/deaktivere " + supplier.name + ":");
+    var confirmText = prompt("Skriv SLETT LEVERANDÃ˜R for Ã¥ slette/deaktivere " + supplier.name + ":");
 
-    if (confirmText !== "SLETT LEVERANDØR") {
-      alert("Leverandør ble ikke slettet/deaktivert.");
+    if (confirmText !== "SLETT LEVERANDÃ˜R") {
+      alert("LeverandÃ¸r ble ikke slettet/deaktivert.");
       return;
     }
 
@@ -19810,15 +20201,15 @@ createBtn.onclick = function () {
       p_confirm_text: confirmText
     }).then(function (result) {
       deleteSupplierBtn.disabled = false;
-      deleteSupplierBtn.textContent = "Slett / deaktiver leverandør";
+      deleteSupplierBtn.textContent = "Slett / deaktiver leverandÃ¸r";
 
       if (result.error) {
-        alert("Kunne ikke slette/deaktivere leverandør: " + result.error.message);
+        alert("Kunne ikke slette/deaktivere leverandÃ¸r: " + result.error.message);
         return;
       }
 
       localStorage.setItem("sk_internal_active_tab", "suppliers");
-      alert("Leverandør oppdatert.");
+      alert("LeverandÃ¸r oppdatert.");
       window.location.reload();
     });
   };
@@ -19861,7 +20252,7 @@ createBtn.onclick = function () {
     left.appendChild(descEl);
   }
 
-  var icon = el("div", defaultOpen ? "−" : "+");
+  var icon = el("div", defaultOpen ? "âˆ’" : "+");
   icon.style.fontSize = "22px";
   icon.style.fontWeight = "900";
   icon.style.color = "#111827";
@@ -19877,7 +20268,7 @@ createBtn.onclick = function () {
   header.onclick = function () {
     var isOpen = body.style.display !== "none";
     body.style.display = isOpen ? "none" : "block";
-    icon.textContent = isOpen ? "+" : "−";
+    icon.textContent = isOpen ? "+" : "âˆ’";
   };
 
   wrap.appendChild(header);
@@ -19908,7 +20299,7 @@ createBtn.onclick = function () {
   }
 
   var createSection = createCollapsibleSection(
-  "➕ Nytt tillegg",
+  "âž• Nytt tillegg",
   "Opprett frakt, oppstart, trykk, designkost, montering eller andre tillegg.",
   false
 );
@@ -19922,7 +20313,7 @@ var createWrap = createSection.body;
 
   var newName = el("input");
   newName.type = "text";
-  newName.placeholder = "Navn på tillegg";
+  newName.placeholder = "Navn pÃ¥ tillegg";
 
   var newType = el("select");
   addonTypeOptions(newType);
@@ -19959,9 +20350,9 @@ var createWrap = createSection.body;
 
   addField(createGrid, "Navn", newName);
   addField(createGrid, "Type", newType);
-  addField(createGrid, "Leverandør", newSupplier);
-  addField(createGrid, "Beløp eks. mva", newAmountEx);
-  addField(createGrid, "Beløp inkl. mva", newAmountInc);
+  addField(createGrid, "LeverandÃ¸r", newSupplier);
+  addField(createGrid, "BelÃ¸p eks. mva", newAmountEx);
+  addField(createGrid, "BelÃ¸p inkl. mva", newAmountInc);
   addField(createGrid, "Valuta", newCurrency);
   addField(createGrid, "MVA %", newVat);
   addField(createGrid, "Beregning", newMethod);
@@ -19997,7 +20388,7 @@ parent.appendChild(createSection.wrap);
     var name = newName.value.trim();
 
     if (!name) {
-      alert("Navn på tillegg må fylles ut.");
+      alert("Navn pÃ¥ tillegg mÃ¥ fylles ut.");
       return;
     }
 
@@ -20031,8 +20422,8 @@ parent.appendChild(createSection.wrap);
   };
 
   var editSection = createCollapsibleSection(
-  "✏️ Rediger tillegg",
-  "Velg et eksisterende tillegg og endre pris, leverandør, status eller notat.",
+  "âœï¸ Rediger tillegg",
+  "Velg et eksisterende tillegg og endre pris, leverandÃ¸r, status eller notat.",
   false
 );
 
@@ -20047,7 +20438,7 @@ var editWrap = editSection.body;
   addOption(editSelect, "", "Velg tillegg");
 
   (data.addons || []).forEach(function (a) {
-    var label = (a.supplier_name ? a.supplier_name + " – " : "") + a.addon_name;
+    var label = (a.supplier_name ? a.supplier_name + " â€“ " : "") + a.addon_name;
     addOption(editSelect, a.addon_id, label);
   });
 
@@ -20092,9 +20483,9 @@ var editWrap = editSection.body;
   addField(editGrid, "Velg tillegg", editSelect);
   addField(editGrid, "Navn", editName);
   addField(editGrid, "Type", editType);
-  addField(editGrid, "Leverandør", editSupplier);
-  addField(editGrid, "Beløp eks. mva", editAmountEx);
-  addField(editGrid, "Beløp inkl. mva", editAmountInc);
+  addField(editGrid, "LeverandÃ¸r", editSupplier);
+  addField(editGrid, "BelÃ¸p eks. mva", editAmountEx);
+  addField(editGrid, "BelÃ¸p inkl. mva", editAmountInc);
   addField(editGrid, "Valuta", editCurrency);
   addField(editGrid, "MVA %", editVat);
   addField(editGrid, "Beregning", editMethod);
@@ -20176,14 +20567,14 @@ parent.appendChild(editSection.wrap);
     var addon = getSelectedAddon();
 
     if (!addon) {
-      alert("Velg tillegg først.");
+      alert("Velg tillegg fÃ¸rst.");
       return;
     }
 
     var name = editName.value.trim();
 
     if (!name) {
-      alert("Navn på tillegg må fylles ut.");
+      alert("Navn pÃ¥ tillegg mÃ¥ fylles ut.");
       return;
     }
 
@@ -20219,13 +20610,13 @@ parent.appendChild(editSection.wrap);
   };
 
   var suppliersSection = createCollapsibleSection(
-  "🏢 Leverandører",
-  "Oversikt over leverandører, valuta, MOQ, setup og leveringstid.",
+  "ðŸ¢ LeverandÃ¸rer",
+  "Oversikt over leverandÃ¸rer, valuta, MOQ, setup og leveringstid.",
   false
 );
 
 addTable(suppliersSection.body, [
-    { key: "name", label: "Leverandør" },
+    { key: "name", label: "LeverandÃ¸r" },
     { key: "brand_group", label: "Merkegruppe" },
     { key: "currency", label: "Valuta" },
     { key: "minimum_order_quantity", label: "MOQ" },
@@ -20233,24 +20624,24 @@ addTable(suppliersSection.body, [
     { key: "setup_fee", label: "Setup" },
     { key: "typical_lead_time", label: "Leveringstid" },
     { key: "is_active", label: "Aktiv" }
-  ], data.suppliers || [], "Ingen leverandører funnet.");
+  ], data.suppliers || [], "Ingen leverandÃ¸rer funnet.");
     parent.appendChild(suppliersSection.wrap);
 
   var addonsSection = createCollapsibleSection(
-  "💰 Tilleggskostnader",
+  "ðŸ’° Tilleggskostnader",
   "Oversikt over frakt, oppstart, trykk, designkost, montering og andre tillegg.",
   true
 );
 
 addTable(addonsSection.body, [
-    { key: "supplier_name", label: "Leverandør" },
+    { key: "supplier_name", label: "LeverandÃ¸r" },
     { key: "addon_name", label: "Tillegg" },
     { key: "addon_type", label: "Type" },
-    { key: "amount_ex_vat", label: "Beløp eks.", format: "money" },
-    { key: "amount_inc_vat", label: "Beløp inkl.", format: "money" },
+    { key: "amount_ex_vat", label: "BelÃ¸p eks.", format: "money" },
+    { key: "amount_inc_vat", label: "BelÃ¸p inkl.", format: "money" },
     { key: "currency", label: "Valuta" },
     { key: "calculation_method", label: "Beregning" },
-    { key: "cost_locked", label: "Låst" },
+    { key: "cost_locked", label: "LÃ¥st" },
     { key: "addon_is_active", label: "Aktiv" }
   ], data.addons || [], "Ingen tillegg funnet.");
     parent.appendChild(addonsSection.wrap);
@@ -20294,7 +20685,7 @@ addTable(addonsSection.body, [
     left.appendChild(descEl);
   }
 
-  var icon = el("div", defaultOpen ? "−" : "+");
+  var icon = el("div", defaultOpen ? "âˆ’" : "+");
   icon.style.fontSize = "22px";
   icon.style.fontWeight = "900";
   icon.style.color = "#111827";
@@ -20312,7 +20703,7 @@ addTable(addonsSection.body, [
   header.onclick = function () {
     var isOpen = body.style.display !== "none";
     body.style.display = isOpen ? "none" : "block";
-    icon.textContent = isOpen ? "+" : "−";
+    icon.textContent = isOpen ? "+" : "âˆ’";
   };
 
   wrap.appendChild(header);
@@ -20326,7 +20717,7 @@ addTable(addonsSection.body, [
 
   function renderStandardQuoteBuilder(parent, data, sb) {
   // ============================================================
-  // KAPITTEL 1 – Tittel og intro
+  // KAPITTEL 1 â€“ Tittel og intro
   // ============================================================
 
   var h2 = el("h2", "Vanlig tilbudsbygger");
@@ -20338,11 +20729,11 @@ addTable(addonsSection.body, [
   parent.appendChild(intro);
 
   // ============================================================
-  // KAPITTEL 2 – Kundeinfo / tidligere kunde
+  // KAPITTEL 2 â€“ Kundeinfo / tidligere kunde
   // ============================================================
 
   var customerSection = createCollapsibleSection(
-    "👤 Kundeinfo",
+    "ðŸ‘¤ Kundeinfo",
     "Velg tidligere kunde eller legg inn ny kunde.",
     true
   );
@@ -20363,7 +20754,7 @@ addTable(addonsSection.body, [
     }
 
     if (c.customer_email) {
-      label += " – " + c.customer_email;
+      label += " â€“ " + c.customer_email;
     }
 
     if (c.quote_count) {
@@ -20424,11 +20815,11 @@ addTable(addonsSection.body, [
   };
 
   // ============================================================
-  // KAPITTEL 3 – Tilbudslinjer: produkt / frakt / rabatt / manuell
+  // KAPITTEL 3 â€“ Tilbudslinjer: produkt / frakt / rabatt / manuell
   // ============================================================
 
   var linesSection = createCollapsibleSection(
-    "📦 Tilbudslinjer",
+    "ðŸ“¦ Tilbudslinjer",
     "Legg til produkter, frakt, rabatt eller manuelle linjer.",
     true
   );
@@ -20507,7 +20898,7 @@ addTable(addonsSection.body, [
     addOption(line.itemTypeSelect, "manual", "Manuell linje");
 
     line.searchInput.type = "text";
-    line.searchInput.placeholder = "Søk produkt, merke, SKU...";
+    line.searchInput.placeholder = "SÃ¸k produkt, merke, SKU...";
     line.searchInput.autocomplete = "off";
 
     line.qtyInput.type = "number";
@@ -20573,7 +20964,7 @@ addTable(addonsSection.body, [
 
       if (type === "product") {
         line.searchInput.value = "";
-        line.searchInput.placeholder = "Søk produkt, merke, SKU...";
+        line.searchInput.placeholder = "SÃ¸k produkt, merke, SKU...";
         line.costInput.disabled = true;
         line.costInput.value = "";
         line.priceInput.placeholder = "Valgfritt, ellers produktpris";
@@ -20599,7 +20990,7 @@ addTable(addonsSection.body, [
 
       if (type === "manual") {
         line.searchInput.value = "";
-        line.searchInput.placeholder = "Navn på manuell linje";
+        line.searchInput.placeholder = "Navn pÃ¥ manuell linje";
         line.costInput.disabled = false;
         line.costInput.value = "";
         line.priceInput.placeholder = "Pris/stk inkl. mva";
@@ -20637,16 +21028,16 @@ addTable(addonsSection.body, [
         item.style.background = "#fff";
         item.style.cursor = "pointer";
 
-        var title = el("div", (p.brand ? p.brand + " – " : "") + p.name);
+        var title = el("div", (p.brand ? p.brand + " â€“ " : "") + p.name);
         title.style.fontWeight = "800";
 
         var meta = el(
           "div",
           "Utsalg: " +
             money(p.sales_price_inc_vat || 0) +
-            " kr · Innpris eks: " +
+            " kr Â· Innpris eks: " +
             money(p.purchase_price_ex_vat || 0) +
-            " kr · Lager: " +
+            " kr Â· Lager: " +
             (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity)
         );
         meta.style.color = "#6b7280";
@@ -20658,20 +21049,20 @@ addTable(addonsSection.body, [
 
         item.onclick = function () {
           line.selectedProductId = p.id;
-          line.searchInput.value = (p.brand ? p.brand + " – " : "") + p.name;
+          line.searchInput.value = (p.brand ? p.brand + " â€“ " : "") + p.name;
           line.resultList.style.display = "none";
           line.costInput.value = Number(p.purchase_price_ex_vat || 0).toFixed(2);
 
           line.selectedInfo.style.display = "block";
           line.selectedInfo.textContent =
             "Valgt: " +
-            (p.brand ? p.brand + " – " : "") +
+            (p.brand ? p.brand + " â€“ " : "") +
             p.name +
-            " · Utsalg " +
+            " Â· Utsalg " +
             money(p.sales_price_inc_vat || 0) +
-            " kr · Innpris eks. " +
+            " kr Â· Innpris eks. " +
             money(p.purchase_price_ex_vat || 0) +
-            " kr · Lager " +
+            " kr Â· Lager " +
             (p.stock_quantity === null || p.stock_quantity === undefined ? "-" : p.stock_quantity);
 
           updateSummary();
@@ -20723,7 +21114,7 @@ addTable(addonsSection.body, [
   }
 
   // ============================================================
-  // KAPITTEL 4 – Beregning av linjer og totaler
+  // KAPITTEL 4 â€“ Beregning av linjer og totaler
   // ============================================================
 
   function lineData(line, discountBaseInc) {
@@ -20818,12 +21209,12 @@ addTable(addonsSection.body, [
   }
 
   // ============================================================
-  // KAPITTEL 5 – Oppsummering og tilbudstekster
+  // KAPITTEL 5 â€“ Oppsummering og tilbudstekster
   // ============================================================
 
   var summarySection = createCollapsibleSection(
-    "📊 Oppsummering",
-    "Se totalsum, kost og fortjeneste før du lagrer tilbudet.",
+    "ðŸ“Š Oppsummering",
+    "Se totalsum, kost og fortjeneste fÃ¸r du lagrer tilbudet.",
     true
   );
 
@@ -20844,7 +21235,7 @@ addTable(addonsSection.body, [
   offerText.style.borderRadius = "10px";
   offerText.style.boxSizing = "border-box";
   offerText.style.fontFamily = "Arial, sans-serif";
-  offerText.value = "Takk for forespørselen. Her er vårt tilbud basert på produktene vi har valgt ut.";
+  offerText.value = "Takk for forespÃ¸rselen. Her er vÃ¥rt tilbud basert pÃ¥ produktene vi har valgt ut.";
 
   var internalNotesLabel = el("label", "Interne notater");
   internalNotesLabel.style.display = "block";
@@ -20900,7 +21291,7 @@ addTable(addonsSection.body, [
 
       if (d.itemType === "discount") {
         line.info.textContent =
-          "Type: Rabatt · " +
+          "Type: Rabatt Â· " +
           money(d.discountPercent || 0) +
           " % av " +
           money(discountBaseInc) +
@@ -20911,13 +21302,13 @@ addTable(addonsSection.body, [
         line.info.textContent =
           "Type: " +
           d.itemType +
-          " · Pris/stk inkl: " +
+          " Â· Pris/stk inkl: " +
           money(d.unitSalesInc) +
-          " kr · Kost/stk eks: " +
+          " kr Â· Kost/stk eks: " +
           money(d.unitCostEx || 0) +
-          " kr · Linje inkl: " +
+          " kr Â· Linje inkl: " +
           money(d.lineSalesInc) +
-          " kr · Fortjeneste: " +
+          " kr Â· Fortjeneste: " +
           money(d.profitEx) +
           " kr / " +
           money(d.margin) +
@@ -20948,7 +21339,7 @@ addTable(addonsSection.body, [
   }
 
   // ============================================================
-  // KAPITTEL 6 – Lagre tilbud
+  // KAPITTEL 6 â€“ Lagre tilbud
   // ============================================================
 
   addLineBtn.onclick = function () {
@@ -20959,7 +21350,7 @@ addTable(addonsSection.body, [
     var customer = customerName.value.trim();
 
     if (!customer) {
-      alert("Kundenavn må fylles ut.");
+      alert("Kundenavn mÃ¥ fylles ut.");
       return;
     }
 
@@ -20991,7 +21382,7 @@ addTable(addonsSection.body, [
     });
 
     if (!items.length) {
-      alert("Legg til minst én tilbudslinje.");
+      alert("Legg til minst Ã©n tilbudslinje.");
       return;
     }
 
@@ -21030,7 +21421,7 @@ addTable(addonsSection.body, [
   };
 
   // ============================================================
-  // KAPITTEL 7 – Start med én tom produktlinje
+  // KAPITTEL 7 â€“ Start med Ã©n tom produktlinje
   // ============================================================
 
   createLine();
@@ -21045,7 +21436,7 @@ addTable(addonsSection.body, [
     createPageHeader(
       parent,
       "Varetelling",
-      "Pågående tellinger først, historikk separat og selve tellingen i ett ryddig arbeidsområde.",
+      "PÃ¥gÃ¥ende tellinger fÃ¸rst, historikk separat og selve tellingen i ett ryddig arbeidsomrÃ¥de.",
       "Varer og lager"
     );
 
@@ -21134,13 +21525,13 @@ addTable(addonsSection.body, [
       if (
         status === "in_progress"
       ) {
-        return "Pågår";
+        return "PÃ¥gÃ¥r";
       }
 
       if (
         status === "locked"
       ) {
-        return "Låst";
+        return "LÃ¥st";
       }
 
       if (
@@ -21152,7 +21543,7 @@ addTable(addonsSection.body, [
       if (
         status === "applied"
       ) {
-        return "Utført";
+        return "UtfÃ¸rt";
       }
 
       return (
@@ -21253,7 +21644,7 @@ addTable(addonsSection.body, [
           (
             value
               ? (
-                  " · " +
+                  " Â· " +
                   value
                 )
               : ""
@@ -21269,7 +21660,7 @@ addTable(addonsSection.body, [
           (
             value
               ? (
-                  " · " +
+                  " Â· " +
                   value
                 )
               : ""
@@ -21281,11 +21672,11 @@ addTable(addonsSection.body, [
         type === "supplier"
       ) {
         return (
-          "Leverandør" +
+          "LeverandÃ¸r" +
           (
             value
               ? (
-                  " · " +
+                  " Â· " +
                   value
                 )
               : ""
@@ -21301,7 +21692,7 @@ addTable(addonsSection.body, [
           (
             value
               ? (
-                  " · " +
+                  " Â· " +
                   value
                 )
               : ""
@@ -21533,7 +21924,7 @@ addTable(addonsSection.body, [
       [
         {
           label:
-            "Pågående",
+            "PÃ¥gÃ¥ende",
           value:
             String(
               openCounts.length
@@ -21545,7 +21936,7 @@ addTable(addonsSection.body, [
         },
         {
           label:
-            "Låst / til kontroll",
+            "LÃ¥st / til kontroll",
           value:
             String(
               lockedCounts.length
@@ -21580,13 +21971,13 @@ addTable(addonsSection.body, [
 
 
     // ============================================================
-    // TOPP: PÅGÅENDE / LÅSTE TELLINGER
+    // TOPP: PÃ…GÃ…ENDE / LÃ…STE TELLINGER
     // ============================================================
 
     var currentSection =
       createCollapsibleSection(
-        "▶ Pågående varetellinger",
-        "Fortsett en åpen telling, eller åpne en låst telling som venter på kontroll / Quickbutik.",
+        "â–¶ PÃ¥gÃ¥ende varetellinger",
+        "Fortsett en Ã¥pen telling, eller Ã¥pne en lÃ¥st telling som venter pÃ¥ kontroll / Quickbutik.",
         true
       );
 
@@ -21680,7 +22071,7 @@ addTable(addonsSection.body, [
               count.line_count ||
               0
             ) +
-            " linjer telt · " +
+            " linjer telt Â· " +
             String(
               countProgress(
                 count
@@ -21816,7 +22207,7 @@ addTable(addonsSection.body, [
         var empty =
           el(
             "div",
-            "Ingen åpne eller låste varetellinger akkurat nå."
+            "Ingen Ã¥pne eller lÃ¥ste varetellinger akkurat nÃ¥."
           );
 
         empty.className =
@@ -21903,7 +22294,7 @@ addTable(addonsSection.body, [
                 )
               ]
                 .filter(Boolean)
-                .join(" · ")
+                .join(" Â· ")
             );
 
           meta.style.marginTop =
@@ -21951,7 +22342,7 @@ addTable(addonsSection.body, [
                   count
                     .difference_quantity_total
                 ) +
-                " stk · " +
+                " stk Â· " +
                 money(
                   count
                     .difference_value_ex_vat_total
@@ -21990,7 +22381,7 @@ addTable(addonsSection.body, [
                 count
               )
                 ? "Fortsett telling"
-                : "Åpne / kontroller"
+                : "Ã…pne / kontroller"
             );
 
           openButton.onclick =
@@ -22045,8 +22436,8 @@ addTable(addonsSection.body, [
 
     var createSection =
       createCollapsibleSection(
-        "➕ Ny varetelling",
-        "Opprett bare når du skal starte en ny telling. Hovedkategori er anbefalt for praktisk telling.",
+        "âž• Ny varetelling",
+        "Opprett bare nÃ¥r du skal starte en ny telling. Hovedkategori er anbefalt for praktisk telling.",
         false
       );
 
@@ -22100,7 +22491,7 @@ addTable(addonsSection.body, [
     addOption(
       scopeSelect,
       "supplier",
-      "Leverandør"
+      "LeverandÃ¸r"
     );
 
     addOption(
@@ -22160,7 +22551,7 @@ addTable(addonsSection.body, [
     var createHelp =
       el(
         "div",
-        "Tips: Hovedkategori gir som regel en mer håndterbar telling enn «Alle fysiske produkter»."
+        "Tips: Hovedkategori gir som regel en mer hÃ¥ndterbar telling enn Â«Alle fysiske produkterÂ»."
       );
 
     createHelp.className =
@@ -22194,7 +22585,7 @@ addTable(addonsSection.body, [
     var inventoryMainGroups = [
       "Discer",
       "Sekker og bager",
-      "Tilbehør",
+      "TilbehÃ¸r",
       "Dartutstyr",
       "Golfballer",
       "Golfhansker",
@@ -22267,7 +22658,7 @@ addTable(addonsSection.body, [
         addOption(
           valueSelect,
           "",
-          "Ikke nødvendig"
+          "Ikke nÃ¸dvendig"
         );
 
         valueSelect.disabled =
@@ -22358,7 +22749,7 @@ addTable(addonsSection.body, [
 
         if (!title) {
           alert(
-            "Skriv inn tittel på varetellingen."
+            "Skriv inn tittel pÃ¥ varetellingen."
           );
 
           return;
@@ -22379,7 +22770,7 @@ addTable(addonsSection.body, [
           !value
         ) {
           alert(
-            "Velg utvalg først."
+            "Velg utvalg fÃ¸rst."
           );
 
           return;
@@ -22390,7 +22781,7 @@ addTable(addonsSection.body, [
           true;
 
         createBtn.textContent =
-          "Oppretter…";
+          "Oppretterâ€¦";
 
 
         sb.rpc(
@@ -22468,13 +22859,13 @@ addTable(addonsSection.body, [
 
 
     // ============================================================
-    // ARBEIDSOMRÅDE
+    // ARBEIDSOMRÃ…DE
     // ============================================================
 
     var workspaceSection =
       createCollapsibleSection(
-        "🧮 Valgt varetelling",
-        "Tell varer, lagre endringer og lås tellingen når du er ferdig.",
+        "ðŸ§® Valgt varetelling",
+        "Tell varer, lagre endringer og lÃ¥s tellingen nÃ¥r du er ferdig.",
         true
       );
 
@@ -22518,11 +22909,11 @@ addTable(addonsSection.body, [
               ""
             )
             .replace(
-              /^[\s\-–—|/·:]+/g,
+              /^[\s\-â€“â€”|/Â·:]+/g,
               ""
             )
             .replace(
-              /[\s\-–—|/·:]+$/g,
+              /[\s\-â€“â€”|/Â·:]+$/g,
               ""
             )
             .trim();
@@ -22596,11 +22987,11 @@ addTable(addonsSection.body, [
             ""
           )
           .replace(
-            /^[\s\-–—|/·:]+/g,
+            /^[\s\-â€“â€”|/Â·:]+/g,
             ""
           )
           .replace(
-            /[\s\-–—|/·:]+$/g,
+            /[\s\-â€“â€”|/Â·:]+$/g,
             ""
           )
           .replace(
@@ -22642,11 +23033,11 @@ addTable(addonsSection.body, [
               " / "
             )
             .replace(
-              /\s+–\s+/g,
+              /\s+â€“\s+/g,
               " / "
             )
             .replace(
-              /\s+—\s+/g,
+              /\s+â€”\s+/g,
               " / "
             )
             .replace(
@@ -22820,10 +23211,10 @@ addTable(addonsSection.body, [
 
       var section =
         createCollapsibleSection(
-          "🔄 Quickbutik lageroppdatering",
+          "ðŸ”„ Quickbutik lageroppdatering",
           count.quickbutik_updated_at
-            ? "Denne tellingen er allerede brukt mot Quickbutik. Ny kjøring krever ekstra bekreftelse."
-            : "Forhåndsvis først. Kjør oppdatering først når tellingen er ferdig kontrollert.",
+            ? "Denne tellingen er allerede brukt mot Quickbutik. Ny kjÃ¸ring krever ekstra bekreftelse."
+            : "ForhÃ¥ndsvis fÃ¸rst. KjÃ¸r oppdatering fÃ¸rst nÃ¥r tellingen er ferdig kontrollert.",
           false
         );
 
@@ -22854,7 +23245,7 @@ addTable(addonsSection.body, [
           "1px solid #86efac";
 
         status.textContent =
-          "✅ Quickbutik oppdatert\n" +
+          "âœ… Quickbutik oppdatert\n" +
           "Dato: " +
           formatAdminDateTime(
             count
@@ -22881,7 +23272,7 @@ addTable(addonsSection.body, [
           "1px solid #fde68a";
 
         status.textContent =
-          "⚠️ Ikke oppdatert mot Quickbutik ennå.";
+          "âš ï¸ Ikke oppdatert mot Quickbutik ennÃ¥.";
       }
 
 
@@ -22903,13 +23294,13 @@ addTable(addonsSection.body, [
 
       var previewButton =
         createButton(
-          "Forhåndsvis"
+          "ForhÃ¥ndsvis"
         );
 
       var applyButton =
         createPrimaryButton(
           count.quickbutik_updated_at
-            ? "Kjør på nytt"
+            ? "KjÃ¸r pÃ¥ nytt"
             : "Oppdater Quickbutik-lager"
         );
 
@@ -22942,13 +23333,13 @@ addTable(addonsSection.body, [
             true;
 
           previewButton.textContent =
-            "Henter…";
+            "Henterâ€¦";
 
           resultBox.style.display =
             "block";
 
           resultBox.textContent =
-            "Henter forhåndsvisning…";
+            "Henter forhÃ¥ndsvisningâ€¦";
 
 
           sb.auth
@@ -23035,7 +23426,7 @@ addTable(addonsSection.body, [
                   false;
 
                 previewButton.textContent =
-                  "Forhåndsvis";
+                  "ForhÃ¥ndsvis";
               }
             );
         };
@@ -23049,7 +23440,7 @@ addTable(addonsSection.body, [
 
           var required =
             alreadyUpdated
-              ? "OPPDATER QUICKBUTIK PÅ NYTT"
+              ? "OPPDATER QUICKBUTIK PÃ… NYTT"
               : "OPPDATER QUICKBUTIK";
 
           var confirmText =
@@ -23059,9 +23450,9 @@ addTable(addonsSection.body, [
                   ? "Denne tellingen er allerede brukt mot Quickbutik.\n\n"
                   : ""
               ) +
-                "Dette oppdaterer lageret i Quickbutik fra den låste tellingen.\n\nSkriv " +
+                "Dette oppdaterer lageret i Quickbutik fra den lÃ¥ste tellingen.\n\nSkriv " +
                 required +
-                " for å bekrefte:"
+                " for Ã¥ bekrefte:"
             );
 
 
@@ -23102,7 +23493,7 @@ addTable(addonsSection.body, [
             "block";
 
           resultBox.textContent =
-            "Starter Quickbutik-oppdatering…";
+            "Starter Quickbutik-oppdateringâ€¦";
 
 
           sb.auth
@@ -23146,7 +23537,7 @@ addTable(addonsSection.body, [
 
 
                   resultBox.textContent =
-                    "Oppdaterer Quickbutik…" +
+                    "Oppdaterer Quickbutikâ€¦" +
                     "\nBatch " +
                     String(
                       batches
@@ -23314,7 +23705,7 @@ addTable(addonsSection.body, [
 
 
                 resultBox.textContent =
-                  "✅ Quickbutik-oppdatering ferdig." +
+                  "âœ… Quickbutik-oppdatering ferdig." +
                   "\nBatcher: " +
                   String(
                     batches
@@ -23361,7 +23752,7 @@ addTable(addonsSection.body, [
                       error
                     )
                   ) +
-                  "\n\nOppdatert før stopp: " +
+                  "\n\nOppdatert fÃ¸r stopp: " +
                   String(
                     updates
                   );
@@ -23425,7 +23816,7 @@ addTable(addonsSection.body, [
         var empty =
           el(
             "div",
-            "Velg en pågående telling eller åpne en telling fra historikken."
+            "Velg en pÃ¥gÃ¥ende telling eller Ã¥pne en telling fra historikken."
           );
 
         empty.className =
@@ -23483,7 +23874,7 @@ addTable(addonsSection.body, [
             )
           ]
             .filter(Boolean)
-            .join(" · ")
+            .join(" Â· ")
         );
 
       meta.style.marginTop =
@@ -23649,20 +24040,20 @@ addTable(addonsSection.body, [
       ) {
         var unlockButton =
           createButton(
-            "🔓 Åpne telling igjen"
+            "ðŸ”“ Ã…pne telling igjen"
           );
 
         unlockButton.onclick =
           function () {
             var confirmText =
               prompt(
-                "Skriv ÅPNE for å åpne tellingen igjen:"
+                "Skriv Ã…PNE for Ã¥ Ã¥pne tellingen igjen:"
               );
 
 
             if (
               confirmText !==
-              "ÅPNE"
+              "Ã…PNE"
             ) {
               return;
             }
@@ -23731,7 +24122,7 @@ addTable(addonsSection.body, [
                   error
                 ) {
                   alert(
-                    "Kunne ikke åpne tellingen: " +
+                    "Kunne ikke Ã¥pne tellingen: " +
                       (
                         error.message ||
                         String(
@@ -23753,7 +24144,7 @@ addTable(addonsSection.body, [
       ) {
         var lockButton =
           createPrimaryButton(
-            "🔒 Lås telling"
+            "ðŸ”’ LÃ¥s telling"
           );
 
         lockButton.onclick =
@@ -23785,15 +24176,15 @@ addTable(addonsSection.body, [
 
             var confirmText =
               prompt(
-                "Lås tellingen når du er ferdig med kontrollen." +
+                "LÃ¥s tellingen nÃ¥r du er ferdig med kontrollen." +
                   warning +
-                  "\n\nSkriv LÅS for å bekrefte:"
+                  "\n\nSkriv LÃ…S for Ã¥ bekrefte:"
               );
 
 
             if (
               confirmText !==
-              "LÅS"
+              "LÃ…S"
             ) {
               return;
             }
@@ -23860,7 +24251,7 @@ addTable(addonsSection.body, [
                   error
                 ) {
                   alert(
-                    "Kunne ikke låse tellingen: " +
+                    "Kunne ikke lÃ¥se tellingen: " +
                       (
                         error.message ||
                         String(
@@ -23880,7 +24271,7 @@ addTable(addonsSection.body, [
 
       var reportJump =
         createButton(
-          "📈 Se rapport"
+          "ðŸ“ˆ Se rapport"
         );
 
       reportJump.onclick =
@@ -23923,11 +24314,11 @@ addTable(addonsSection.body, [
       var countingSection =
         createCollapsibleSection(
           editable
-            ? "🔎 Tell varer"
-            : "🔎 Se varelinjer",
+            ? "ðŸ”Ž Tell varer"
+            : "ðŸ”Ž Se varelinjer",
           editable
-            ? "Søk, registrer antall og lagre flere endringer samlet."
-            : "Tellingen er låst. Åpne den igjen hvis noe må korrigeres.",
+            ? "SÃ¸k, registrer antall og lagre flere endringer samlet."
+            : "Tellingen er lÃ¥st. Ã…pne den igjen hvis noe mÃ¥ korrigeres.",
           true
         );
 
@@ -23954,7 +24345,7 @@ addTable(addonsSection.body, [
         "search";
 
       searchInput.placeholder =
-        "Søk produkt, variant, merke eller SKU…";
+        "SÃ¸k produkt, variant, merke eller SKUâ€¦";
 
 
       var filterSelect =
@@ -24031,7 +24422,7 @@ addTable(addonsSection.body, [
 
       addField(
         filterGrid,
-        "Søk",
+        "SÃ¸k",
         searchInput
       );
 
@@ -24176,7 +24567,7 @@ addTable(addonsSection.body, [
             : (
                 editable
                   ? "Ingen ulagrede endringer."
-                  : "Tellingen er låst."
+                  : "Tellingen er lÃ¥st."
               );
       }
 
@@ -24404,7 +24795,7 @@ addTable(addonsSection.body, [
                     ""
                 ]
                   .filter(Boolean)
-                  .join(" · ")
+                  .join(" Â· ")
               );
 
             productMeta.style.marginTop =
@@ -24801,7 +25192,7 @@ addTable(addonsSection.body, [
 
           if (invalid) {
             alert(
-              "Alle endrede linjer må ha et opptalt antall."
+              "Alle endrede linjer mÃ¥ ha et opptalt antall."
             );
 
             return;
@@ -24842,7 +25233,7 @@ addTable(addonsSection.body, [
                       String(
                         ids.length
                       ) +
-                      "…";
+                      "â€¦";
 
 
                     return sb.rpc(
@@ -25000,8 +25391,8 @@ addTable(addonsSection.body, [
 
     var reportSection =
       createCollapsibleSection(
-        "📈 Rapport og avvik",
-        "Oppsummering, største avvik og PDF for valgt varetelling.",
+        "ðŸ“ˆ Rapport og avvik",
+        "Oppsummering, stÃ¸rste avvik og PDF for valgt varetelling.",
         false
       );
 
@@ -25203,19 +25594,19 @@ addTable(addonsSection.body, [
     addOption(
       reportGroupSelect,
       "category",
-      "Grupper på kategori"
+      "Grupper pÃ¥ kategori"
     );
 
     addOption(
       reportGroupSelect,
       "supplier_name",
-      "Grupper på leverandør"
+      "Grupper pÃ¥ leverandÃ¸r"
     );
 
     addOption(
       reportGroupSelect,
       "brand",
-      "Grupper på merke"
+      "Grupper pÃ¥ merke"
     );
 
 
@@ -25323,7 +25714,7 @@ addTable(addonsSection.body, [
       lines.push("");
 
       lines.push(
-        "STØRSTE AVVIK"
+        "STÃ˜RSTE AVVIK"
       );
 
       lines.push(
@@ -25385,7 +25776,7 @@ addTable(addonsSection.body, [
         var empty =
           el(
             "div",
-            "Velg en varetelling først."
+            "Velg en varetelling fÃ¸rst."
           );
 
         empty.className =
@@ -25599,7 +25990,7 @@ addTable(addonsSection.body, [
 
           printElementAsPdf(
             "sk-stock-report-document",
-            "Velg «Lagre som PDF» i utskriftsvinduet."
+            "Velg Â«Lagre som PDFÂ» i utskriftsvinduet."
           );
         };
 
@@ -25675,7 +26066,7 @@ addTable(addonsSection.body, [
       var diffTitle =
         el(
           "h3",
-          "Største avvik"
+          "StÃ¸rste avvik"
         );
 
       diffTitle.style.marginTop =
@@ -25769,8 +26160,8 @@ addTable(addonsSection.body, [
 
     var historySection =
       createCollapsibleSection(
-        "📚 Historikk og administrasjon",
-        "Finn gamle tellinger, åpne rapporter eller slett tellinger som aldri ble brukt mot Quickbutik.",
+        "ðŸ“š Historikk og administrasjon",
+        "Finn gamle tellinger, Ã¥pne rapporter eller slett tellinger som aldri ble brukt mot Quickbutik.",
         true
       );
 
@@ -25794,7 +26185,7 @@ addTable(addonsSection.body, [
     historySearch.type =
       "search";
     historySearch.placeholder =
-      "Søk nummer, tittel eller utvalg…";
+      "SÃ¸k nummer, tittel eller utvalgâ€¦";
 
 
     var historyFilter =
@@ -25809,13 +26200,13 @@ addTable(addonsSection.body, [
     addOption(
       historyFilter,
       "open",
-      "Pågående"
+      "PÃ¥gÃ¥ende"
     );
 
     addOption(
       historyFilter,
       "locked",
-      "Låste"
+      "LÃ¥ste"
     );
 
     addOption(
@@ -25889,7 +26280,7 @@ addTable(addonsSection.body, [
         prompt(
           "Dette sletter hele varetellingen og alle tellelinjene permanent.\n\nSkriv " +
             count.count_number +
-            " for å bekrefte:"
+            " for Ã¥ bekrefte:"
         );
 
 
@@ -25905,7 +26296,7 @@ addTable(addonsSection.body, [
         true;
 
       button.textContent =
-        "Sletter…";
+        "Sletterâ€¦";
 
 
       sb.rpc(
@@ -26265,7 +26656,7 @@ addTable(addonsSection.body, [
                     .line_count ||
                   0
                 ) +
-                " · " +
+                " Â· " +
                 String(
                   countProgress(
                     count
@@ -26283,7 +26674,7 @@ addTable(addonsSection.body, [
                 count
                   .difference_quantity_total
               ) +
-                " stk · " +
+                " stk Â· " +
                 money(
                   count
                     .difference_value_ex_vat_total
@@ -26314,8 +26705,8 @@ addTable(addonsSection.body, [
               "span",
               count
                 .quickbutik_updated_at
-                ? "✅ Oppdatert"
-                : "–"
+                ? "âœ… Oppdatert"
+                : "â€“"
             );
 
           tdNode(
@@ -26336,7 +26727,7 @@ addTable(addonsSection.body, [
 
           var openButton =
             createButton(
-              "Åpne"
+              "Ã…pne"
             );
 
           openButton.onclick =
@@ -26471,7 +26862,7 @@ addTable(addonsSection.body, [
     var text =
       el(
         "p",
-        "Bruk booking-admin for bookinger, blokkeringer, regler og tidsluker. Den åpnes separat slik at den etablerte bookingløsningen beholdes stabil."
+        "Bruk booking-admin for bookinger, blokkeringer, regler og tidsluker. Den Ã¥pnes separat slik at den etablerte bookinglÃ¸sningen beholdes stabil."
       );
 
     text.style.color =
@@ -26481,7 +26872,7 @@ addTable(addonsSection.body, [
 
     var button =
       createPrimaryButton(
-        "📅 Åpne Booking-admin"
+        "ðŸ“… Ã…pne Booking-admin"
       );
 
     button.onclick =
@@ -26516,7 +26907,7 @@ function renderProductControlDashboard(
   createPageHeader(
     parent,
     "Kontrollsenter",
-    "Feil og avvik som krever handling. Start med «Må fikses», og godkjenn bevisste avvik slik at de ikke kommer tilbake som støy.",
+    "Feil og avvik som krever handling. Start med Â«MÃ¥ fiksesÂ», og godkjenn bevisste avvik slik at de ikke kommer tilbake som stÃ¸y.",
     "Mission Control"
   );
 
@@ -26725,7 +27116,7 @@ function renderProductControlDashboard(
         "span",
         issue.severity ===
           "danger"
-          ? "Må fikses"
+          ? "MÃ¥ fikses"
           : "Sjekk"
       );
 
@@ -26772,23 +27163,23 @@ function renderProductControlDashboard(
       campaign_price:
         "Kampanje / pris satt med vilje",
       service_no_cost:
-        "Booking / tjeneste – ingen varekost",
+        "Booking / tjeneste â€“ ingen varekost",
       gift_card_no_cost:
-        "Gavekort – ingen innkjøpspris",
+        "Gavekort â€“ ingen innkjÃ¸pspris",
       intentional_no_cost:
-        "Ingen innkjøpspris med vilje",
+        "Ingen innkjÃ¸pspris med vilje",
       accepted:
         "Godkjent som korrekt",
       variant_price_intentional:
         "Variantpriser er bevisst forskjellige",
       service_variant_pricing:
-        "Booking/tjeneste – variantprisene er bevisste",
+        "Booking/tjeneste â€“ variantprisene er bevisste",
       gift_card_variant_pricing:
-        "Gavekort – beløpsvariantene er bevisste",
+        "Gavekort â€“ belÃ¸psvariantene er bevisste",
       intentional_hidden_stock:
         "Bevisst skjult / reservevare",
       seasonal_hidden_stock:
-        "Sesongvare – skjult med vilje",
+        "Sesongvare â€“ skjult med vilje",
       brand_not_relevant:
         "Merke er ikke relevant",
       other:
@@ -27016,19 +27407,19 @@ function renderProductControlDashboard(
           value:
             "service_no_cost",
           label:
-            "Booking / tjeneste – ingen varekost"
+            "Booking / tjeneste â€“ ingen varekost"
         },
         {
           value:
             "gift_card_no_cost",
           label:
-            "Gavekort – ingen innkjøpspris"
+            "Gavekort â€“ ingen innkjÃ¸pspris"
         },
         {
           value:
             "intentional_no_cost",
           label:
-            "Ingen innkjøpspris med vilje"
+            "Ingen innkjÃ¸pspris med vilje"
         },
         {
           value:
@@ -27054,13 +27445,13 @@ function renderProductControlDashboard(
           value:
             "service_variant_pricing",
           label:
-            "Booking / tjeneste – variantprisene er bevisste"
+            "Booking / tjeneste â€“ variantprisene er bevisste"
         },
         {
           value:
             "gift_card_variant_pricing",
           label:
-            "Gavekort – beløpsvariantene er bevisste"
+            "Gavekort â€“ belÃ¸psvariantene er bevisste"
         },
         {
           value:
@@ -27086,7 +27477,7 @@ function renderProductControlDashboard(
           value:
             "seasonal_hidden_stock",
           label:
-            "Sesongvare – skjult med vilje"
+            "Sesongvare â€“ skjult med vilje"
         },
         {
           value:
@@ -27205,7 +27596,7 @@ function renderProductControlDashboard(
           (
             issue.variant_name
               ? (
-                  " · " +
+                  " Â· " +
                   issue.variant_name
                 )
               : ""
@@ -27230,7 +27621,7 @@ function renderProductControlDashboard(
           (
             issue.message
               ? (
-                  " – " +
+                  " â€“ " +
                   issue.message
                 )
               : ""
@@ -27372,7 +27763,7 @@ function renderProductControlDashboard(
     var info =
       el(
         "div",
-        "Bare dette varselet skjules. Andre feil på samme produkt vil fortsatt vises."
+        "Bare dette varselet skjules. Andre feil pÃ¥ samme produkt vil fortsatt vises."
       );
 
     info.style.marginTop =
@@ -27423,7 +27814,7 @@ function renderProductControlDashboard(
 
     var approve =
       createPrimaryButton(
-        "✅ Godkjenn og skjul varsel"
+        "âœ… Godkjenn og skjul varsel"
       );
 
     approve.onclick =
@@ -27432,7 +27823,7 @@ function renderProductControlDashboard(
           true;
 
         approve.textContent =
-          "Lagrer…";
+          "Lagrerâ€¦";
 
         sb.rpc(
           "internal_product_control_acknowledge",
@@ -27474,7 +27865,7 @@ function renderProductControlDashboard(
                 false;
 
               approve.textContent =
-                "✅ Godkjenn og skjul varsel";
+                "âœ… Godkjenn og skjul varsel";
 
               alert(
                 "Kunne ikke godkjenne varselet: " +
@@ -27538,7 +27929,7 @@ function renderProductControlDashboard(
     [
       {
         label:
-          "Må fikses",
+          "MÃ¥ fikses",
         value:
           String(
             dangerCount
@@ -27611,13 +28002,13 @@ function renderProductControlDashboard(
 
   if (dangerCount) {
     note.textContent =
-      "Kontrollsenter viser bare ting som er verdt å se på. Start med «Må fikses». Bevisste avvik kan godkjennes som OK, mens reelle systemfeil må rettes.";
+      "Kontrollsenter viser bare ting som er verdt Ã¥ se pÃ¥. Start med Â«MÃ¥ fiksesÂ». Bevisste avvik kan godkjennes som OK, mens reelle systemfeil mÃ¥ rettes.";
   } else if (issues.length) {
     note.textContent =
-      "Ingen kritiske avvik. Det finnes noen varsler som bør følges opp.";
+      "Ingen kritiske avvik. Det finnes noen varsler som bÃ¸r fÃ¸lges opp.";
   } else {
     note.textContent =
-      "Alt ser ryddig ut akkurat nå.";
+      "Alt ser ryddig ut akkurat nÃ¥.";
   }
 
   parent.appendChild(
@@ -27653,7 +28044,7 @@ function renderProductControlDashboard(
     "search";
 
   search.placeholder =
-    "Søk i Kontrollsenter – produkt, variant, merke eller Quickbutik-ID…";
+    "SÃ¸k i Kontrollsenter â€“ produkt, variant, merke eller Quickbutik-IDâ€¦";
 
   search.style.width =
     "100%";
@@ -27688,7 +28079,7 @@ function renderProductControlDashboard(
 
   var refresh =
     createButton(
-      "↻ Oppdater"
+      "â†» Oppdater"
     );
 
   refresh.onclick =
@@ -27697,7 +28088,7 @@ function renderProductControlDashboard(
         true;
 
       refresh.textContent =
-        "Oppdaterer…";
+        "Oppdatererâ€¦";
 
       reloadProductControl()
         .finally(
@@ -27706,7 +28097,7 @@ function renderProductControlDashboard(
               false;
 
             refresh.textContent =
-              "↻ Oppdater";
+              "â†» Oppdater";
           }
         );
     };
@@ -27744,7 +28135,7 @@ function renderProductControlDashboard(
     var btn =
       createButton(
         label +
-          " · " +
+          " Â· " +
           String(count)
       );
 
@@ -27805,7 +28196,7 @@ function renderProductControlDashboard(
   );
 
   addFilterButton(
-    "Må fikses",
+    "MÃ¥ fikses",
     "danger",
     dangerCount
   );
@@ -27936,8 +28327,8 @@ function renderProductControlDashboard(
         el(
           "div",
           searchTerm
-            ? "Ingen godkjente unntak matcher søket."
-            : "Ingen godkjente unntak ennå."
+            ? "Ingen godkjente unntak matcher sÃ¸ket."
+            : "Ingen godkjente unntak ennÃ¥."
         );
 
       empty.className =
@@ -28170,7 +28561,7 @@ function renderProductControlDashboard(
             exceptionRow
               .condition_still_present
               ? "Skjules fortsatt"
-              : "Forholdet er ikke aktivt nå"
+              : "Forholdet er ikke aktivt nÃ¥"
           );
 
         statusBadge.style.display =
@@ -28223,7 +28614,7 @@ function renderProductControlDashboard(
         if (qbUrl) {
           actionBox.appendChild(
             createActionLink(
-              "Åpne i Quickbutik",
+              "Ã…pne i Quickbutik",
               qbUrl,
               false
             )
@@ -28233,15 +28624,15 @@ function renderProductControlDashboard(
 
         var reopen =
           createButton(
-            "Gjenåpne varsel"
+            "GjenÃ¥pne varsel"
           );
 
         reopen.onclick =
           function () {
             var confirmed =
               window.confirm(
-                "Gjenåpne dette varselet?\n\n" +
-                "Det vil vises i Produktkontroll igjen så lenge forholdet fortsatt er til stede."
+                "GjenÃ¥pne dette varselet?\n\n" +
+                "Det vil vises i Produktkontroll igjen sÃ¥ lenge forholdet fortsatt er til stede."
               );
 
             if (!confirmed) {
@@ -28252,7 +28643,7 @@ function renderProductControlDashboard(
               true;
 
             reopen.textContent =
-              "Gjenåpner…";
+              "GjenÃ¥pnerâ€¦";
 
             sb.rpc(
               "internal_product_control_unacknowledge",
@@ -28278,10 +28669,10 @@ function renderProductControlDashboard(
                     false;
 
                   reopen.textContent =
-                    "Gjenåpne varsel";
+                    "GjenÃ¥pne varsel";
 
                   alert(
-                    "Kunne ikke gjenåpne varselet: " +
+                    "Kunne ikke gjenÃ¥pne varselet: " +
                       skReadableError(
                         error &&
                         error.message
@@ -28387,7 +28778,7 @@ function renderProductControlDashboard(
         el(
           "div",
           searchTerm
-            ? "Ingen treff på søket i dette filteret."
+            ? "Ingen treff pÃ¥ sÃ¸ket i dette filteret."
             : "Ingen varsler i denne kategorien."
         );
 
@@ -28458,7 +28849,7 @@ function renderProductControlDashboard(
 
     [
       "Prioritet",
-      "Hva må sjekkes",
+      "Hva mÃ¥ sjekkes",
       "Produkt",
       "Variant",
       "Lager",
@@ -28614,7 +29005,7 @@ function renderProductControlDashboard(
                 : ""
             ]
               .filter(Boolean)
-              .join(" · ")
+              .join(" Â· ")
           );
 
         meta.style.color =
@@ -28698,7 +29089,7 @@ function renderProductControlDashboard(
         if (qbUrl) {
           actionBox.appendChild(
             createActionLink(
-              "Åpne i Quickbutik",
+              "Ã…pne i Quickbutik",
               qbUrl,
               true
             )
@@ -28724,7 +29115,7 @@ function renderProductControlDashboard(
         ) {
           var acknowledge =
             createButton(
-              "✓ Godkjenn som OK"
+              "âœ“ Godkjenn som OK"
             );
 
           acknowledge.onclick =
@@ -28816,7 +29207,7 @@ function renderProductControlDashboard(
     createPageHeader(
       parent,
       "Prissjekk",
-      "Sammenlign prisene på GolfKongens lagerførte produkter med norske konkurrenter.",
+      "Sammenlign prisene pÃ¥ GolfKongens lagerfÃ¸rte produkter med norske konkurrenter.",
       rows.length + " produkter med lager"
     );
 
@@ -28866,7 +29257,7 @@ function renderProductControlDashboard(
 
     var note = el(
       "div",
-      "Prissjekken søker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf. Billigst/dyrest og sorteringen bestemmes kun av varepris mot varepris. Frakt for både GolfKongen og konkurrent vises separat og påvirker ikke rangeringen."
+      "Prissjekken sÃ¸ker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf. Billigst/dyrest og sorteringen bestemmes kun av varepris mot varepris. Frakt for bÃ¥de GolfKongen og konkurrent vises separat og pÃ¥virker ikke rangeringen."
     );
     note.className = "sk-note";
     note.style.marginBottom = "16px";
@@ -29790,11 +30181,11 @@ function renderProductControlDashboard(
 
               title.textContent =
                 entry.label +
-                " · " +
+                " Â· " +
                 formatPriceCheckMoney(
                   point.price
                 ) +
-                " · " +
+                " Â· " +
                 new Date(
                   point.time
                 ).toLocaleString(
@@ -30229,10 +30620,10 @@ function renderProductControlDashboard(
       }
 
       /*
-       * Generelt markedsråd:
+       * Generelt markedsrÃ¥d:
        * - Alle konkurrenter likt priset -> samme pris.
        * - Ellers bruker vi medianen som robust "midtpris".
-       * Det hindrer at én ekstrem konkurrent styrer rådet.
+       * Det hindrer at Ã©n ekstrem konkurrent styrer rÃ¥det.
        */
       var recommendationTarget =
         allSame
@@ -30275,7 +30666,7 @@ function renderProductControlDashboard(
           reason:
             allSame
               ? "Alle konkurrentene har lik varepris."
-              : "Målprisen er medianen av de godkjente konkurrentprisene."
+              : "MÃ¥lprisen er medianen av de godkjente konkurrentprisene."
         }
       };
     }
@@ -30293,7 +30684,7 @@ function renderProductControlDashboard(
           target: null,
           delta: null,
           text:
-            "For lite godkjent prisdata til å beregne dette."
+            "For lite godkjent prisdata til Ã¥ beregne dette."
         };
       }
 
@@ -30329,7 +30720,7 @@ function renderProductControlDashboard(
           analysis.min
         ) {
           text =
-            "Du er allerede billigst. Du kan gå opp " +
+            "Du er allerede billigst. Du kan gÃ¥ opp " +
             formatPriceCheckMoney(
               analysis.min -
               analysis.ownPrice
@@ -30338,20 +30729,20 @@ function renderProductControlDashboard(
             formatPriceCheckMoney(
               analysis.min
             ) +
-            " og fortsatt være delt billigst.";
+            " og fortsatt vÃ¦re delt billigst.";
         } else if (
           analysis.ownPrice ===
           analysis.min
         ) {
           text =
-            "Du er allerede delt billigst på " +
+            "Du er allerede delt billigst pÃ¥ " +
             formatPriceCheckMoney(
               analysis.ownPrice
             ) +
             ".";
         } else {
           text =
-            "Gå ned " +
+            "GÃ¥ ned " +
             formatPriceCheckMoney(
               analysis.ownPrice -
               analysis.min
@@ -30360,7 +30751,7 @@ function renderProductControlDashboard(
             formatPriceCheckMoney(
               analysis.min
             ) +
-            " for å bli delt billigst.";
+            " for Ã¥ bli delt billigst.";
         }
       } else if (
         strategy ===
@@ -30377,14 +30768,14 @@ function renderProductControlDashboard(
           analysis.max
         ) {
           text =
-            "Du er allerede delt dyrest på " +
+            "Du er allerede delt dyrest pÃ¥ " +
             formatPriceCheckMoney(
               analysis.ownPrice
             ) +
             ".";
         } else {
           text =
-            "Gå opp " +
+            "GÃ¥ opp " +
             formatPriceCheckMoney(
               analysis.max -
               analysis.ownPrice
@@ -30393,34 +30784,34 @@ function renderProductControlDashboard(
             formatPriceCheckMoney(
               analysis.max
             ) +
-            " for å bli delt dyrest.";
+            " for Ã¥ bli delt dyrest.";
         }
       } else {
         if (delta > 0) {
           text =
-            "Gå opp " +
+            "GÃ¥ opp " +
             formatPriceCheckMoney(
               delta
             ) +
-            " til ca. markedsmidten på " +
+            " til ca. markedsmidten pÃ¥ " +
             formatPriceCheckMoney(
               target
             ) +
             ".";
         } else if (delta < 0) {
           text =
-            "Gå ned " +
+            "GÃ¥ ned " +
             formatPriceCheckMoney(
               Math.abs(delta)
             ) +
-            " til ca. markedsmidten på " +
+            " til ca. markedsmidten pÃ¥ " +
             formatPriceCheckMoney(
               target
             ) +
             ".";
         } else {
           text =
-            "Du ligger allerede i markedsmidten på " +
+            "Du ligger allerede i markedsmidten pÃ¥ " +
             formatPriceCheckMoney(
               target
             ) +
@@ -30446,7 +30837,7 @@ function renderProductControlDashboard(
 
       button.disabled = true;
       button.textContent =
-        "Lagrer…";
+        "Lagrerâ€¦";
 
       sb.rpc(
         "internal_set_price_product_strategy",
@@ -30521,7 +30912,7 @@ function renderProductControlDashboard(
     ) {
       if (
         !window.confirm(
-          "Flytte dette godkjente pristreffet tilbake til kontroll? Det blir ikke avvist og brukes ikke som negativ læring."
+          "Flytte dette godkjente pristreffet tilbake til kontroll? Det blir ikke avvist og brukes ikke som negativ lÃ¦ring."
         )
       ) {
         return;
@@ -30532,7 +30923,7 @@ function renderProductControlDashboard(
 
       button.disabled = true;
       button.textContent =
-        "Angrer…";
+        "Angrerâ€¦";
 
       sb.rpc(
         "internal_review_price_match",
@@ -30643,13 +31034,13 @@ function renderProductControlDashboard(
         "Prisstrategi",
         priceProductStrategies.length
       ],
-      ["run", "Kjør kontroll", null],
+      ["run", "KjÃ¸r kontroll", null],
       ["suggestions", "Forslag", probableCount],
       ["confirmed", "Godkjente", confirmedCount],
-      ["followup", "Oppfølging", readyFollowUpCount],
+      ["followup", "OppfÃ¸lging", readyFollowUpCount],
       ["competitors", "Konkurrenter", priceCompetitors.length],
       ["shipping", "Frakt", priceShippingRules.length],
-      ["learning", "Læring", rejectedCount]
+      ["learning", "LÃ¦ring", rejectedCount]
     ].forEach(function (definition) {
       var key = definition[0];
       var label = definition[1];
@@ -30757,7 +31148,7 @@ function renderProductControlDashboard(
 
     /*
      * Forslag og godkjente deler selve listekomponenten.
-     * Fanene bytter bare statusfilteret, så vi slipper å
+     * Fanene bytter bare statusfilteret, sÃ¥ vi slipper Ã¥
      * duplisere hele den store arbeidslisten.
      */
     var matchesPane =
@@ -30794,7 +31185,7 @@ function renderProductControlDashboard(
       pricePanes.learning;
 
         var workerTestSection = createCollapsibleSection(
-      "🔎 Kjør prissjekk",
+      "ðŸ”Ž KjÃ¸r prissjekk",
       "Velg ett produkt og kontroller konkurrenttreffene.",
       false
     );
@@ -30833,7 +31224,7 @@ function renderProductControlDashboard(
 
     var productSearchLabel = el(
       "span",
-      "Søk etter produkt"
+      "SÃ¸k etter produkt"
     );
     productSearchLabel.style.fontWeight = "700";
     productSearchLabel.style.fontSize = "13px";
@@ -30862,7 +31253,7 @@ function renderProductControlDashboard(
     function getProductOptionLabel(product) {
       return (
         (product.brand
-          ? product.brand + " – "
+          ? product.brand + " â€“ "
           : "") +
         product.name +
         " (" +
@@ -31386,7 +31777,7 @@ function renderProductControlDashboard(
       if (!mergedProductResult) {
         var noResultError =
           new Error(
-            "Alle priskilder feilet også i kildevis fallback."
+            "Alle priskilder feilet ogsÃ¥ i kildevis fallback."
           );
 
         noResultError.sourceFailures =
@@ -31408,10 +31799,10 @@ function renderProductControlDashboard(
         sourceFailures;
 
       /*
-       * Produktet er delvis kontrollert dersom minst én kilde
-       * fortsatt ikke lot seg kjøre. Forslag fra kildene som
+       * Produktet er delvis kontrollert dersom minst Ã©n kilde
+       * fortsatt ikke lot seg kjÃ¸re. Forslag fra kildene som
        * fungerte beholdes og kan lagres, men produktet blir
-       * stående i retry-listen til alle kilder er kontrollert.
+       * stÃ¥ende i retry-listen til alle kilder er kontrollert.
        */
       if (sourceFailures.length) {
         mergedProductResult.error =
@@ -31468,8 +31859,8 @@ function renderProductControlDashboard(
         payload
       ).catch(function (originalError) {
         /*
-         * Bare fall tilbake kilde-for-kilde når vi sjekker ett
-         * produkt. Fullkjøringen sender nå alltid ett produkt
+         * Bare fall tilbake kilde-for-kilde nÃ¥r vi sjekker ett
+         * produkt. FullkjÃ¸ringen sender nÃ¥ alltid ett produkt
          * per kall.
          */
         var productCount =
@@ -31646,7 +32037,7 @@ function renderProductControlDashboard(
             "wearediscgolf",
             "productsFound"
           )
-        ].join(" · ")
+        ].join(" Â· ")
       );
 
       sourceText.style.margin = "4px 0";
@@ -31720,12 +32111,12 @@ function renderProductControlDashboard(
           "div",
           totalSearchResults > 0
             ? (
-                "Ingen sikre konkurrenttreff. Søket fant " +
+                "Ingen sikre konkurrenttreff. SÃ¸ket fant " +
                 String(totalSearchResults) +
                 " mulige produkter hos kildene, men ingen bestod alle kravene."
               )
             : (
-                "Ingen konkurrentprodukter ble funnet i søket."
+                "Ingen konkurrentprodukter ble funnet i sÃ¸ket."
               )
         );
 
@@ -31756,7 +32147,7 @@ function renderProductControlDashboard(
           },
           {
             label:
-              "Filtrert av læring",
+              "Filtrert av lÃ¦ring",
             value:
               diagnostics.excludedByLearning !==
                 undefined
@@ -31774,7 +32165,7 @@ function renderProductControlDashboard(
           },
           {
             label:
-              "Læringseksempler",
+              "LÃ¦ringseksempler",
             value:
               productResult.learningExamples !==
                 undefined
@@ -31833,7 +32224,7 @@ function renderProductControlDashboard(
                       : String(
                           item.count
                         ) +
-                        " søkeresultat"
+                        " sÃ¸keresultat"
                   )
               )
             );
@@ -31875,7 +32266,7 @@ function renderProductControlDashboard(
           var filteredTitle =
             el(
               "h3",
-              "Nærmeste kandidater som ble stoppet"
+              "NÃ¦rmeste kandidater som ble stoppet"
             );
 
           filteredTitle.style.margin =
@@ -31897,7 +32288,7 @@ function renderProductControlDashboard(
                 candidate.excludedByLearning
               ) {
                 reasonParts.push(
-                  "stoppet av tidligere læring"
+                  "stoppet av tidligere lÃ¦ring"
                 );
               } else {
                 reasonParts.push(
@@ -31932,7 +32323,7 @@ function renderProductControlDashboard(
               ).forEach(
                 function (learning) {
                   reasonParts.push(
-                    "læring: " +
+                    "lÃ¦ring: " +
                       learning
                   );
                 }
@@ -31945,7 +32336,7 @@ function renderProductControlDashboard(
                     candidate.name ||
                     "Ukjent produkt"
                   ) +
-                    " · " +
+                    " Â· " +
                     (
                       candidate.store ||
                       "ukjent butikk"
@@ -31957,7 +32348,7 @@ function renderProductControlDashboard(
                 el(
                   "div",
                   reasonParts.join(
-                    " · "
+                    " Â· "
                   )
                 )
               );
@@ -31997,9 +32388,9 @@ function renderProductControlDashboard(
           "div",
           (candidate.store ||
             "Ukjent butikk") +
-            " · " +
+            " Â· " +
             formatPriceCheckMoney(candidate.price) +
-            " · Treff: " +
+            " Â· Treff: " +
             String(
               candidate.matchConfidence || 0
             ) +
@@ -32024,7 +32415,7 @@ function renderProductControlDashboard(
           var warningText = el(
             "div",
             "Kontroll: " +
-              candidate.matchWarnings.join(" · ")
+              candidate.matchWarnings.join(" Â· ")
           );
           warningText.style.color = "#92400e";
           warningText.style.fontSize = "12px";
@@ -32052,7 +32443,7 @@ function renderProductControlDashboard(
         if (candidate.url) {
           var openCandidate = el(
             "a",
-            "Åpne hos konkurrent"
+            "Ã…pne hos konkurrent"
           );
 
           openCandidate.href = candidate.url;
@@ -32242,7 +32633,7 @@ function renderProductControlDashboard(
 
       workerStatus.style.display = "block";
       workerStatus.textContent =
-        "Søker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf...";
+        "SÃ¸ker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf...";
 
       workerResult.style.display = "none";
       clear(workerResult);
@@ -32280,8 +32671,8 @@ function renderProductControlDashboard(
 
     var batchSection =
       createCollapsibleSection(
-        "☑️ Sjekk valgte produkter",
-        "Velg opptil 5 produkter og kjør én samlet prissjekk.",
+        "â˜‘ï¸ Sjekk valgte produkter",
+        "Velg opptil 5 produkter og kjÃ¸r Ã©n samlet prissjekk.",
         false
       );
 
@@ -32290,7 +32681,7 @@ function renderProductControlDashboard(
     var batchSearchInput = el("input");
     batchSearchInput.type = "search";
     batchSearchInput.placeholder =
-      "Søk etter produkt eller merke";
+      "SÃ¸k etter produkt eller merke";
     batchSearchInput.autocomplete = "off";
     batchSearchInput.style.width = "100%";
     batchSearchInput.style.marginBottom = "10px";
@@ -32462,13 +32853,13 @@ function renderProductControlDashboard(
 
       batchInfo.textContent =
         String(filteredProducts.length) +
-        " produkter vises. Maks 5 kan sjekkes per kjøring.";
+        " produkter vises. Maks 5 kan sjekkes per kjÃ¸ring.";
 
       if (!filteredProducts.length) {
         batchProductList.appendChild(
           el(
             "div",
-            "Ingen produkter matcher søket."
+            "Ingen produkter matcher sÃ¸ket."
           )
         );
         return;
@@ -32514,7 +32905,7 @@ function renderProductControlDashboard(
             "div",
             (
               product.brand
-                ? product.brand + " – "
+                ? product.brand + " â€“ "
                 : ""
             ) +
               product.name
@@ -33431,11 +33822,11 @@ function renderProductControlDashboard(
                   candidate.store ||
                   "Ukjent butikk"
                 ) +
-                  " · " +
+                  " Â· " +
                   formatPriceCheckMoney(
                     candidate.price
                   ) +
-                  " · Treff: " +
+                  " Â· Treff: " +
                   String(
                     candidate.matchConfidence ||
                     0
@@ -33463,7 +33854,7 @@ function renderProductControlDashboard(
                 var warningText = el(
                   "div",
                   "Kontroll: " +
-                    candidate.matchWarnings.join(" · ")
+                    candidate.matchWarnings.join(" Â· ")
                 );
                 warningText.style.color = "#92400e";
                 warningText.style.fontSize = "12px";
@@ -33482,7 +33873,7 @@ function renderProductControlDashboard(
               if (candidate.url) {
                 var openLink = el(
                   "a",
-                  "Åpne konkurrentprodukt"
+                  "Ã…pne konkurrentprodukt"
                 );
 
                 openLink.href =
@@ -33562,7 +33953,7 @@ function renderProductControlDashboard(
 
         if (ids.length > 5) {
           alert(
-            "Maks 5 produkter kan sjekkes per kjøring."
+            "Maks 5 produkter kan sjekkes per kjÃ¸ring."
           );
           return;
         }
@@ -33630,8 +34021,8 @@ function renderProductControlDashboard(
 
     var checkAllSection =
       createCollapsibleSection(
-        "🚀 Kjør prissjekk på flere produkter",
-        "Kontroller produkter ett og ett med retry og kildevis fallback. Du kan nå kjøre bare produkter som fortsatt mangler et godkjent pristreff.",
+        "ðŸš€ KjÃ¸r prissjekk pÃ¥ flere produkter",
+        "Kontroller produkter ett og ett med retry og kildevis fallback. Du kan nÃ¥ kjÃ¸re bare produkter som fortsatt mangler et godkjent pristreff.",
         false
       );
 
@@ -34054,7 +34445,7 @@ function renderProductControlDashboard(
 
     var checkAllRetryFailedButton =
       createButton(
-        "Kjør bare produkter som feilet"
+        "KjÃ¸r bare produkter som feilet"
       );
 
     checkAllRetryFailedButton.style.display =
@@ -34133,7 +34524,7 @@ function renderProductControlDashboard(
         "inline-block";
 
       checkAllRetryFailedButton.textContent =
-        "Kjør lagrede feilprodukter (" +
+        "KjÃ¸r lagrede feilprodukter (" +
         String(
           lastFailedPriceCheckIds.length
         ) +
@@ -34223,7 +34614,7 @@ function renderProductControlDashboard(
             "gk_pricecheck_failed_ids_v1"
           );
         } catch (_) {
-          // Ingen handling nødvendig.
+          // Ingen handling nÃ¸dvendig.
         }
 
         checkAllFailureDetails.style.display =
@@ -34240,17 +34631,17 @@ function renderProductControlDashboard(
         rows.slice(0, 40);
 
       checkAllFailureDetails.textContent =
-        "Produkter som bør kjøres på nytt (" +
+        "Produkter som bÃ¸r kjÃ¸res pÃ¥ nytt (" +
         String(rows.length) +
         "):\n" +
         shown.map(function (row) {
           return (
-            "• " +
+            "â€¢ " +
             (
               row.name ||
               ("Produkt " + row.id)
             ) +
-            " – " +
+            " â€“ " +
             row.type +
             (
               row.error
@@ -34265,7 +34656,7 @@ function renderProductControlDashboard(
         (
           rows.length > shown.length
             ? (
-                "\n… og " +
+                "\nâ€¦ og " +
                 String(
                   rows.length -
                   shown.length
@@ -34384,7 +34775,7 @@ function renderProductControlDashboard(
             requestedLimit === "missing20"
           )
             ? (
-                "\n\nDisse produktene mangler fortsatt et godkjent pristreff. Nye avvisninger og læring brukes automatisk i denne kjøringen."
+                "\n\nDisse produktene mangler fortsatt et godkjent pristreff. Nye avvisninger og lÃ¦ring brukes automatisk i denne kjÃ¸ringen."
               )
             : "";
 
@@ -34515,7 +34906,7 @@ function renderProductControlDashboard(
         /*
          * Ett produkt per Worker-kall.
          * Dette isolerer feil til ett produkt, gir bedre margin
-         * mot Cloudflare-grenser og gjør automatisk retry tryggere.
+         * mot Cloudflare-grenser og gjÃ¸r automatisk retry tryggere.
          */
         for (
           var index = 0;
@@ -34553,7 +34944,7 @@ function renderProductControlDashboard(
             skipped,
             workerErrors,
             saveErrors,
-            "Kjører pulje " +
+            "KjÃ¸rer pulje " +
               String(batchIndex) +
               " av " +
               String(
@@ -34673,7 +35064,7 @@ function renderProductControlDashboard(
                 /*
                  * Dersom Worker stoppet tidlig/rate-limit eller av annen
                  * grunn ikke returnerte et produkt i puljen, skal produktet
-                 * stå i retry-listen i stedet for å forsvinne stille.
+                 * stÃ¥ i retry-listen i stedet for Ã¥ forsvinne stille.
                  */
                 batch.forEach(
                   function (product) {
@@ -34785,7 +35176,7 @@ function renderProductControlDashboard(
                 workerErrors,
                 saveErrors,
                 checkAllStopRequested
-                  ? "Stopper etter fullført pulje..."
+                  ? "Stopper etter fullfÃ¸rt pulje..."
                   : (
                       "Pulje " +
                       String(batchIndex) +
@@ -34871,7 +35262,7 @@ function renderProductControlDashboard(
                     String(
                       diagnosticTotals.excludedByLearning
                     ) +
-                    " ble stoppet av læring/tidligere avvisning og " +
+                    " ble stoppet av lÃ¦ring/tidligere avvisning og " +
                     String(
                       diagnosticTotals.belowMinimumConfidence
                     ) +
@@ -34907,7 +35298,7 @@ function renderProductControlDashboard(
                           item.name ||
                           "Ukjent produkt"
                         ) +
-                        " – " +
+                        " â€“ " +
                         String(
                           item.uniqueCandidates ??
                           "?"
@@ -34917,7 +35308,7 @@ function renderProductControlDashboard(
                           item.excludedByLearning ??
                           "?"
                         ) +
-                        " filtrert av læring, " +
+                        " filtrert av lÃ¦ring, " +
                         String(
                           item.belowMinimumConfidence ??
                           "?"
@@ -35081,19 +35472,19 @@ var competitors = priceCompetitors;
         function (item) {
           return (
             item.follow_up_reason ===
-            "Planlagt oppfølging er forfalt"
+            "Planlagt oppfÃ¸lging er forfalt"
           );
         }
       );
 
     var followUpSection =
       createCollapsibleSection(
-        "⏰ Prisoppfølging (" +
+        "â° PrisoppfÃ¸lging (" +
           String(
             readyPriceFollowUps.length
           ) +
-          " klare nå)",
-        "Godkjent betyr at produktkoblingen er riktig. Her kommer treff tilbake når pris, frakt eller lagerstatus endres, eller når planlagt oppfølging forfaller.",
+          " klare nÃ¥)",
+        "Godkjent betyr at produktkoblingen er riktig. Her kommer treff tilbake nÃ¥r pris, frakt eller lagerstatus endres, eller nÃ¥r planlagt oppfÃ¸lging forfaller.",
         true
       );
 
@@ -35101,7 +35492,7 @@ var competitors = priceCompetitors;
       followUpSection.body,
       [
         {
-          label: "Klare nå",
+          label: "Klare nÃ¥",
           value: String(
             readyPriceFollowUps.length
           ),
@@ -35142,7 +35533,7 @@ var competitors = priceCompetitors;
 
     var followUpIntro = el(
       "div",
-      "Velg «Behold prisen» når du ikke gjør noe nå. Produktet planlegges da på nytt etter 7, 14 eller 30 dager. Velg «Jeg har endret pris» når GolfKongen-prisen er justert."
+      "Velg Â«Behold prisenÂ» nÃ¥r du ikke gjÃ¸r noe nÃ¥. Produktet planlegges da pÃ¥ nytt etter 7, 14 eller 30 dager. Velg Â«Jeg har endret prisÂ» nÃ¥r GolfKongen-prisen er justert."
     );
 
     followUpIntro.className = "sk-note";
@@ -35207,7 +35598,7 @@ var competitors = priceCompetitors;
       "Produkt, merke eller konkurrent";
 
     addPriceFollowUpFilter(
-      "Søk",
+      "SÃ¸k",
       followUpSearch
     );
 
@@ -35218,7 +35609,7 @@ var competitors = priceCompetitors;
       {
         value: "ready",
         label:
-          "Klare til oppfølging nå"
+          "Klare til oppfÃ¸lging nÃ¥"
       },
       {
         value: "planned",
@@ -35292,7 +35683,7 @@ var competitors = priceCompetitors;
       {
         value: "priority",
         label:
-          "Viktigste oppfølging først"
+          "Viktigste oppfÃ¸lging fÃ¸rst"
       },
       {
         value: "difference-desc",
@@ -35302,12 +35693,12 @@ var competitors = priceCompetitors;
       {
         value: "next-asc",
         label:
-          "Neste dato først"
+          "Neste dato fÃ¸rst"
       },
       {
         value: "product-asc",
         label:
-          "Produktnavn A–Å"
+          "Produktnavn Aâ€“Ã…"
       }
     ].forEach(function (item) {
       addOption(
@@ -35446,7 +35837,7 @@ var competitors = priceCompetitors;
 
           item.needs_follow_up = false;
           item.follow_up_reason =
-            "Ingen oppfølging nødvendig";
+            "Ingen oppfÃ¸lging nÃ¸dvendig";
 
           localStorage.setItem(
             "sk_internal_active_tab",
@@ -35461,7 +35852,7 @@ var competitors = priceCompetitors;
             originalText;
 
           alert(
-            "Kunne ikke lagre oppfølging: " +
+            "Kunne ikke lagre oppfÃ¸lging: " +
               (
                 error.message ||
                 String(error)
@@ -35659,8 +36050,8 @@ var competitors = priceCompetitors;
         var empty = el(
           "div",
           selectedStatus === "ready"
-            ? "Ingen godkjente treff trenger oppfølging akkurat nå. De kommer tilbake når noe endres eller oppfølgingsdatoen nås."
-            : "Ingen oppfølginger passer med filtrene."
+            ? "Ingen godkjente treff trenger oppfÃ¸lging akkurat nÃ¥. De kommer tilbake nÃ¥r noe endres eller oppfÃ¸lgingsdatoen nÃ¥s."
+            : "Ingen oppfÃ¸lginger passer med filtrene."
         );
 
         empty.className = "sk-note";
@@ -35711,14 +36102,14 @@ var competitors = priceCompetitors;
           (
             item.product_brand
               ? item.product_brand +
-                " · "
+                " Â· "
               : ""
           ) +
             (
               item.competitor_name ||
               "Ukjent konkurrent"
             ) +
-            " → " +
+            " â†’ " +
             (
               item
                 .competitor_product_name ||
@@ -35741,7 +36132,7 @@ var competitors = priceCompetitors;
           item.needs_follow_up === true
             ? (
                 item.follow_up_reason ||
-                "Klar til oppfølging"
+                "Klar til oppfÃ¸lging"
               )
             : "Planlagt " +
                 formatPriceFollowUpDate(
@@ -35789,7 +36180,7 @@ var competitors = priceCompetitors;
 
         [
           {
-            label: "GolfKongen nå",
+            label: "GolfKongen nÃ¥",
             value:
               formatPriceCheckMoney(
                 item
@@ -35801,7 +36192,7 @@ var competitors = priceCompetitors;
           },
           {
             label:
-              "Konkurrent nå",
+              "Konkurrent nÃ¥",
             value:
               formatPriceCheckMoney(
                 item
@@ -35812,7 +36203,7 @@ var competitors = priceCompetitors;
                 .last_reviewed_competitor_price_inc_vat
           },
           {
-            label: "Frakt nå",
+            label: "Frakt nÃ¥",
             value:
               priceFollowUpShippingText(
                 item
@@ -35837,7 +36228,7 @@ var competitors = priceCompetitors;
                 .last_reviewed_total_inc_vat
           },
           {
-            label: "Forskjell nå",
+            label: "Forskjell nÃ¥",
             value:
               formatPriceCheckMoney(
                 item
@@ -35953,7 +36344,7 @@ var competitors = priceCompetitors;
             formatPriceFollowUpDate(
               item.next_follow_up_at
             ) +
-            " · Sist kontrollert hos konkurrent: " +
+            " Â· Sist kontrollert hos konkurrent: " +
             formatPriceFollowUpDate(
               item.checked_at
             )
@@ -36011,12 +36402,12 @@ var competitors = priceCompetitors;
 
         addFollowUpLink(
           item.golfkongen_product_url,
-          "Åpne GolfKongen-produkt"
+          "Ã…pne GolfKongen-produkt"
         );
 
         addFollowUpLink(
           item.competitor_product_url,
-          "Åpne konkurrentprodukt"
+          "Ã…pne konkurrentprodukt"
         );
 
         card.appendChild(links);
@@ -36030,7 +36421,7 @@ var competitors = priceCompetitors;
         actions.appendChild(
           createPriceFollowUpAction(
             item,
-            "Behold – 7 dager",
+            "Behold â€“ 7 dager",
             7,
             "keep_price",
             false
@@ -36040,7 +36431,7 @@ var competitors = priceCompetitors;
         actions.appendChild(
           createPriceFollowUpAction(
             item,
-            "Behold – 14 dager",
+            "Behold â€“ 14 dager",
             14,
             "keep_price",
             true
@@ -36050,7 +36441,7 @@ var competitors = priceCompetitors;
         actions.appendChild(
           createPriceFollowUpAction(
             item,
-            "Behold – 30 dager",
+            "Behold â€“ 30 dager",
             30,
             "keep_price",
             false
@@ -36060,7 +36451,7 @@ var competitors = priceCompetitors;
         actions.appendChild(
           createPriceFollowUpAction(
             item,
-            "Jeg har endret pris – 14 dager",
+            "Jeg har endret pris â€“ 14 dager",
             14,
             "price_changed",
             false
@@ -36096,8 +36487,8 @@ var competitors = priceCompetitors;
 
     var suggestionSection =
       createCollapsibleSection(
-        "📋 Prisforslag og koblinger",
-        "Prioriter produkter som mangler godkjent konkurrenttreff. Høy confidence betyr ikke automatisk at treffet er riktig.",
+        "ðŸ“‹ Prisforslag og koblinger",
+        "Prioriter produkter som mangler godkjent konkurrenttreff. HÃ¸y confidence betyr ikke automatisk at treffet er riktig.",
         true
       );
 
@@ -36178,7 +36569,7 @@ var competitors = priceCompetitors;
         [
           {
             label:
-              "Venter på vurdering",
+              "Venter pÃ¥ vurdering",
             value:
               String(waiting.length),
             tone:
@@ -36188,7 +36579,7 @@ var competitors = priceCompetitors;
           },
           {
             label:
-              "Kan gi første pristreff",
+              "Kan gi fÃ¸rste pristreff",
             value:
               String(
                 Object.keys(
@@ -36269,7 +36660,7 @@ var competitors = priceCompetitors;
       "Produkt, merke eller konkurrent";
 
     addSuggestionFilter(
-      "Søk",
+      "SÃ¸k",
       suggestionSearch
     );
 
@@ -36279,7 +36670,7 @@ var competitors = priceCompetitors;
     [
       {
         value: "probable",
-        label: "Venter på kontroll"
+        label: "Venter pÃ¥ kontroll"
       },
       {
         value: "confirmed",
@@ -36351,19 +36742,19 @@ var competitors = priceCompetitors;
       },
       {
         value: "95-99",
-        label: "95–99 %"
+        label: "95â€“99 %"
       },
       {
         value: "90-94",
-        label: "90–94 %"
+        label: "90â€“94 %"
       },
       {
         value: "80-89",
-        label: "80–89 %"
+        label: "80â€“89 %"
       },
       {
         value: "70-79",
-        label: "70–79 %"
+        label: "70â€“79 %"
       },
       {
         value: "under-70",
@@ -36492,17 +36883,17 @@ var competitors = priceCompetitors;
       {
         value: "difference-desc",
         label:
-          "Størst avvik – GolfKongen dyrere"
+          "StÃ¸rst avvik â€“ GolfKongen dyrere"
       },
       {
         value: "absolute-desc",
         label:
-          "Størst absolutt prisavvik"
+          "StÃ¸rst absolutt prisavvik"
       },
       {
         value: "confidence-desc",
         label:
-          "Høyeste treffsikkerhet"
+          "HÃ¸yeste treffsikkerhet"
       },
       {
         value: "confidence-asc",
@@ -36517,7 +36908,7 @@ var competitors = priceCompetitors;
       {
         value: "product-asc",
         label:
-          "Produktnavn A–Å"
+          "Produktnavn Aâ€“Ã…"
       },
       {
         value: "checked-desc",
@@ -36980,7 +37371,7 @@ var competitors = priceCompetitors;
     ) {
       if (!reviewReasons.length) {
         alert(
-          "Fant ingen avvisningsgrunner. Last siden på nytt og prøv igjen."
+          "Fant ingen avvisningsgrunner. Last siden pÃ¥ nytt og prÃ¸v igjen."
         );
 
         return;
@@ -37029,7 +37420,7 @@ var competitors = priceCompetitors;
           suggestion.product_name ||
           "Ukjent GolfKongen-produkt"
         ) +
-          " → " +
+          " â†’ " +
           (
             suggestion
               .competitor_product_name ||
@@ -37088,7 +37479,7 @@ var competitors = priceCompetitors;
 
       comment.rows = 4;
       comment.placeholder =
-        "Valgfri forklaring. Påkrevd når du velger Annet.";
+        "Valgfri forklaring. PÃ¥krevd nÃ¥r du velger Annet.";
 
       addField(
         dialog,
@@ -37124,12 +37515,12 @@ var competitors = priceCompetitors;
 
       var learningTitle = el(
         "strong",
-        "Bruk som læringseksempel"
+        "Bruk som lÃ¦ringseksempel"
       );
 
       var learningHelp = el(
         "div",
-        "Dette lagres som et negativt eksempel for produktet. Det påvirker ikke søket før Worker-læringen kobles inn."
+        "Dette lagres som et negativt eksempel for produktet. Det pÃ¥virker ikke sÃ¸ket fÃ¸r Worker-lÃ¦ringen kobles inn."
       );
 
       learningHelp.style.marginTop =
@@ -37263,7 +37654,7 @@ var competitors = priceCompetitors;
           !commentValue
         ) {
           alert(
-            "Skriv en kommentar når årsaken er Annet."
+            "Skriv en kommentar nÃ¥r Ã¥rsaken er Annet."
           );
 
           return;
@@ -37330,7 +37721,7 @@ var competitors = priceCompetitors;
             }
 
             /*
-             * Prioriteringsfilteret brukes bare når vi
+             * Prioriteringsfilteret brukes bare nÃ¥r vi
              * vurderer probable-forslag.
              */
             if (
@@ -37445,7 +37836,7 @@ var competitors = priceCompetitors;
         var empty = el(
           "div",
           selectedStatus === "probable"
-            ? "Ingen forslag venter på kontroll med valgte filtre."
+            ? "Ingen forslag venter pÃ¥ kontroll med valgte filtre."
             : "Ingen forslag med valgte filtre."
         );
 
@@ -37476,7 +37867,7 @@ var competitors = priceCompetitors;
             (
               suggestion.product_brand
                 ? suggestion.product_brand +
-                  " – "
+                  " â€“ "
                 : ""
             ) +
               (
@@ -37496,7 +37887,7 @@ var competitors = priceCompetitors;
               suggestion.competitor_name ||
               "Ukjent konkurrent"
             ) +
-              " · " +
+              " Â· " +
               (
                 suggestion
                   .competitor_product_name ||
@@ -37564,7 +37955,7 @@ var competitors = priceCompetitors;
           ) {
             var firstMatchBadge = el(
               "div",
-              "⭐ Kan bli første godkjente pristreff"
+              "â­ Kan bli fÃ¸rste godkjente pristreff"
             );
 
             firstMatchBadge.style.display =
@@ -37643,7 +38034,7 @@ var competitors = priceCompetitors;
               reviewBox.appendChild(
                 el(
                   "div",
-                  "✓ Lagret som læringseksempel"
+                  "âœ“ Lagret som lÃ¦ringseksempel"
                 )
               );
             }
@@ -37842,7 +38233,7 @@ var competitors = priceCompetitors;
           ) {
             var golfkongenLink = el(
               "a",
-              "Åpne GolfKongen-produkt"
+              "Ã…pne GolfKongen-produkt"
             );
 
             golfkongenLink.href =
@@ -37880,7 +38271,7 @@ var competitors = priceCompetitors;
           ) {
             var competitorLink = el(
               "a",
-              "Åpne konkurrentprodukt"
+              "Ã…pne konkurrentprodukt"
             );
 
             competitorLink.href =
@@ -38144,10 +38535,10 @@ var competitors = priceCompetitors;
 
     createPageHeader(
       learningPane,
-      "Læring fra avvisninger",
-      "Avvisninger brukes automatisk ved neste prissjekk. Eksisterende forslag blir ikke rescoret før produktet kjøres på nytt.",
+      "LÃ¦ring fra avvisninger",
+      "Avvisninger brukes automatisk ved neste prissjekk. Eksisterende forslag blir ikke rescoret fÃ¸r produktet kjÃ¸res pÃ¥ nytt.",
       String(learningUsedCount) +
-        " læringseksempler"
+        " lÃ¦ringseksempler"
     );
 
     addProStatGrid(
@@ -38164,7 +38555,7 @@ var competitors = priceCompetitors;
         },
         {
           label:
-            "Brukes til læring",
+            "Brukes til lÃ¦ring",
           value:
             String(
               learningUsedCount
@@ -38202,7 +38593,7 @@ var competitors = priceCompetitors;
 
     var learningInfo = el(
       "div",
-      "Slik brukes læringen: eksakte tidligere avviste konkurrentlenker blokkeres, og strukturerte grunner som feil plast, feil utgave/run og feil spiller/år gir ekstra scoretrekk på lignende kandidater."
+      "Slik brukes lÃ¦ringen: eksakte tidligere avviste konkurrentlenker blokkeres, og strukturerte grunner som feil plast, feil utgave/run og feil spiller/Ã¥r gir ekstra scoretrekk pÃ¥ lignende kandidater."
     );
 
     learningInfo.className =
@@ -38263,7 +38654,7 @@ var competitors = priceCompetitors;
     var learningHistory =
       createCollapsibleSection(
         "Siste avvisninger",
-        "De nyeste eksemplene systemet kan bruke for å unngå samme type feil senere.",
+        "De nyeste eksemplene systemet kan bruke for Ã¥ unngÃ¥ samme type feil senere.",
         true
       );
 
@@ -38282,7 +38673,7 @@ var competitors = priceCompetitors;
                 item.product_name ||
                 "Ukjent GolfKongen-produkt"
               ) +
-                " → " +
+                " â†’ " +
                 (
                   item.competitor_product_name ||
                   "Ukjent konkurrentprodukt"
@@ -38296,13 +38687,13 @@ var competitors = priceCompetitors;
               item.competitor_name ||
               "Ukjent konkurrent"
             ) +
-              " · " +
+              " Â· " +
               (
                 item.review_reason_label ||
                 item.review_reason_code ||
                 "Annet"
               ) +
-              " · Treffscore " +
+              " Â· Treffscore " +
               String(
                 item.match_confidence ??
                 "-"
@@ -38348,14 +38739,14 @@ var competitors = priceCompetitors;
     );
 
 var competitorSection = createCollapsibleSection(
-      "🏪 Konkurrentbutikker",
+      "ðŸª Konkurrentbutikker",
       "Legg inn norske butikker som skal brukes i prissammenligningen.",
       true
     );
 
     var competitorIntro = el(
       "div",
-      "Konkurrentbutikker administreres her. Brukte varer er som standard ikke med i markedsanalyse. En butikk kan fortsatt sammenlignes på nye varer selv om den også har et bruktmarked."
+      "Konkurrentbutikker administreres her. Brukte varer er som standard ikke med i markedsanalyse. En butikk kan fortsatt sammenlignes pÃ¥ nye varer selv om den ogsÃ¥ har et bruktmarked."
     );
     competitorIntro.className = "sk-note";
     competitorIntro.style.marginBottom = "14px";
@@ -38381,7 +38772,7 @@ var competitorSection = createCollapsibleSection(
 
     addField(
       competitorForm,
-      "Navn på konkurrent",
+      "Navn pÃ¥ konkurrent",
       competitorNameInput
     );
 
@@ -38667,7 +39058,7 @@ var competitorSection = createCollapsibleSection(
       if (!competitors.length) {
         var empty = el(
           "p",
-          "Ingen konkurrentbutikker er registrert ennå."
+          "Ingen konkurrentbutikker er registrert ennÃ¥."
         );
         empty.style.color = "#64748b";
         competitorList.appendChild(empty);
@@ -38765,8 +39156,8 @@ var competitorSection = createCollapsibleSection(
                   competitor
                     .include_used_in_analysis ===
                     true
-                    ? "Med · brukt tillatt"
-                    : "Med · kun nytt"
+                    ? "Med Â· brukt tillatt"
+                    : "Med Â· kun nytt"
                 )
               : "Ikke med"
           );
@@ -38861,7 +39252,7 @@ var competitorSection = createCollapsibleSection(
       var baseUrl = competitorUrlInput.value.trim();
 
       if (!name) {
-        alert("Skriv inn navn på konkurrenten.");
+        alert("Skriv inn navn pÃ¥ konkurrenten.");
         return;
       }
 
@@ -38870,7 +39261,7 @@ var competitorSection = createCollapsibleSection(
         !/^https?:\/\//i.test(baseUrl)
       ) {
         alert(
-          "Nettadressen må starte med https:// eller http://"
+          "Nettadressen mÃ¥ starte med https:// eller http://"
         );
         return;
       }
@@ -39023,7 +39414,7 @@ var competitorSection = createCollapsibleSection(
 
     var shippingHelp = el(
       "div",
-      "Produktprisen er hovedsammenligningen. Frakt vises separat og legges bare til når regelen er verifisert. Legg frakt inn én gang per konkurrent/frakttype – aldri per produkt."
+      "Produktprisen er hovedsammenligningen. Frakt vises separat og legges bare til nÃ¥r regelen er verifisert. Legg frakt inn Ã©n gang per konkurrent/frakttype â€“ aldri per produkt."
     );
     shippingHelp.className = "sk-note";
     shippingHelp.style.marginBottom = "14px";
@@ -39054,14 +39445,14 @@ var competitorSection = createCollapsibleSection(
 
     var shippingClassSelect = el("select");
     addOption(shippingClassSelect, "disc", "Disc");
-    addOption(shippingClassSelect, "small", "Lite tilbehør");
+    addOption(shippingClassSelect, "small", "Lite tilbehÃ¸r");
     addOption(shippingClassSelect, "bag", "Bag / sekk");
     addOption(shippingClassSelect, "basket", "Kurv");
     addOption(shippingClassSelect, "all", "Alle varer");
 
     var shippingMethodInput = el("input");
     shippingMethodInput.type = "text";
-    shippingMethodInput.placeholder = "F.eks. Posten – Pakke i postkassen";
+    shippingMethodInput.placeholder = "F.eks. Posten â€“ Pakke i postkassen";
 
     var shippingFixedInput = el("input");
     shippingFixedInput.type = "number";
@@ -39084,7 +39475,7 @@ var competitorSection = createCollapsibleSection(
     shippingNotesInput.placeholder = "Valgfri kommentar";
 
     addField(shippingForm, "Konkurrent", shippingCompetitorSelect);
-    addField(shippingForm, "Navn på regel", shippingRuleNameInput);
+    addField(shippingForm, "Navn pÃ¥ regel", shippingRuleNameInput);
     addField(shippingForm, "Fraktklasse", shippingClassSelect);
     addField(shippingForm, "Fraktmetode", shippingMethodInput);
     addField(shippingForm, "Fast frakt inkl. mva", shippingFixedInput);
@@ -39332,7 +39723,7 @@ var competitorSection = createCollapsibleSection(
       }
 
       if (!ruleName) {
-        alert("Skriv inn navn på fraktregelen.");
+        alert("Skriv inn navn pÃ¥ fraktregelen.");
         return;
       }
 
@@ -39342,7 +39733,7 @@ var competitorSection = createCollapsibleSection(
         freeFrom === null
       ) {
         alert(
-          "En verifisert regel må ha fast frakt og/eller fri-fraktgrense."
+          "En verifisert regel mÃ¥ ha fast frakt og/eller fri-fraktgrense."
         );
         return;
       }
@@ -39384,7 +39775,7 @@ var competitorSection = createCollapsibleSection(
         );
 
         alert(
-          "Fraktregelen er lagret. Kjør prissjekken på nytt for at nye totalsummer skal bruke regelen."
+          "Fraktregelen er lagret. KjÃ¸r prissjekken pÃ¥ nytt for at nye totalsummer skal bruke regelen."
         );
         window.location.reload();
       });
@@ -39438,7 +39829,7 @@ var competitorSection = createCollapsibleSection(
     createPageHeader(
       overviewPane,
       "Prisoversikt",
-      "Varepris styrer posisjon og råd. Markedsrådet bruker medianen av godkjente konkurrentpriser; dersom alle konkurrentene har samme pris anbefales den samme prisen.",
+      "Varepris styrer posisjon og rÃ¥d. MarkedsrÃ¥det bruker medianen av godkjente konkurrentpriser; dersom alle konkurrentene har samme pris anbefales den samme prisen.",
       String(
         overviewRows.length
       ) +
@@ -39606,7 +39997,7 @@ var competitorSection = createCollapsibleSection(
         },
         {
           label:
-            "Ligger på ønsket mål",
+            "Ligger pÃ¥ Ã¸nsket mÃ¥l",
           value:
             String(
               strategyOnTarget
@@ -39615,7 +40006,7 @@ var competitorSection = createCollapsibleSection(
         },
         {
           label:
-            "Bør justeres",
+            "BÃ¸r justeres",
           value:
             String(
               strategyNeedsChange
@@ -39653,20 +40044,20 @@ var competitorSection = createCollapsibleSection(
       ["all", "Alle valgte strategier"],
       [
         "needs",
-        "Kun de som bør justeres"
+        "Kun de som bÃ¸r justeres"
       ],
       [
         "ok",
-        "Kun de som ligger på mål"
+        "Kun de som ligger pÃ¥ mÃ¥l"
       ],
       [
         "cheapest",
-        "Mål: billigst"
+        "MÃ¥l: billigst"
       ],
-      ["middle", "Mål: midten"],
+      ["middle", "MÃ¥l: midten"],
       [
         "most_expensive",
-        "Mål: dyrest"
+        "MÃ¥l: dyrest"
       ]
     ].forEach(
       function (item) {
@@ -39796,7 +40187,7 @@ var competitorSection = createCollapsibleSection(
               }
           },
           {
-            label: "Mål",
+            label: "MÃ¥l",
             value:
               function (item) {
                 return strategyLabel(
@@ -39805,7 +40196,7 @@ var competitorSection = createCollapsibleSection(
               }
           },
           {
-            label: "GK nå",
+            label: "GK nÃ¥",
             value:
               function (item) {
                 return (
@@ -39820,7 +40211,7 @@ var competitorSection = createCollapsibleSection(
             align: "right"
           },
           {
-            label: "Målpris",
+            label: "MÃ¥lpris",
             value:
               function (item) {
                 return (
@@ -39866,7 +40257,7 @@ var competitorSection = createCollapsibleSection(
 
                 td.textContent =
                   item.onTarget
-                    ? "På mål"
+                    ? "PÃ¥ mÃ¥l"
                     : (
                         item.advice &&
                         item.advice
@@ -39905,7 +40296,7 @@ var competitorSection = createCollapsibleSection(
                                             )
                                           )
                                         )
-                                      : "Treffer mål"
+                                      : "Treffer mÃ¥l"
                                   )
                             )
                           : "For lite data"
@@ -40011,7 +40402,7 @@ var competitorSection = createCollapsibleSection(
       [
         {
           label:
-            "Markedsråd: gå ned",
+            "MarkedsrÃ¥d: gÃ¥ ned",
           value:
             String(adviceDown),
           tone:
@@ -40021,14 +40412,14 @@ var competitorSection = createCollapsibleSection(
         },
         {
           label:
-            "Markedsråd: gå opp",
+            "MarkedsrÃ¥d: gÃ¥ opp",
           value:
             String(adviceUp),
           tone: "ok"
         },
         {
           label:
-            "Markedsråd: behold",
+            "MarkedsrÃ¥d: behold",
           value:
             String(adviceStay),
           tone: "ok"
@@ -40064,7 +40455,7 @@ var competitorSection = createCollapsibleSection(
     overviewSearch.type =
       "search";
     overviewSearch.placeholder =
-      "Søk produkt eller merke";
+      "SÃ¸k produkt eller merke";
 
     var overviewStatus =
       el("select");
@@ -40154,9 +40545,9 @@ var competitorSection = createCollapsibleSection(
       ],
       [
         "advice-change",
-        "Største anbefalte prisendring"
+        "StÃ¸rste anbefalte prisendring"
       ],
-      ["product", "Produkt A–Å"],
+      ["product", "Produkt Aâ€“Ã…"],
       ["competitor", "Konkurrent"]
     ].forEach(
       function (item) {
@@ -40404,7 +40795,7 @@ var competitorSection = createCollapsibleSection(
         "Konkurrent",
         "Konk. vare",
         "Forskjell",
-        "Markedsråd",
+        "MarkedsrÃ¥d",
         "Status",
         ""
       ].forEach(
@@ -40540,7 +40931,7 @@ var competitorSection = createCollapsibleSection(
                 .action === "down"
             ) {
               adviceText =
-                "↓ " +
+                "â†“ " +
                 formatPriceCheckMoney(
                   Math.abs(
                     marketRecommendation
@@ -40560,7 +40951,7 @@ var competitorSection = createCollapsibleSection(
                 .action === "up"
             ) {
               adviceText =
-                "↑ " +
+                "â†‘ " +
                 formatPriceCheckMoney(
                   marketRecommendation
                     .delta
@@ -40759,7 +41150,7 @@ var competitorSection = createCollapsibleSection(
               var link =
                 el(
                   "a",
-                  "Åpne produkt"
+                  "Ã…pne produkt"
                 );
 
               link.href = url;
@@ -41021,7 +41412,7 @@ var competitorSection = createCollapsibleSection(
                   .action === "down"
               ) {
                 directionText =
-                  "Forslag: gå ned " +
+                  "Forslag: gÃ¥ ned " +
                   formatPriceCheckMoney(
                     Math.abs(
                       generalAdvice
@@ -41039,7 +41430,7 @@ var competitorSection = createCollapsibleSection(
                   .action === "up"
               ) {
                 directionText =
-                  "Forslag: gå opp " +
+                  "Forslag: gÃ¥ opp " +
                   formatPriceCheckMoney(
                     generalAdvice
                       .delta
@@ -41073,7 +41464,7 @@ var competitorSection = createCollapsibleSection(
             marketBox.appendChild(
               el(
                 "div",
-                "For lite godkjent konkurrentdata til å plassere produktet i markedet."
+                "For lite godkjent konkurrentdata til Ã¥ plassere produktet i markedet."
               )
             );
           }
@@ -41091,14 +41482,14 @@ var competitorSection = createCollapsibleSection(
           strategyBox.appendChild(
             el(
               "strong",
-              "Ønsket prisposisjon"
+              "Ã˜nsket prisposisjon"
             )
           );
 
           strategyBox.appendChild(
             el(
               "div",
-              "Velg hvor du ønsker at GolfKongen skal ligge for dette produktet. Valget lagres og kan endres senere."
+              "Velg hvor du Ã¸nsker at GolfKongen skal ligge for dette produktet. Valget lagres og kan endres senere."
             )
           );
 
@@ -41123,15 +41514,15 @@ var competitorSection = createCollapsibleSection(
             [
               [
                 "cheapest",
-                "✓ Billigst"
+                "âœ“ Billigst"
               ],
               [
                 "middle",
-                "✓ Midten"
+                "âœ“ Midten"
               ],
               [
                 "most_expensive",
-                "✓ Dyrest"
+                "âœ“ Dyrest"
               ]
             ].forEach(
               function (item) {
@@ -41184,7 +41575,7 @@ var competitorSection = createCollapsibleSection(
 
             if (!strategy) {
               strategyAdviceBox.textContent =
-                "Ingen ønsket posisjon er valgt ennå. Det generelle markedsrådet over bruker markedsmidten.";
+                "Ingen Ã¸nsket posisjon er valgt ennÃ¥. Det generelle markedsrÃ¥det over bruker markedsmidten.";
               return;
             }
 
@@ -41231,7 +41622,7 @@ var competitorSection = createCollapsibleSection(
           historyBox.appendChild(
             el(
               "div",
-              "Grafen viser varepris for GolfKongen og de konkurrentkoblingene som er godkjent nå. Frakt er ikke med."
+              "Grafen viser varepris for GolfKongen og de konkurrentkoblingene som er godkjent nÃ¥. Frakt er ikke med."
             )
           );
 
@@ -41294,14 +41685,14 @@ var competitorSection = createCollapsibleSection(
               true;
 
             loadHistoryButton.textContent =
-              "Laster…";
+              "Lasterâ€¦";
 
             clear(historyHost);
 
             var loading =
               el(
                 "div",
-                "Henter prishistorikk…"
+                "Henter prishistorikkâ€¦"
               );
 
             loading.className =
@@ -41337,7 +41728,7 @@ var competitorSection = createCollapsibleSection(
                     false;
 
                   loadHistoryButton.textContent =
-                    "Prøv igjen";
+                    "PrÃ¸v igjen";
 
                   clear(
                     historyHost
@@ -41398,7 +41789,7 @@ var competitorSection = createCollapsibleSection(
           var priceEditIntro =
             el(
               "div",
-              "Prisendringen skjer først etter kontroll og bekreftelse. Har produktet aktive varianter, beregnes hovedprisen automatisk som laveste positive aktive variantpris."
+              "Prisendringen skjer fÃ¸rst etter kontroll og bekreftelse. Har produktet aktive varianter, beregnes hovedprisen automatisk som laveste positive aktive variantpris."
             );
 
           priceEditBox.appendChild(
@@ -41407,7 +41798,7 @@ var competitorSection = createCollapsibleSection(
 
           var openPriceEditor =
             createPrimaryButton(
-              "Åpne prisendring"
+              "Ã…pne prisendring"
             );
 
           openPriceEditor.style.marginTop =
@@ -41512,13 +41903,13 @@ var competitorSection = createCollapsibleSection(
                 "span",
                 selectedStrategy
                   ? (
-                      "Målpris fra strategi (" +
+                      "MÃ¥lpris fra strategi (" +
                       strategyLabel(
                         selectedStrategy
                       ) +
                       ")"
                     )
-                  : "Generell anbefalt målpris"
+                  : "Generell anbefalt mÃ¥lpris"
               )
             );
 
@@ -41599,7 +41990,7 @@ var competitorSection = createCollapsibleSection(
 
               var setAllButton =
                 createButton(
-                  "Bruk målpris på alle aktive"
+                  "Bruk mÃ¥lpris pÃ¥ alle aktive"
                 );
 
               setAllButton.style.margin =
@@ -41660,7 +42051,7 @@ var competitorSection = createCollapsibleSection(
                   var currentCell =
                     el(
                       "div",
-                      "Nå " +
+                      "NÃ¥ " +
                         formatPriceCheckMoney(
                           variant.price
                         )
@@ -41738,7 +42129,7 @@ var competitorSection = createCollapsibleSection(
                     target <= 0
                   ) {
                     alert(
-                      "Skriv inn en gyldig målpris først."
+                      "Skriv inn en gyldig mÃ¥lpris fÃ¸rst."
                     );
                     return;
                   }
@@ -41980,7 +42371,7 @@ var competitorSection = createCollapsibleSection(
                   : 0;
 
               var text =
-                "Hovedpris nå: " +
+                "Hovedpris nÃ¥: " +
                 formatPriceCheckMoney(
                   product
                     .current_main_price
@@ -42045,7 +42436,7 @@ var competitorSection = createCollapsibleSection(
                     .length
                 ) {
                   alert(
-                    "Velg minst én aktiv variant som skal endres."
+                    "Velg minst Ã©n aktiv variant som skal endres."
                   );
                   return;
                 }
@@ -42054,7 +42445,7 @@ var competitorSection = createCollapsibleSection(
                   true;
 
                 applyButton.textContent =
-                  "Kontrollerer…";
+                  "Kontrollererâ€¦";
 
                 previewProductPriceChange(
                   payload
@@ -42077,7 +42468,7 @@ var competitorSection = createCollapsibleSection(
                             changes
                               .old_main_price
                           ) +
-                          " → " +
+                          " â†’ " +
                           formatPriceCheckMoney(
                             changes
                               .new_main_price
@@ -42106,7 +42497,7 @@ var competitorSection = createCollapsibleSection(
                                 change
                                   .old_price
                               ) +
-                              " → " +
+                              " â†’ " +
                               formatPriceCheckMoney(
                                 change
                                   .new_price
@@ -42134,7 +42525,7 @@ var competitorSection = createCollapsibleSection(
                       }
 
                       applyButton.textContent =
-                        "Oppdaterer Quickbutik…";
+                        "Oppdaterer Quickbutikâ€¦";
 
                       return applyProductPriceChange(
                         payload
@@ -42230,7 +42621,7 @@ var competitorSection = createCollapsibleSection(
                   "none";
 
                 openPriceEditor.textContent =
-                  "Åpne prisendring";
+                  "Ã…pne prisendring";
                 return;
               }
 
@@ -42253,7 +42644,7 @@ var competitorSection = createCollapsibleSection(
               var loading =
                 el(
                   "div",
-                  "Henter hovedpris og varianter direkte fra Quickbutik…"
+                  "Henter hovedpris og varianter direkte fra Quickbutikâ€¦"
                 );
 
               loading.className =
@@ -42289,7 +42680,7 @@ var competitorSection = createCollapsibleSection(
                     var errorNote =
                       el(
                         "div",
-                        "Kunne ikke åpne prisendring: " +
+                        "Kunne ikke Ã¥pne prisendring: " +
                           skReadableError(
                             error
                           )
@@ -42372,7 +42763,7 @@ var competitorSection = createCollapsibleSection(
                     match.competitor_name ||
                     "Konkurrent"
                   ) +
-                    " · " +
+                    " Â· " +
                     formatPriceCheckMoney(
                       match
                         .competitor_price_inc_vat
@@ -42665,7 +43056,7 @@ function skInventoryBucket(row) {
   if (
     group.indexOf("tilbeh") >= 0
   ) {
-    return "Discgolf-tilbehør";
+    return "Discgolf-tilbehÃ¸r";
   }
 
   return "Annet utstyr";
@@ -42800,7 +43191,7 @@ function renderInventoryAnalytics(
   createPageHeader(
     parent,
     "Lageranalyse",
-    "Se hva som bør kjøpes inn, hva som står stille og hvor kapital er bundet. Tekniske lagerfeil ligger i Kontrollsenter.",
+    "Se hva som bÃ¸r kjÃ¸pes inn, hva som stÃ¥r stille og hvor kapital er bundet. Tekniske lagerfeil ligger i Kontrollsenter.",
     "Varer og lager"
   );
 
@@ -42818,8 +43209,8 @@ function renderInventoryAnalytics(
 
   var tabDefinitions = [
     ["low", "Lavt / utsolgt"],
-    ["purchase", "Kjøp inn"],
-    ["dead", "Dødt lager"],
+    ["purchase", "KjÃ¸p inn"],
+    ["dead", "DÃ¸dt lager"],
     ["value", "Lagerverdi"]
   ];
 
@@ -42860,8 +43251,8 @@ function renderInventoryAnalytics(
       ["Discer", "Discer"],
       ["Sekker", "Sekker"],
       [
-        "Discgolf-tilbehør",
-        "Discgolf-tilbehør"
+        "Discgolf-tilbehÃ¸r",
+        "Discgolf-tilbehÃ¸r"
       ],
       [
         "Golfutstyr",
@@ -43027,8 +43418,8 @@ function renderInventoryAnalytics(
           {
             label:
               isEx
-                ? "Innkjøpsverdi eks. MVA"
-                : "Innkjøpsverdi inkl. MVA",
+                ? "InnkjÃ¸psverdi eks. MVA"
+                : "InnkjÃ¸psverdi inkl. MVA",
             value:
               skFormatMoney(
                 purchaseValue
@@ -43062,7 +43453,7 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Enheter på lager",
+              "Enheter pÃ¥ lager",
             value:
               String(
                 Math.round(units)
@@ -43077,12 +43468,12 @@ function renderInventoryAnalytics(
           "div",
           isEx
             ? (
-                "Potensiell bruttofortjeneste er utsalgsverdi minus innkjøpsverdi eks. MVA. " +
-                "Tallet er før frakt, betalingskostnader, rabatter og andre kostnader."
+                "Potensiell bruttofortjeneste er utsalgsverdi minus innkjÃ¸psverdi eks. MVA. " +
+                "Tallet er fÃ¸r frakt, betalingskostnader, rabatter og andre kostnader."
               )
             : (
                 "Inkl. MVA viser butikkverdien av lageret. Prisforskjellen inkl. MVA er ikke det samme som fortjeneste. " +
-                "Velg «Verdier eks. MVA» for økonomisk bruttofortjeneste før frakt, betalingskostnader og andre kostnader."
+                "Velg Â«Verdier eks. MVAÂ» for Ã¸konomisk bruttofortjeneste fÃ¸r frakt, betalingskostnader og andre kostnader."
               )
         );
 
@@ -43139,8 +43530,8 @@ function renderInventoryAnalytics(
           {
             label:
               isEx
-                ? "Innkjøpsverdi eks. MVA"
-                : "Innkjøpsverdi inkl. MVA",
+                ? "InnkjÃ¸psverdi eks. MVA"
+                : "InnkjÃ¸psverdi inkl. MVA",
             value:
               function (row) {
                 return row[
@@ -43267,7 +43658,7 @@ function renderInventoryAnalytics(
         [
           {
             label:
-              "Populære med lavt lager",
+              "PopulÃ¦re med lavt lager",
             value:
               String(low.length),
             tone:
@@ -43277,7 +43668,7 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "0–7 lagerdager",
+              "0â€“7 lagerdager",
             value:
               String(
                 low.filter(
@@ -43324,7 +43715,7 @@ function renderInventoryAnalytics(
         el(
           "div",
           hideGolf.checked
-            ? "Golfutstyr er skjult fordi det ikke skal fylles opp igjen. Slå av valget for å se det."
+            ? "Golfutstyr er skjult fordi det ikke skal fylles opp igjen. SlÃ¥ av valget for Ã¥ se det."
             : "Golfutstyr er med i listen."
         );
 
@@ -43369,14 +43760,14 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Foreslå kjøp",
+              "ForeslÃ¥ kjÃ¸p",
             key:
               "suggested_purchase_qty_60d",
             align: "right"
           }
         ],
         low,
-        "Ingen populære produkter er klassifisert som snart utsolgt."
+        "Ingen populÃ¦re produkter er klassifisert som snart utsolgt."
       );
     }
 
@@ -43471,7 +43862,7 @@ function renderInventoryAnalytics(
         [
           {
             label:
-              "Døde produkter",
+              "DÃ¸de produkter",
             value:
               String(
                 dead.length
@@ -43483,7 +43874,7 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Bundet innkjøpsverdi",
+              "Bundet innkjÃ¸psverdi",
             value:
               skFormatMoney(
                 boundValue
@@ -43531,7 +43922,7 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Innkjøpsverdi",
+              "InnkjÃ¸psverdi",
             key:
               "stock_purchase_value_inc_vat",
             format: "money",
@@ -43539,7 +43930,7 @@ function renderInventoryAnalytics(
           }
         ],
         dead,
-        "Ingen døde produkter i valgt periode."
+        "Ingen dÃ¸de produkter i valgt periode."
       );
     }
 
@@ -43643,7 +44034,7 @@ function renderInventoryAnalytics(
         [
           {
             label:
-              "Innkjøpsforslag",
+              "InnkjÃ¸psforslag",
             value:
               String(
                 suggestions.length
@@ -43655,7 +44046,7 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Foreslåtte enheter",
+              "ForeslÃ¥tte enheter",
             value:
               String(
                 suggestions.reduce(
@@ -43684,8 +44075,8 @@ function renderInventoryAnalytics(
         el(
           "div",
           hideGolf.checked
-            ? "Golfutstyr er skjult fra innkjøpsforslag fordi det ikke skal fylles opp igjen. Slå av valget for å se det."
-            : "Golfutstyr er med i innkjøpsforslagene."
+            ? "Golfutstyr er skjult fra innkjÃ¸psforslag fordi det ikke skal fylles opp igjen. SlÃ¥ av valget for Ã¥ se det."
+            : "Golfutstyr er med i innkjÃ¸psforslagene."
         );
 
       info.className =
@@ -43711,7 +44102,7 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Leverandør",
+              "LeverandÃ¸r",
             value:
               function (row) {
                 return (
@@ -43751,14 +44142,14 @@ function renderInventoryAnalytics(
           },
           {
             label:
-              "Foreslå kjøp",
+              "ForeslÃ¥ kjÃ¸p",
             key:
               "suggested_purchase_qty_60d",
             align: "right"
           }
         ],
         suggestions,
-        "Ingen innkjøpsforslag akkurat nå."
+        "Ingen innkjÃ¸psforslag akkurat nÃ¥."
       );
     }
 
@@ -43859,7 +44250,7 @@ function renderInventoryAnalytics(
                   0
                 ) === 0
               ) {
-                return "Populært produkt er utsolgt";
+                return "PopulÃ¦rt produkt er utsolgt";
               }
 
               return "Lagerverdi ser ulogisk ut";
@@ -43910,8 +44301,8 @@ function renderInventoryAnalytics(
 
   var syncSection =
     createCollapsibleSection(
-      "🔄 Oppdater salgsgrunnlag",
-      "Henter betalte ordre fra Quickbutik og bruker dem til salgstakt, dødt lager og innkjøpsforslag.",
+      "ðŸ”„ Oppdater salgsgrunnlag",
+      "Henter betalte ordre fra Quickbutik og bruker dem til salgstakt, dÃ¸dt lager og innkjÃ¸psforslag.",
       false
     );
 
@@ -43972,11 +44363,11 @@ function renderInventoryAnalytics(
     function () {
       syncButton.disabled = true;
       syncButton.textContent =
-        "Synker…";
+        "Synkerâ€¦";
       syncStatus.style.display =
         "block";
       syncStatus.textContent =
-        "Starter synk…";
+        "Starter synkâ€¦";
 
       sb.auth.getSession()
         .then(
@@ -44063,11 +44454,11 @@ function renderInventoryAnalytics(
                     syncStatus.textContent =
                       "Pulje " +
                       String(batches) +
-                      " · " +
+                      " Â· " +
                       String(
                         totalOrders
                       ) +
-                      " ordre · " +
+                      " ordre Â· " +
                       String(
                         totalItems
                       ) +
@@ -44105,7 +44496,7 @@ function renderInventoryAnalytics(
               "Synk salgsdata";
 
             syncStatus.textContent =
-              "Salgsgrunnlaget er oppdatert. Laster siden på nytt…";
+              "Salgsgrunnlaget er oppdatert. Laster siden pÃ¥ nyttâ€¦";
 
             localStorage.setItem(
               "sk_internal_active_tab",
@@ -44208,7 +44599,7 @@ function renderSalesAnalytics(
   addOption(
     modeSelect,
     "worst",
-    "Dårligst selgende"
+    "DÃ¥rligst selgende"
   );
 
 
@@ -44229,8 +44620,8 @@ function renderSalesAnalytics(
       "Sekker"
     ],
     [
-      "Discgolf-tilbehør",
-      "Discgolf-tilbehør"
+      "Discgolf-tilbehÃ¸r",
+      "Discgolf-tilbehÃ¸r"
     ],
     [
       "Golfutstyr",
@@ -44437,7 +44828,7 @@ function renderSalesAnalytics(
             best
               ? (
                   best.name +
-                  " · " +
+                  " Â· " +
                   String(
                     Math.round(
                       Number(
@@ -44527,7 +44918,7 @@ function renderSalesAnalytics(
         },
         {
           label:
-            "Lager nå",
+            "Lager nÃ¥",
           key:
             "stock_quantity",
           align:
@@ -44578,7 +44969,7 @@ function renderTasksManager(
   createPageHeader(
     parent,
     "Oppgaver",
-    "En enkel arbeidsliste. Frister og høy prioritet kommer først.",
+    "En enkel arbeidsliste. Frister og hÃ¸y prioritet kommer fÃ¸rst.",
     "Drift"
   );
 
@@ -44621,7 +45012,7 @@ function renderTasksManager(
     el("input");
 
   titleInput.placeholder =
-    "Hva skal gjøres?";
+    "Hva skal gjÃ¸res?";
 
 
   var priority =
@@ -44636,7 +45027,7 @@ function renderTasksManager(
   addOption(
     priority,
     "high",
-    "Høy"
+    "HÃ¸y"
   );
 
   addOption(
@@ -44763,12 +45154,12 @@ function renderTasksManager(
 
   addFilter(
     "mine",
-    "Mine åpne"
+    "Mine Ã¥pne"
   );
 
   addFilter(
     "all",
-    "Alle åpne"
+    "Alle Ã¥pne"
   );
 
   addFilter(
@@ -44945,7 +45336,7 @@ function renderTasksManager(
       [
         {
           label:
-            "Åpne",
+            "Ã…pne",
           value:
             String(
               open.length
@@ -44981,7 +45372,7 @@ function renderTasksManager(
         },
         {
           label:
-            "Høy prioritet",
+            "HÃ¸y prioritet",
           value:
             String(
               high.length
@@ -45119,7 +45510,7 @@ function renderTasksManager(
             (
               task.status ===
                 "done"
-                ? "✓ "
+                ? "âœ“ "
                 : ""
             ) +
               task.title
@@ -45134,7 +45525,7 @@ function renderTasksManager(
           "high"
         ) {
           metaParts.push(
-            "Høy prioritet"
+            "HÃ¸y prioritet"
           );
         } else if (
           task.priority ===
@@ -45178,7 +45569,7 @@ function renderTasksManager(
           el(
             "div",
             metaParts.join(
-              " · "
+              " Â· "
             )
           );
 
@@ -45337,7 +45728,7 @@ function renderSystemStatus(
   createPageHeader(
     parent,
     "Systemstatus",
-    "Teknisk status for synkjobber og interne tjenester. I normal drift holder det å se på sammendraget øverst.",
+    "Teknisk status for synkjobber og interne tjenester. I normal drift holder det Ã¥ se pÃ¥ sammendraget Ã¸verst.",
     "System"
   );
 
@@ -45405,7 +45796,7 @@ function renderSystemStatus(
       },
       {
         label:
-          "Siste kjøring",
+          "Siste kjÃ¸ring",
         value:
           formatAdminDateTime(
             newestDate(
@@ -45427,7 +45818,7 @@ function renderSystemStatus(
     var alert =
       el(
         "div",
-        "Det finnes registrerte systemfeil. Åpne detaljene under og se på de nyeste feilradene først."
+        "Det finnes registrerte systemfeil. Ã…pne detaljene under og se pÃ¥ de nyeste feilradene fÃ¸rst."
       );
 
     alert.className =
@@ -45443,8 +45834,8 @@ function renderSystemStatus(
 
   var detail =
     createCollapsibleSection(
-      "⚙️ Tekniske kjøringer",
-      "Siste registrerte kjøringer, antall leste/skrevne rader og eventuelle feilmeldinger.",
+      "âš™ï¸ Tekniske kjÃ¸ringer",
+      "Siste registrerte kjÃ¸ringer, antall leste/skrevne rader og eventuelle feilmeldinger.",
       errors.length > 0
     );
 
@@ -45497,7 +45888,7 @@ function renderSystemStatus(
       },
       {
         label:
-          "Sist kjørt",
+          "Sist kjÃ¸rt",
         value:
           function (row) {
             return formatAdminDateTime(
@@ -45537,12 +45928,90 @@ function renderSystemStatus(
       }
     ],
     rows,
-    "Ingen systemkjøringer er logget ennå."
+    "Ingen systemkjÃ¸ringer er logget ennÃ¥."
   );
 
   parent.appendChild(
     detail.wrap
   );
+}
+
+
+function auditAreaLabel(value) {
+  var labels = {
+    internal_portal: "Innlogging",
+    internal_admin_users: "Tilganger",
+    internal_products: "Produkter",
+    internal_product_variants: "Produktvarianter",
+    internal_quotes: "Tilbud",
+    internal_quote_items: "Tilbudslinjer",
+    internal_tasks: "Oppgaver",
+    internal_stock_counts: "Varetelling",
+    internal_stock_count_items: "Varetellingslinjer",
+    internal_settings: "Innstillinger",
+    internal_suppliers: "LeverandÃ¸rer",
+    internal_addons: "Tillegg",
+    internal_price_product_strategies: "Prisstrategi"
+  };
+
+  return labels[value] || value || "Annet";
+}
+
+
+function auditActionLabel(value) {
+  var labels = {
+    login: "Logget inn",
+    insert: "Opprettet",
+    update: "Endret",
+    delete: "Slettet",
+    access_changed: "Endret tilgang",
+    create_standard_quote: "Opprettet tilbud",
+    update_customer_info: "Endret kundeinfo",
+    update_customer_price: "Endret kundepris",
+    update_customer_text: "Endret kundetekst",
+    update_status: "Endret status",
+    apply_stock_count: "Oppdaterte lager"
+  };
+
+  return labels[value] || value || "Hendelse";
+}
+
+
+function auditDisplayValue(value) {
+  if (value === null || value === undefined || value === "") return "â€“";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+
+function auditChangeSummary(row) {
+  if (row.action === "login") {
+    return "Portal Ã¥pnet";
+  }
+
+  var before = row.old_data || {};
+  var after = row.new_data || {};
+  var ignored = {
+    updated_at: true,
+    last_synced_at: true,
+    synced_at: true,
+    last_seen_at: true
+  };
+  var keys = {};
+
+  Object.keys(before).forEach(function (key) { keys[key] = true; });
+  Object.keys(after).forEach(function (key) { keys[key] = true; });
+
+  var changes = Object.keys(keys)
+    .filter(function (key) {
+      return !ignored[key] && auditDisplayValue(before[key]) !== auditDisplayValue(after[key]);
+    })
+    .slice(0, 5)
+    .map(function (key) {
+      return key + ": " + auditDisplayValue(before[key]) + " â†’ " + auditDisplayValue(after[key]);
+    });
+
+  return changes.length ? changes.join("\n") : (row.description || "Ingen feltendringer registrert");
 }
 
 
@@ -45553,7 +46022,7 @@ function renderAuditLog(
   createPageHeader(
     parent,
     "Endringslogg",
-    "Viser meningsfulle endringer i produkter, varianter, tilbud, oppgaver og prisstrategier.",
+    "Viser hvem som har Ã¥pnet portalen, og hvem som har opprettet, endret eller slettet interne data.",
     "Audit"
   );
 
@@ -45567,15 +46036,18 @@ function renderAuditLog(
   var search =
     el("input");
   search.placeholder =
-    "Søk i loggen";
+    "SÃ¸k i loggen";
 
   var tableSelect =
+    el("select");
+
+  var actionSelect =
     el("select");
 
   addOption(
     tableSelect,
     "all",
-    "Alle områder"
+    "Alle omrÃ¥der"
   );
 
   var tables = {};
@@ -45597,16 +46069,30 @@ function renderAuditLog(
         addOption(
           tableSelect,
           name,
-          name
+          auditAreaLabel(name)
         );
       }
     );
+
+  addOption(actionSelect, "all", "Alle handlinger");
+
+  var actions = {};
+  rows.forEach(function (row) {
+    if (row.action) actions[row.action] = true;
+  });
+
+  Object.keys(actions).sort().forEach(function (action) {
+    addOption(actionSelect, action, auditActionLabel(action));
+  });
 
   toolbar.appendChild(
     search
   );
   toolbar.appendChild(
     tableSelect
+  );
+  toolbar.appendChild(
+    actionSelect
   );
 
   parent.appendChild(
@@ -45636,6 +46122,10 @@ function renderAuditLog(
             return false;
           }
 
+          if (actionSelect.value !== "all" && row.action !== actionSelect.value) {
+            return false;
+          }
+
           if (!needle) {
             return true;
           }
@@ -45661,6 +46151,11 @@ function renderAuditLog(
               JSON.stringify(
                 row.new_data ||
                 {}
+              ) +
+              " " +
+              JSON.stringify(
+                row.old_data ||
+                {}
               )
             ).toLowerCase();
 
@@ -45685,13 +46180,16 @@ function renderAuditLog(
             }
         },
         {
-          label: "Område",
-          key:
-            "table_name"
+          label: "OmrÃ¥de",
+          value: function (row) {
+            return auditAreaLabel(row.table_name);
+          }
         },
         {
           label: "Handling",
-          key: "action"
+          value: function (row) {
+            return auditActionLabel(row.action);
+          }
         },
         {
           label: "Beskrivelse",
@@ -45702,6 +46200,34 @@ function renderAuditLog(
           label: "Endret av",
           key:
             "changed_by_display"
+        },
+        {
+          label: "Hva ble endret",
+          render: function (td, row) {
+            var summary = auditChangeSummary(row);
+            var firstLine = summary.split("\n")[0];
+            var short = el("div", firstLine);
+            short.style.maxWidth = "360px";
+            short.style.whiteSpace = "normal";
+            td.appendChild(short);
+
+            if (summary.indexOf("\n") >= 0 || row.old_data || row.new_data) {
+              var details = el("details");
+              details.style.marginTop = "5px";
+              var detailsLabel = el("summary", "Se fÃ¸r/etter");
+              detailsLabel.style.cursor = "pointer";
+              detailsLabel.style.fontWeight = "700";
+              detailsLabel.style.color = "#334155";
+              var pre = el("pre", summary);
+              pre.style.whiteSpace = "pre-wrap";
+              pre.style.maxWidth = "520px";
+              pre.style.margin = "6px 0 0";
+              pre.style.fontSize = "11px";
+              details.appendChild(detailsLabel);
+              details.appendChild(pre);
+              td.appendChild(details);
+            }
+          }
         }
       ],
       filtered.slice(0, 500),
@@ -45712,6 +46238,8 @@ function renderAuditLog(
   search.oninput =
     renderRows;
   tableSelect.onchange =
+    renderRows;
+  actionSelect.onchange =
     renderRows;
 
   renderRows();
@@ -45835,14 +46363,14 @@ function renderMarketAnalysis(
   createPageHeader(
     parent,
     "Markedsanalyse",
-    "En samlet oversikt over pris, sortiment og målbare konkurrentindikatorer. Data fra katalogprøver vises tydelig som utvalg – ikke som full katalog eller markedsandel.",
+    "En samlet oversikt over pris, sortiment og mÃ¥lbare konkurrentindikatorer. Data fra katalogprÃ¸ver vises tydelig som utvalg â€“ ikke som full katalog eller markedsandel.",
     "Marked v3.3"
   );
 
   var marketInfo =
     el(
       "div",
-      "Standardanalysen gjelder nye varer. Brukt holdes utenfor hovedanalysen. Katalogprøver er begrensede indikatorer og skal ikke tolkes som komplett sortiment eller faktisk markedsandel."
+      "Standardanalysen gjelder nye varer. Brukt holdes utenfor hovedanalysen. KatalogprÃ¸ver er begrensede indikatorer og skal ikke tolkes som komplett sortiment eller faktisk markedsandel."
     );
 
   marketInfo.className =
@@ -45863,7 +46391,7 @@ function renderMarketAnalysis(
   var marketV3Loading =
     el(
       "div",
-      "Henter samlet konkurrentbilde…"
+      "Henter samlet konkurrentbildeâ€¦"
     );
 
   marketV3Loading.className =
@@ -45881,7 +46409,7 @@ function renderMarketAnalysis(
     return String(value || "")
       .toLowerCase()
       .replace(
-        /[^a-z0-9æøå]+/g,
+        /[^a-z0-9Ã¦Ã¸Ã¥]+/g,
         ""
       );
   }
@@ -45911,14 +46439,14 @@ function renderMarketAnalysis(
     addDashboardSectionTitle(
       marketV3BaselineHost,
       "Konkurrentradar",
-      "Seks områder som etter hvert skal følges måned for måned"
+      "Seks omrÃ¥der som etter hvert skal fÃ¸lges mÃ¥ned for mÃ¥ned"
     );
 
     if (!measured.length) {
       var noData =
         el(
           "div",
-          "Ingen ferdige katalogprøver er tilgjengelige i oversikten ennå."
+          "Ingen ferdige katalogprÃ¸ver er tilgjengelige i oversikten ennÃ¥."
         );
 
       noData.className =
@@ -46303,15 +46831,15 @@ function renderMarketAnalysis(
     radarHeadText.appendChild(
       el(
         "strong",
-        "Hvordan står GolfKongen mot markedet?"
+        "Hvordan stÃ¥r GolfKongen mot markedet?"
       )
     );
     radarHeadText.appendChild(
       el(
         "span",
         economyReady
-          ? "Pris, sortiment og offentlig økonomi kan sammenlignes nå. Google-synlighet, Meta og omdømme står fortsatt uten gratis/offisiell datakilde som passer reglene våre."
-          : "Pris og sortiment kan sammenlignes nå. Økonomi viser egne GolfKongen-tall inntil offentlige regnskapsdata er tilgjengelige."
+          ? "Pris, sortiment og offentlig Ã¸konomi kan sammenlignes nÃ¥. Google-synlighet, Meta og omdÃ¸mme stÃ¥r fortsatt uten gratis/offisiell datakilde som passer reglene vÃ¥re."
+          : "Pris og sortiment kan sammenlignes nÃ¥. Ã˜konomi viser egne GolfKongen-tall inntil offentlige regnskapsdata er tilgjengelige."
       )
     );
 
@@ -46330,9 +46858,9 @@ function renderMarketAnalysis(
       el(
         "span",
         String(readyAreas) +
-          " klare · " +
+          " klare Â· " +
           String(partialAreas) +
-          " delvis · " +
+          " delvis Â· " +
           String(pendingAreas) +
           " ikke koblet"
       )
@@ -46442,16 +46970,16 @@ function renderMarketAnalysis(
         ? "For lite godkjent prisdata."
         : (
             generalPriceIndex > 101.5
-              ? "GolfKongen ligger over markedsmidten på medianen av sammenlignbare produkter."
+              ? "GolfKongen ligger over markedsmidten pÃ¥ medianen av sammenlignbare produkter."
               : (
                   generalPriceIndex < 98.5
-                    ? "GolfKongen ligger under markedsmidten på medianen av sammenlignbare produkter."
-                    : "GolfKongen ligger omtrent på markedsmidten."
+                    ? "GolfKongen ligger under markedsmidten pÃ¥ medianen av sammenlignbare produkter."
+                    : "GolfKongen ligger omtrent pÃ¥ markedsmidten."
                 )
           );
 
     addRadarCard(
-      "💰",
+      "ðŸ’°",
       "Pris",
       priceRadarValue,
       indexedProducts.length
@@ -46462,17 +46990,17 @@ function renderMarketAnalysis(
         : "sk-pending",
       priceRadarText,
       String(indexedProducts.length) +
-        " produkter med brukbar markedsprisdata · marked = 100"
+        " produkter med brukbar markedsprisdata Â· marked = 100"
     );
 
     addRadarCard(
-      "📦",
+      "ðŸ“¦",
       "Sortiment & merker",
       ownBrandCount
         ? String(ownBrandCount) +
           " GK-merker"
         : String(measured.length) +
-          " butikker målt",
+          " butikker mÃ¥lt",
       measured.length
         ? "Samplebasert"
         : "Mangler data",
@@ -46480,7 +47008,7 @@ function renderMarketAnalysis(
         ? "sk-ready"
         : "sk-pending",
       averageBrands === null
-        ? "Ingen ferdige konkurrentprøver."
+        ? "Ingen ferdige konkurrentprÃ¸ver."
         : (
             averageBrands.toLocaleString(
               "nb-NO",
@@ -46489,9 +47017,9 @@ function renderMarketAnalysis(
                 maximumFractionDigits: 1
               }
             ) +
-            " merker i snitt i konkurrentprøvene. Full merke-matrise bygges senere."
+            " merker i snitt i konkurrentprÃ¸vene. Full merke-matrise bygges senere."
           ),
-      "GK på lager: " +
+      "GK pÃ¥ lager: " +
         (
           ownStockProductShare === null
             ? "-"
@@ -46499,7 +47027,7 @@ function renderMarketAnalysis(
                 ownStockProductShare
               )
         ) +
-        " · Konkurrentprøver: " +
+        " Â· KonkurrentprÃ¸ver: " +
         (
           stockShare === null
             ? "-"
@@ -46510,8 +47038,8 @@ function renderMarketAnalysis(
     );
 
     addRadarCard(
-      "📈",
-      "Økonomi",
+      "ðŸ“ˆ",
+      "Ã˜konomi",
       economyReady &&
       gkEconomy &&
       gkEconomy
@@ -46539,8 +47067,8 @@ function renderMarketAnalysis(
               : "Mangler data"
           ),
       economyReady
-        ? "Offentlige årsregnskap fra Brønnøysund er koblet inn og kan sammenlignes mot GolfKongen."
-        : "GolfKongen kan følges på egne interne tall, men offentlig konkurrentøkonomi mangler.",
+        ? "Offentlige Ã¥rsregnskap fra BrÃ¸nnÃ¸ysund er koblet inn og kan sammenlignes mot GolfKongen."
+        : "GolfKongen kan fÃ¸lges pÃ¥ egne interne tall, men offentlig konkurrentÃ¸konomi mangler.",
       economyReady
         ? (
             String(
@@ -46551,7 +47079,7 @@ function renderMarketAnalysis(
               gkEconomy &&
               gkEconomy
                 .accounting_year
-                ? " · GK regnskapsår " +
+                ? " Â· GK regnskapsÃ¥r " +
                   String(
                     gkEconomy
                       .accounting_year
@@ -46563,32 +47091,32 @@ function renderMarketAnalysis(
     );
 
     addRadarCard(
-      "🔎",
+      "ðŸ”Ž",
       "Google & synlighet",
       "Ikke koblet",
       "Neste datakilde",
       "sk-pending",
-      "Ikke koblet. Vi bruker ikke løsninger som krever betalt API, egen tredjepartskonto eller tvilsom scraping.",
+      "Ikke koblet. Vi bruker ikke lÃ¸sninger som krever betalt API, egen tredjepartskonto eller tvilsom scraping.",
       "Kobles bare dersom vi finner en gratis, offentlig og lovlig kilde"
     );
 
     addRadarCard(
-      "📣",
+      "ðŸ“£",
       "Meta & sosiale medier",
       "Ikke koblet",
       "Neste datakilde",
       "sk-pending",
       "Ikke koblet. Vi holder dette ute til vi har en gratis og ryddig offentlig datakilde.",
-      "Ingen konto eller betalt API skal være nødvendig"
+      "Ingen konto eller betalt API skal vÃ¦re nÃ¸dvendig"
     );
 
     addRadarCard(
-      "⭐",
-      "Omdømme",
+      "â­",
+      "OmdÃ¸mme",
       "Ikke koblet",
       "Neste datakilde",
       "sk-pending",
-      "Google- og Trustpilot-data er foreløpig droppet fordi vi ikke vil bygge dette på betalte API-er eller scraping på grensen.",
+      "Google- og Trustpilot-data er forelÃ¸pig droppet fordi vi ikke vil bygge dette pÃ¥ betalte API-er eller scraping pÃ¥ grensen.",
       "Kan kobles senere dersom en gratis/offisiell kilde blir tilgjengelig"
     );
 
@@ -46614,7 +47142,7 @@ function renderMarketAnalysis(
     economyHeadText.appendChild(
       el(
         "strong",
-        "📈 Økonomi · offentlige årsregnskap"
+        "ðŸ“ˆ Ã˜konomi Â· offentlige Ã¥rsregnskap"
       )
     );
 
@@ -46630,15 +47158,15 @@ function renderMarketAnalysis(
               String(
                 economyRows.length
               ) +
-              " økonomienheter har offentlig årsregnskap i siste månedsbilde. Tallene er årsregnskap – ikke månedlig omsetning."
+              " Ã¸konomienheter har offentlig Ã¥rsregnskap i siste mÃ¥nedsbilde. Tallene er Ã¥rsregnskap â€“ ikke mÃ¥nedlig omsetning."
             )
           : (
               economyErrors.length
-                ? "Kunne ikke hente økonomivisningen akkurat nå: " +
+                ? "Kunne ikke hente Ã¸konomivisningen akkurat nÃ¥: " +
                   economyErrors.join(
-                    " · "
+                    " Â· "
                   )
-                : "Ingen offentlige regnskapstall er tilgjengelige i radaren ennå."
+                : "Ingen offentlige regnskapstall er tilgjengelige i radaren ennÃ¥."
             )
       )
     );
@@ -46657,7 +47185,7 @@ function renderMarketAnalysis(
       el(
         "span",
         economyReady
-          ? "Brønnøysund-data lastet"
+          ? "BrÃ¸nnÃ¸ysund-data lastet"
           : "Ikke oppdatert"
       );
 
@@ -46671,7 +47199,7 @@ function renderMarketAnalysis(
 
     var economyRefreshButton =
       createButton(
-        "Oppdater økonomitall"
+        "Oppdater Ã¸konomitall"
       );
 
     economyRefreshButton.onclick =
@@ -46679,11 +47207,11 @@ function renderMarketAnalysis(
         economyRefreshButton.disabled =
           true;
         economyRefreshButton.textContent =
-          "Henter…";
+          "Henterâ€¦";
         economyRefreshState.className =
           "sk-market-monthly-state";
         economyRefreshState.textContent =
-          "Henter fra Brønnøysund…";
+          "Henter fra BrÃ¸nnÃ¸ysundâ€¦";
 
         callMarketCrawler(
           "/economy-refresh",
@@ -46700,7 +47228,7 @@ function renderMarketAnalysis(
                 result.status ===
                   "partial"
                   ? "Oppdatert delvis"
-                  : "Økonomi oppdatert";
+                  : "Ã˜konomi oppdatert";
 
               economyRefreshButton.textContent =
                 "Oppdatert";
@@ -46718,7 +47246,7 @@ function renderMarketAnalysis(
               economyRefreshButton.disabled =
                 false;
               economyRefreshButton.textContent =
-                "Prøv igjen";
+                "PrÃ¸v igjen";
               economyRefreshState.className =
                 "sk-market-monthly-state";
               economyRefreshState.textContent =
@@ -46874,7 +47402,7 @@ function renderMarketAnalysis(
         ) +
         (
           gkRevenueRank
-            ? " · plass " +
+            ? " Â· plass " +
               String(
                 gkRevenueRank
               ) +
@@ -46909,12 +47437,12 @@ function renderMarketAnalysis(
       );
 
       addEconomyKpi(
-        "GK årsresultat",
+        "GK Ã¥rsresultat",
         marketEconomyMoney(
           gkEconomy
             .annual_result
         ),
-        "Offentlig årsregnskap · ikke intern månedsrapport"
+        "Offentlig Ã¥rsregnskap Â· ikke intern mÃ¥nedsrapport"
       );
 
       addEconomyKpi(
@@ -47006,7 +47534,7 @@ function renderMarketAnalysis(
           var empty =
             el(
               "div",
-              "Ingen data for denne målingen."
+              "Ingen data for denne mÃ¥lingen."
             );
 
           empty.className =
@@ -47171,7 +47699,7 @@ function renderMarketAnalysis(
         renderEconomyChart(
           "operating_revenue",
           "Driftsinntekter",
-          "Siste offentlige årsregnskap · høyest øverst"
+          "Siste offentlige Ã¥rsregnskap Â· hÃ¸yest Ã¸verst"
         )
       );
 
@@ -47179,15 +47707,15 @@ function renderMarketAnalysis(
         renderEconomyChart(
           "operating_profit",
           "Driftsresultat",
-          "Negative resultater vises rødt"
+          "Negative resultater vises rÃ¸dt"
         )
       );
 
       economyChartGrid.appendChild(
         renderEconomyChart(
           "annual_result",
-          "Årsresultat",
-          "Resultat etter skatt / årsresultat"
+          "Ã…rsresultat",
+          "Resultat etter skatt / Ã¥rsresultat"
         )
       );
 
@@ -47308,7 +47836,7 @@ function renderMarketAnalysis(
               }
           },
           {
-            label: "År",
+            label: "Ã…r",
             value:
               function (row) {
                 return row.accounting_year ||
@@ -47337,7 +47865,7 @@ function renderMarketAnalysis(
             align: "right"
           },
           {
-            label: "Årsresultat",
+            label: "Ã…rsresultat",
             value:
               function (row) {
                 return marketEconomyMoney(
@@ -47398,7 +47926,7 @@ function renderMarketAnalysis(
           }
         ],
         economyTableRows,
-        "Ingen økonomidata."
+        "Ingen Ã¸konomidata."
       );
 
       var economyNotes = [];
@@ -47418,7 +47946,7 @@ function renderMarketAnalysis(
             .join(
               ", "
             ) +
-          " har ikke offentlig årsregnskap i Regnskapsregisterets åpne data."
+          " har ikke offentlig Ã¥rsregnskap i Regnskapsregisterets Ã¥pne data."
         );
       }
 
@@ -47435,12 +47963,12 @@ function renderMarketAnalysis(
             .join(
               ", "
             ) +
-          " er ikke koblet til verifisert organisasjonsnummer ennå og er derfor ikke med i økonomisammenligningen."
+          " er ikke koblet til verifisert organisasjonsnummer ennÃ¥ og er derfor ikke med i Ã¸konomisammenligningen."
         );
       }
 
       economyNotes.push(
-        "Søylene sammenligner siste tilgjengelige årsregnskap. Regnskapsår kan variere mellom selskapene, og dette skal ikke tolkes som månedlig markedsandel."
+        "SÃ¸ylene sammenligner siste tilgjengelige Ã¥rsregnskap. RegnskapsÃ¥r kan variere mellom selskapene, og dette skal ikke tolkes som mÃ¥nedlig markedsandel."
       );
 
       var economyNote =
@@ -47462,11 +47990,11 @@ function renderMarketAnalysis(
         el(
           "div",
           economyErrors.length
-            ? "Økonomidata kunne ikke leses: " +
+            ? "Ã˜konomidata kunne ikke leses: " +
               economyErrors.join(
-                " · "
+                " Â· "
               )
-            : "Ingen offentlig økonomidata i siste månedsbilde."
+            : "Ingen offentlig Ã¸konomidata i siste mÃ¥nedsbilde."
         );
 
       economyEmpty.className =
@@ -47482,9 +48010,9 @@ function renderMarketAnalysis(
     );
 
     /*
-     * ØKONOMIHISTORIKK
-     * Sammenligner samme regnskapsår mot samme regnskapsår.
-     * Standard er utvikling siste tre tilgjengelige år.
+     * Ã˜KONOMIHISTORIKK
+     * Sammenligner samme regnskapsÃ¥r mot samme regnskapsÃ¥r.
+     * Standard er utvikling siste tre tilgjengelige Ã¥r.
      */
     if (
       economyAnnualRows.length
@@ -47507,14 +48035,14 @@ function renderMarketAnalysis(
       economyHistoryHeadText.appendChild(
         el(
           "strong",
-          "📊 Økonomi over tid"
+          "ðŸ“Š Ã˜konomi over tid"
         )
       );
 
       economyHistoryHeadText.appendChild(
         el(
           "span",
-          "Velg ett regnskapsår for rettferdig sammenligning, eller se utviklingen over de tre siste årene. Historiske 2023/2024-tall er verifisert mot offisielle Brønnøysund-årsregnskap."
+          "Velg ett regnskapsÃ¥r for rettferdig sammenligning, eller se utviklingen over de tre siste Ã¥rene. Historiske 2023/2024-tall er verifisert mot offisielle BrÃ¸nnÃ¸ysund-Ã¥rsregnskap."
         )
       );
 
@@ -47630,7 +48158,7 @@ function renderMarketAnalysis(
               ) > 0
             ) {
               yearLabel +=
-                " · " +
+                " Â· " +
                 String(
                   yearMeta.entity_count
                 ) +
@@ -47652,7 +48180,7 @@ function renderMarketAnalysis(
         addOption(
           economyHistorySelect,
           "trend3",
-          "Utvikling · siste 3 år"
+          "Utvikling Â· siste 3 Ã¥r"
         );
       }
 
@@ -48333,7 +48861,7 @@ function renderMarketAnalysis(
                           numericValue,
                           chartKey
                         )
-                      : "–"
+                      : "â€“"
                   );
 
                 valueNode.className =
@@ -48417,7 +48945,7 @@ function renderMarketAnalysis(
                 }
             },
             {
-              label: "År",
+              label: "Ã…r",
               value:
                 function (row) {
                   return row.accounting_year;
@@ -48446,7 +48974,7 @@ function renderMarketAnalysis(
             },
             {
               label:
-                "Årsresultat",
+                "Ã…rsresultat",
               value:
                 function (row) {
                   return row.annual_result;
@@ -48500,13 +49028,13 @@ function renderMarketAnalysis(
                 function (row) {
                   return row.record_source ===
                     "live_latest"
-                    ? "Åpen Brreg-data"
-                    : "Offisielt årsregnskap";
+                    ? "Ã…pen Brreg-data"
+                    : "Offisielt Ã¥rsregnskap";
                 }
             }
           ],
           tableRows,
-          "Ingen økonomihistorikk i denne visningen."
+          "Ingen Ã¸konomihistorikk i denne visningen."
         );
       }
 
@@ -48526,7 +49054,7 @@ function renderMarketAnalysis(
 
         if (mode === "latest") {
           economyHistoryStatus.textContent =
-            "Siste tilgjengelige regnskap per selskap. Regnskapsåret kan variere mellom selskapene.";
+            "Siste tilgjengelige regnskap per selskap. RegnskapsÃ¥ret kan variere mellom selskapene.";
 
           function latestHistoryChart(
             chartKey,
@@ -48734,14 +49262,14 @@ function renderMarketAnalysis(
             latestHistoryChart(
               "operating_profit",
               "Driftsresultat",
-              "Negative resultater vises rødt"
+              "Negative resultater vises rÃ¸dt"
             )
           );
 
           chartGrid.appendChild(
             latestHistoryChart(
               "annual_result",
-              "Årsresultat",
+              "Ã…rsresultat",
               "Siste offentlige regnskap per selskap"
             )
           );
@@ -48844,7 +49372,7 @@ function renderMarketAnalysis(
                 selectedYearMeta.entity_count ||
                 0
               ) !== selectedRows.length
-                ? " · datadekning kan variere per nøkkeltall"
+                ? " Â· datadekning kan variere per nÃ¸kkeltall"
                 : ""
             );
 
@@ -48852,9 +49380,9 @@ function renderMarketAnalysis(
             economyHistoryRenderSingleYearChart(
               selectedYear,
               "operating_revenue",
-              "Driftsinntekter · " +
+              "Driftsinntekter Â· " +
                 String(selectedYear),
-              "Samme regnskapsår mot samme regnskapsår"
+              "Samme regnskapsÃ¥r mot samme regnskapsÃ¥r"
             )
           );
 
@@ -48862,9 +49390,9 @@ function renderMarketAnalysis(
             economyHistoryRenderSingleYearChart(
               selectedYear,
               "operating_profit",
-              "Driftsresultat · " +
+              "Driftsresultat Â· " +
                 String(selectedYear),
-              "Negative resultater vises rødt"
+              "Negative resultater vises rÃ¸dt"
             )
           );
 
@@ -48872,9 +49400,9 @@ function renderMarketAnalysis(
             economyHistoryRenderSingleYearChart(
               selectedYear,
               "annual_result",
-              "Årsresultat · " +
+              "Ã…rsresultat Â· " +
                 String(selectedYear),
-              "Samme regnskapsår mot samme regnskapsår"
+              "Samme regnskapsÃ¥r mot samme regnskapsÃ¥r"
             )
           );
 
@@ -48882,7 +49410,7 @@ function renderMarketAnalysis(
             economyHistoryRenderSingleYearChart(
               selectedYear,
               "equity_ratio_percent",
-              "Egenkapitalandel · " +
+              "Egenkapitalandel Â· " +
                 String(selectedYear),
               "Andel egenkapital av totale eiendeler"
             )
@@ -48916,9 +49444,9 @@ function renderMarketAnalysis(
               }
             )
             .join(
-              "–"
+              "â€“"
             ) +
-          ". Hver bedrift får én søyle per tilgjengelig regnskapsår.";
+          ". Hver bedrift fÃ¥r Ã©n sÃ¸yle per tilgjengelig regnskapsÃ¥r.";
 
         var legend =
           el("div");
@@ -48970,8 +49498,8 @@ function renderMarketAnalysis(
           economyHistoryRenderTrendChart(
             trendYears,
             "operating_revenue",
-            "Driftsinntekter · utvikling",
-            "Søyler per bedrift og regnskapsår"
+            "Driftsinntekter Â· utvikling",
+            "SÃ¸yler per bedrift og regnskapsÃ¥r"
           )
         );
 
@@ -48979,8 +49507,8 @@ function renderMarketAnalysis(
           economyHistoryRenderTrendChart(
             trendYears,
             "operating_profit",
-            "Driftsresultat · utvikling",
-            "Røde søyler betyr negativt driftsresultat"
+            "Driftsresultat Â· utvikling",
+            "RÃ¸de sÃ¸yler betyr negativt driftsresultat"
           )
         );
 
@@ -48988,8 +49516,8 @@ function renderMarketAnalysis(
           economyHistoryRenderTrendChart(
             trendYears,
             "annual_result",
-            "Årsresultat · utvikling",
-            "Søyler per bedrift og regnskapsår"
+            "Ã…rsresultat Â· utvikling",
+            "SÃ¸yler per bedrift og regnskapsÃ¥r"
           )
         );
 
@@ -48997,7 +49525,7 @@ function renderMarketAnalysis(
           economyHistoryRenderTrendChart(
             trendYears,
             "equity_ratio_percent",
-            "Egenkapitalandel · utvikling",
+            "Egenkapitalandel Â· utvikling",
             "Utvikling i egenkapitalandel"
           )
         );
@@ -49074,18 +49602,18 @@ function renderMarketAnalysis(
         : "sk-good";
 
     addRadarSignal(
-      "💰 Prissignal",
+      "ðŸ’° Prissignal",
       generalPriceIndex === null
-        ? "Vi trenger flere godkjente pristreff før prisbildet kan vurderes."
+        ? "Vi trenger flere godkjente pristreff fÃ¸r prisbildet kan vurderes."
         : (
             indexLabel +
-            ". Følg samtidig margin – lavest pris er ikke et mål i seg selv."
+            ". FÃ¸lg samtidig margin â€“ lavest pris er ikke et mÃ¥l i seg selv."
           ),
       priceSignalTone
     );
 
     addRadarSignal(
-      "📦 Lagersignal",
+      "ðŸ“¦ Lagersignal",
       ownStockProductShare === null ||
       stockShare === null
         ? "Lagerindikatoren trenger mer data."
@@ -49094,25 +49622,25 @@ function renderMarketAnalysis(
             formatPercent(
               ownStockProductShare
             ) +
-            " av produktene i eget analysegrunnlag på lager, mot " +
+            " av produktene i eget analysegrunnlag pÃ¥ lager, mot " +
             formatPercent(
               stockShare
             ) +
-            " i de samplebaserte konkurrentprøvene. Tallene er indikatorer, ikke identiske kataloggrunnlag."
+            " i de samplebaserte konkurrentprÃ¸vene. Tallene er indikatorer, ikke identiske kataloggrunnlag."
           ),
       "sk-info"
     );
 
     addRadarSignal(
-      "🧭 Datadekning",
+      "ðŸ§­ Datadekning",
       String(readyAreas) +
-        " av 6 områder kan sammenlignes nå. " +
+        " av 6 omrÃ¥der kan sammenlignes nÃ¥. " +
         String(partialAreas) +
         " er delvis klart. " +
         (
           economyReady
-            ? "Økonomi er nå koblet på. Gjenstår: synlighet, Meta og omdømme."
-            : "Gjenstår: økonomi, synlighet, Meta og omdømme."
+            ? "Ã˜konomi er nÃ¥ koblet pÃ¥. GjenstÃ¥r: synlighet, Meta og omdÃ¸mme."
+            : "GjenstÃ¥r: Ã¸konomi, synlighet, Meta og omdÃ¸mme."
         ),
       "sk-info"
     );
@@ -49129,7 +49657,7 @@ function renderMarketAnalysis(
     monthlyText.appendChild(
       el(
         "strong",
-        "📅 Månedlig konkurrentradar"
+        "ðŸ“… MÃ¥nedlig konkurrentradar"
       )
     );
 
@@ -49157,12 +49685,12 @@ function renderMarketAnalysis(
 
     var monthlyDescription = el(
       "span",
-      "Månedsbildet lagres i Supabase og kan oppdateres manuelt herfra. Økonomidata ligger som offentlige årsregnskapssignaler i samme månedsbilde; automatisk månedskjøring aktiveres først når alle valgte datakilder er ferdige." +
+      "MÃ¥nedsbildet lagres i Supabase og kan oppdateres manuelt herfra. Ã˜konomidata ligger som offentlige Ã¥rsregnskapssignaler i samme mÃ¥nedsbilde; automatisk mÃ¥nedskjÃ¸ring aktiveres fÃ¸rst nÃ¥r alle valgte datakilder er ferdige." +
         (
           freshnessParts.length
-            ? " Nå: " +
+            ? " NÃ¥: " +
               freshnessParts.join(
-                " · "
+                " Â· "
               ) +
               "."
             : ""
@@ -49179,14 +49707,14 @@ function renderMarketAnalysis(
 
     var monthlyState = el(
       "span",
-      "Henter historikk…"
+      "Henter historikkâ€¦"
     );
     monthlyState.className =
       "sk-market-monthly-state";
 
     var captureMonthButton =
       createButton(
-        "Oppdater månedsbilde"
+        "Oppdater mÃ¥nedsbilde"
       );
 
     monthlyActions.appendChild(
@@ -49284,7 +49812,7 @@ function renderMarketAnalysis(
         previous === ""
       ) {
         return {
-          text: "Første baseline",
+          text: "FÃ¸rste baseline",
           className: ""
         };
       }
@@ -49303,7 +49831,7 @@ function renderMarketAnalysis(
         )
       ) {
         return {
-          text: "Første baseline",
+          text: "FÃ¸rste baseline",
           className: ""
         };
       }
@@ -49317,7 +49845,7 @@ function renderMarketAnalysis(
         0.0001
       ) {
         return {
-          text: "→ Uendret",
+          text: "â†’ Uendret",
           className: ""
         };
       }
@@ -49339,7 +49867,7 @@ function renderMarketAnalysis(
 
       return {
         text:
-          (positive ? "↑ " : "↓ ") +
+          (positive ? "â†‘ " : "â†“ ") +
           marketMonthlyNumber(
             Math.abs(difference),
             decimals
@@ -49398,7 +49926,7 @@ function renderMarketAnalysis(
 
       var loadingHistory = el(
         "div",
-        "Henter månedshistorikk…"
+        "Henter mÃ¥nedshistorikkâ€¦"
       );
       loadingHistory.className =
         "sk-note";
@@ -49428,7 +49956,7 @@ function renderMarketAnalysis(
 
               var errorNote = el(
                 "div",
-                "Kunne ikke hente månedshistorikk: " +
+                "Kunne ikke hente mÃ¥nedshistorikk: " +
                   result.error.message
               );
               errorNote.className =
@@ -49450,7 +49978,7 @@ function renderMarketAnalysis(
 
               var noHistory = el(
                 "div",
-                "Ingen månedsbilder er lagret ennå."
+                "Ingen mÃ¥nedsbilder er lagret ennÃ¥."
               );
               noHistory.className =
                 "sk-note";
@@ -49479,8 +50007,8 @@ function renderMarketAnalysis(
               monthlyHistoryHost,
               "Utvikling over tid",
               months.length > 1
-                ? "Siste snapshot mot måneden før"
-                : "Første baseline – piler kommer når neste månedsbilde er lagret"
+                ? "Siste snapshot mot mÃ¥neden fÃ¸r"
+                : "FÃ¸rste baseline â€“ piler kommer nÃ¥r neste mÃ¥nedsbilde er lagret"
             );
 
             var trendGrid = el("div");
@@ -49529,7 +50057,7 @@ function renderMarketAnalysis(
 
             addMonthlyTrendCard(
               trendGrid,
-              "Konkurrentlager · prøve",
+              "Konkurrentlager Â· prÃ¸ve",
               latestMonth
                 .average_competitor_sample_stock_percent ===
                 null
@@ -49578,7 +50106,7 @@ function renderMarketAnalysis(
               monthlyHistoryHost,
               [
                 {
-                  label: "Måned",
+                  label: "MÃ¥ned",
                   value:
                     function (row) {
                       return marketMonthLabel(
@@ -49621,7 +50149,7 @@ function renderMarketAnalysis(
                 },
                 {
                   label:
-                    "Lager i konk.prøve",
+                    "Lager i konk.prÃ¸ve",
                   value:
                     function (row) {
                       return row
@@ -49637,7 +50165,7 @@ function renderMarketAnalysis(
                 },
                 {
                   label:
-                    "Snitt merker · prøve",
+                    "Snitt merker Â· prÃ¸ve",
                   value:
                     function (row) {
                       return row
@@ -49667,12 +50195,12 @@ function renderMarketAnalysis(
                 }
               ],
               months,
-              "Ingen månedshistorikk."
+              "Ingen mÃ¥nedshistorikk."
             );
 
             var historyNote = el(
               "div",
-              "Månedsbildet fryser nøkkeltallene slik de var da snapshotet ble tatt. Katalog- og merkeverdier hos konkurrentene er fortsatt samplebaserte indikatorer; de er ikke full katalog eller markedsandel."
+              "MÃ¥nedsbildet fryser nÃ¸kkeltallene slik de var da snapshotet ble tatt. Katalog- og merkeverdier hos konkurrentene er fortsatt samplebaserte indikatorer; de er ikke full katalog eller markedsandel."
             );
             historyNote.className =
               "sk-note";
@@ -49689,7 +50217,7 @@ function renderMarketAnalysis(
       function () {
         if (
           !window.confirm(
-            "Oppdatere månedsbildet for inneværende måned med dataene som ligger i systemet nå? Samme måned oppdateres – det lages ikke duplikat."
+            "Oppdatere mÃ¥nedsbildet for innevÃ¦rende mÃ¥ned med dataene som ligger i systemet nÃ¥? Samme mÃ¥ned oppdateres â€“ det lages ikke duplikat."
           )
         ) {
           return;
@@ -49698,9 +50226,9 @@ function renderMarketAnalysis(
         captureMonthButton.disabled =
           true;
         captureMonthButton.textContent =
-          "Oppdaterer…";
+          "Oppdatererâ€¦";
         monthlyState.textContent =
-          "Lagrer snapshot…";
+          "Lagrer snapshotâ€¦";
         monthlyState.className =
           "sk-market-monthly-state";
 
@@ -49718,7 +50246,7 @@ function renderMarketAnalysis(
               captureMonthButton.disabled =
                 false;
               captureMonthButton.textContent =
-                "Oppdater månedsbilde";
+                "Oppdater mÃ¥nedsbilde";
 
               loadMarketMonthlyHistory();
             }
@@ -49728,14 +50256,14 @@ function renderMarketAnalysis(
               captureMonthButton.disabled =
                 false;
               captureMonthButton.textContent =
-                "Oppdater månedsbilde";
+                "Oppdater mÃ¥nedsbilde";
               monthlyState.textContent =
                 "Kunne ikke lagre";
               monthlyState.className =
                 "sk-market-monthly-state";
 
               alert(
-                "Kunne ikke oppdatere månedsbildet: " +
+                "Kunne ikke oppdatere mÃ¥nedsbildet: " +
                   skReadableError(
                     error
                   )
@@ -49748,8 +50276,8 @@ function renderMarketAnalysis(
 
     addDashboardSectionTitle(
       marketV3BaselineHost,
-      "Konkurrentbildet nå",
-      "Prisdata + siste godkjente katalogprøve"
+      "Konkurrentbildet nÃ¥",
+      "Prisdata + siste godkjente katalogprÃ¸ve"
     );
 
     addProStatGrid(
@@ -49757,7 +50285,7 @@ function renderMarketAnalysis(
       [
         {
           label:
-            "Butikker med ferdig prøve",
+            "Butikker med ferdig prÃ¸ve",
           value:
             String(
               measured.length
@@ -49766,7 +50294,7 @@ function renderMarketAnalysis(
         },
         {
           label:
-            "Produktsider målt",
+            "Produktsider mÃ¥lt",
           value:
             totalMeasured
               .toLocaleString(
@@ -49776,7 +50304,7 @@ function renderMarketAnalysis(
         },
         {
           label:
-            "På lager i prøvene",
+            "PÃ¥ lager i prÃ¸vene",
           value:
             stockShare === null
               ? "-"
@@ -49791,7 +50319,7 @@ function renderMarketAnalysis(
         },
         {
           label:
-            "Gj.snitt merker i prøve",
+            "Gj.snitt merker i prÃ¸ve",
           value:
             averageBrands === null
               ? "-"
@@ -49957,7 +50485,7 @@ function renderMarketAnalysis(
           align: "right"
         },
         {
-          label: "Prøve",
+          label: "PrÃ¸ve",
           value:
             function (row) {
               return (
@@ -49978,7 +50506,7 @@ function renderMarketAnalysis(
           align: "right"
         },
         {
-          label: "På lager",
+          label: "PÃ¥ lager",
           value:
             function (row) {
               return row.stockShare ===
@@ -49997,7 +50525,7 @@ function renderMarketAnalysis(
         },
         {
           label:
-            "Medianpris · prøve",
+            "Medianpris Â· prÃ¸ve",
           value:
             function (row) {
               return row.medianPrice !==
@@ -50013,13 +50541,13 @@ function renderMarketAnalysis(
         }
       ],
       overviewRows,
-      "Ingen målbare konkurrenter."
+      "Ingen mÃ¥lbare konkurrenter."
     );
 
     var baselineNote =
       el(
         "div",
-        "Slik leses tabellen: «Kandidat-URL-er» er et teknisk discovery-signal, ikke et verifisert produktantall. «Prøve» er maks 25 produktsider per butikk. Lagerandel, merke-bredde og medianpris er derfor samplebaserte indikatorer. Brukt er holdt utenfor hovedanalysen."
+        "Slik leses tabellen: Â«Kandidat-URL-erÂ» er et teknisk discovery-signal, ikke et verifisert produktantall. Â«PrÃ¸veÂ» er maks 25 produktsider per butikk. Lagerandel, merke-bredde og medianpris er derfor samplebaserte indikatorer. Brukt er holdt utenfor hovedanalysen."
       );
 
     baselineNote.className =
@@ -50118,7 +50646,7 @@ function renderMarketAnalysis(
                 competitor
                   .include_used_in_analysis ===
                   true
-                  ? "Brukt kan inngå"
+                  ? "Brukt kan inngÃ¥"
                   : "Kun nytt i analyse"
               );
 
@@ -50501,7 +51029,7 @@ function renderMarketAnalysis(
     [
       {
         label:
-          "Prisindeks · marked = 100",
+          "Prisindeks Â· marked = 100",
         value:
           generalPriceIndex === null
             ? "-"
@@ -50573,7 +51101,7 @@ function renderMarketAnalysis(
   indexCard.className =
     "sk-market-analysis-card";
   indexCard.appendChild(
-    el("h3", "Generelt prisnivå")
+    el("h3", "Generelt prisnivÃ¥")
   );
 
   var indexBig = el(
@@ -50606,9 +51134,9 @@ function renderMarketAnalysis(
   var splitBig = el(
     "div",
     String(cheaperCount) +
-      " billigere · " +
+      " billigere Â· " +
       String(sameCount) +
-      " likt · " +
+      " likt Â· " +
       String(pricierCount) +
       " dyrere"
   );
@@ -50953,7 +51481,7 @@ function renderMarketAnalysis(
 
   addDashboardSectionTitle(
     parent,
-    "Størrelse og markedsindikatorer"
+    "StÃ¸rrelse og markedsindikatorer"
   );
 
   var sizeGrid = el("div");
@@ -50962,12 +51490,12 @@ function renderMarketAnalysis(
 
   [
     [
-      "Fysiske produkter i vårt analysegrunnlag",
+      "Fysiske produkter i vÃ¥rt analysegrunnlag",
       String(physicalProducts),
       "Booking, gavekort og tjenester er holdt utenfor."
     ],
     [
-      "Enheter på lager",
+      "Enheter pÃ¥ lager",
       Math.round(stockUnits)
         .toLocaleString(
           "nb-NO"
@@ -50982,7 +51510,7 @@ function renderMarketAnalysis(
       "Dagens lager vurdert til dagens utsalgspriser eks. MVA."
     ],
     [
-      "Solgte enheter · 365 dager",
+      "Solgte enheter Â· 365 dager",
       Math.round(units365)
         .toLocaleString(
           "nb-NO"
@@ -50990,7 +51518,7 @@ function renderMarketAnalysis(
       "Fra synket Quickbutik-salg."
     ],
     [
-      "Omsetning i produktgrunnlaget · 365 dager",
+      "Omsetning i produktgrunnlaget Â· 365 dager",
       skFormatMoney(
         revenue365
       ),
@@ -51004,7 +51532,7 @@ function renderMarketAnalysis(
       String(
         indexedProducts.length
       ) +
-        " av våre produkter har brukbar markedsprisdata."
+        " av vÃ¥re produkter har brukbar markedsprisdata."
     ]
   ].forEach(
     function (item) {
@@ -51039,7 +51567,7 @@ function renderMarketAnalysis(
 
   var sizeNote = el(
     "div",
-    "Viktig: størrelsesindikatorene er ikke markedsandel. Godkjente pristreff, kandidat-URL-er, merke-bredde, lagerandel og katalogprøver gir sammenlignbare signaler, men forteller ikke konkurrentenes faktiske omsetning, komplette lager eller komplette sortiment."
+    "Viktig: stÃ¸rrelsesindikatorene er ikke markedsandel. Godkjente pristreff, kandidat-URL-er, merke-bredde, lagerandel og katalogprÃ¸ver gir sammenlignbare signaler, men forteller ikke konkurrentenes faktiske omsetning, komplette lager eller komplette sortiment."
   );
   sizeNote.className =
     "sk-note";
@@ -51049,7 +51577,7 @@ function renderMarketAnalysis(
 
   addDashboardSectionTitle(
     parent,
-    "Sortiment-overlapp · foreløpig indikator"
+    "Sortiment-overlapp Â· forelÃ¸pig indikator"
   );
 
   var overlapRows =
@@ -51091,7 +51619,7 @@ function renderMarketAnalysis(
       },
       {
         label:
-          "Andel av våre prisprodukter",
+          "Andel av vÃ¥re prisprodukter",
         value:
           function (row) {
             return indexedProducts.length
@@ -51111,7 +51639,7 @@ function renderMarketAnalysis(
 
   addDashboardSectionTitle(
     parent,
-    "Sikker katalogmåling"
+    "Sikker katalogmÃ¥ling"
   );
 
   var safetyBox =
@@ -51122,8 +51650,8 @@ function renderMarketAnalysis(
 
   safetyBox.innerHTML =
     "<strong>Bevisst konservativ modus.</strong> " +
-    "Denne målingen bruker bare offentlig tilgjengelige sider, kontrollerer robots.txt, stopper ved blokkering/rate-limit, bruker minst 1,5 sekunder mellom produktsider og lagrer ikke beskrivelser, bilder eller HTML. " +
-    "Maks 25 stabile produktsider måles per butikk per kjøring. Dette er en utvalgsindikator – ikke en kopi av konkurrentens katalog.";
+    "Denne mÃ¥lingen bruker bare offentlig tilgjengelige sider, kontrollerer robots.txt, stopper ved blokkering/rate-limit, bruker minst 1,5 sekunder mellom produktsider og lagrer ikke beskrivelser, bilder eller HTML. " +
+    "Maks 25 stabile produktsider mÃ¥les per butikk per kjÃ¸ring. Dette er en utvalgsindikator â€“ ikke en kopi av konkurrentens katalog.";
 
   parent.appendChild(
     safetyBox
@@ -51199,7 +51727,7 @@ function renderMarketAnalysis(
   crawlTermsWrap.appendChild(
     el(
       "span",
-      "Vilkårstatus"
+      "VilkÃ¥rstatus"
     )
   );
 
@@ -51209,11 +51737,11 @@ function renderMarketAnalysis(
   [
     [
       "unknown",
-      "Ikke gjennomgått"
+      "Ikke gjennomgÃ¥tt"
     ],
     [
       "public_facts_ok",
-      "Gjennomgått – offentlig fakta OK"
+      "GjennomgÃ¥tt â€“ offentlig fakta OK"
     ],
     [
       "do_not_crawl",
@@ -51243,7 +51771,7 @@ function renderMarketAnalysis(
   crawlLimitWrap.appendChild(
     el(
       "span",
-      "Produktsider per prøve (1–25)"
+      "Produktsider per prÃ¸ve (1â€“25)"
     )
   );
 
@@ -51320,7 +51848,7 @@ function renderMarketAnalysis(
   crawlEnabledWrap.appendChild(
     el(
       "span",
-      "Aktiver sikker katalogmåling"
+      "Aktiver sikker katalogmÃ¥ling"
     )
   );
 
@@ -51346,7 +51874,7 @@ function renderMarketAnalysis(
 
   crawlNote.rows = 2;
   crawlNote.placeholder =
-    "F.eks. vilkår gjennomgått 04.08.2026 – ingen eksplisitt blokkering av offentlig produktmåling funnet.";
+    "F.eks. vilkÃ¥r gjennomgÃ¥tt 04.08.2026 â€“ ingen eksplisitt blokkering av offentlig produktmÃ¥ling funnet.";
 
   crawlNoteWrap.appendChild(
     crawlNote
@@ -51378,7 +51906,7 @@ function renderMarketAnalysis(
 
   var sampleButton =
     createPrimaryButton(
-      "Kjør sikker prøve"
+      "KjÃ¸r sikker prÃ¸ve"
     );
 
   crawlActions.appendChild(
@@ -51402,7 +51930,7 @@ function renderMarketAnalysis(
     "sk-crawl-result";
 
   crawlResult.textContent =
-    "Velg en konkurrent. Robots-kontroll kan kjøres før katalogmåling aktiveres.";
+    "Velg en konkurrent. Robots-kontroll kan kjÃ¸res fÃ¸r katalogmÃ¥ling aktiveres.";
 
   parent.appendChild(
     crawlResult
@@ -51488,7 +52016,7 @@ function renderMarketAnalysis(
           .market_crawl_robots_status ||
         "ikke kontrollert"
       ) +
-      " · Siste kjøring: " +
+      " Â· Siste kjÃ¸ring: " +
       (
         competitor
           .market_crawl_last_status ||
@@ -51510,7 +52038,7 @@ function renderMarketAnalysis(
           false;
 
         alert(
-          "Sett vilkårstatus til «Gjennomgått – offentlig fakta OK» før målingen aktiveres."
+          "Sett vilkÃ¥rstatus til Â«GjennomgÃ¥tt â€“ offentlig fakta OKÂ» fÃ¸r mÃ¥lingen aktiveres."
         );
       }
 
@@ -51666,7 +52194,7 @@ function renderMarketAnalysis(
         limit > 25
       ) {
         alert(
-          "Prøvestørrelse må være mellom 1 og 25."
+          "PrÃ¸vestÃ¸rrelse mÃ¥ vÃ¦re mellom 1 og 25."
         );
         return;
       }
@@ -51677,7 +52205,7 @@ function renderMarketAnalysis(
         delay > 10000
       ) {
         alert(
-          "Pause må være mellom 1500 og 10000 ms."
+          "Pause mÃ¥ vÃ¦re mellom 1500 og 10000 ms."
         );
         return;
       }
@@ -51688,7 +52216,7 @@ function renderMarketAnalysis(
           "public_facts_ok"
       ) {
         alert(
-          "Katalogmåling kan bare aktiveres etter at vilkårstatus er gjennomgått."
+          "KatalogmÃ¥ling kan bare aktiveres etter at vilkÃ¥rstatus er gjennomgÃ¥tt."
         );
         return;
       }
@@ -51697,7 +52225,7 @@ function renderMarketAnalysis(
         true;
 
       saveCrawlSettings.textContent =
-        "Lagrer…";
+        "Lagrerâ€¦";
 
       sb.rpc(
         "internal_update_market_crawl_settings",
@@ -51760,7 +52288,7 @@ function renderMarketAnalysis(
               );
 
             crawlResult.textContent =
-              "Sikkerhetsinnstillinger lagret. Dette er en intern beslutning om offentlig fakta – ikke en juridisk godkjenning.";
+              "Sikkerhetsinnstillinger lagret. Dette er en intern beslutning om offentlig fakta â€“ ikke en juridisk godkjenning.";
 
             setTimeout(
               function () {
@@ -51802,10 +52330,10 @@ function renderMarketAnalysis(
         true;
 
       robotsButton.textContent =
-        "Kontrollerer…";
+        "Kontrollererâ€¦";
 
       crawlResult.textContent =
-        "Henter kun offentlig /robots.txt…";
+        "Henter kun offentlig /robots.txtâ€¦";
 
       callMarketCrawler(
         "/robots-check" +
@@ -51890,14 +52418,14 @@ function renderMarketAnalysis(
           "public_facts_ok"
       ) {
         alert(
-          "Lagre sikkerhetsinnstillingene først."
+          "Lagre sikkerhetsinnstillingene fÃ¸rst."
         );
         return;
       }
 
       if (
         !window.confirm(
-          "Kjør en begrenset offentlig katalogprøve for " +
+          "KjÃ¸r en begrenset offentlig katalogprÃ¸ve for " +
             competitor.name +
             "?\n\nMaks " +
             String(
@@ -51915,10 +52443,10 @@ function renderMarketAnalysis(
         true;
 
       sampleButton.textContent =
-        "Måler…";
+        "MÃ¥lerâ€¦";
 
       crawlResult.textContent =
-        "Måler et lite, stabilt offentlig utvalg. Dette kan ta litt tid fordi vi bevisst legger pause mellom sidene.";
+        "MÃ¥ler et lite, stabilt offentlig utvalg. Dette kan ta litt tid fordi vi bevisst legger pause mellom sidene.";
 
       callMarketCrawler(
         "/catalog-sample",
@@ -51941,7 +52469,7 @@ function renderMarketAnalysis(
               false;
 
             sampleButton.textContent =
-              "Kjør sikker prøve";
+              "KjÃ¸r sikker prÃ¸ve";
 
             crawlResult.textContent =
               "Ferdig: " +
@@ -51954,7 +52482,7 @@ function renderMarketAnalysis(
                 payload.sitemap
                   .candidate_product_urls
               ) +
-              "\nMålte produktsider: " +
+              "\nMÃ¥lte produktsider: " +
               String(
                 payload.sample
                   .measured
@@ -51963,15 +52491,15 @@ function renderMarketAnalysis(
               String(
                 payload.sample.new
               ) +
-              " · Brukte: " +
+              " Â· Brukte: " +
               String(
                 payload.sample.used
               ) +
-              "\nMerker i prøven: " +
+              "\nMerker i prÃ¸ven: " +
               String(
                 payload.sample.brands
               ) +
-              "\nMedianpris i prøven: " +
+              "\nMedianpris i prÃ¸ven: " +
               (
                 payload.sample
                   .median_price !==
@@ -51998,10 +52526,10 @@ function renderMarketAnalysis(
               false;
 
             sampleButton.textContent =
-              "Kjør sikker prøve";
+              "KjÃ¸r sikker prÃ¸ve";
 
             crawlResult.textContent =
-              "Målingen ble stoppet: " +
+              "MÃ¥lingen ble stoppet: " +
               skReadableError(
                 error
               );
@@ -52019,7 +52547,7 @@ function renderMarketAnalysis(
     var loading =
       el(
         "div",
-        "Henter siste katalogmålinger…"
+        "Henter siste katalogmÃ¥lingerâ€¦"
       );
 
     loading.className =
@@ -52204,7 +52732,7 @@ function renderMarketAnalysis(
             var errorNote =
               el(
                 "div",
-                "Kunne ikke hente katalogmålinger: " +
+                "Kunne ikke hente katalogmÃ¥linger: " +
                   result.error.message
               );
 
@@ -52301,7 +52829,7 @@ function renderMarketAnalysis(
 
           addDashboardSectionTitle(
             latestHost,
-            "Siste måling per konkurrent"
+            "Siste mÃ¥ling per konkurrent"
           );
 
           skCreateAnalysisTable(
@@ -52335,7 +52863,7 @@ function renderMarketAnalysis(
               },
               {
                 label:
-                  "Prøve",
+                  "PrÃ¸ve",
                 value:
                   function (row) {
                     return (
@@ -52404,7 +52932,7 @@ function renderMarketAnalysis(
               },
               {
                 label:
-                  "Målt",
+                  "MÃ¥lt",
                 value:
                   function (row) {
                     return row
@@ -52421,7 +52949,7 @@ function renderMarketAnalysis(
               }
             ],
             rows,
-            "Ingen katalogmålinger ennå."
+            "Ingen katalogmÃ¥linger ennÃ¥."
           );
         }
       );
@@ -52493,14 +53021,14 @@ function renderMarketAnalysis(
               "price";
           } else if (
             titleText.indexOf(
-              "størrelse og markedsindikatorer"
+              "stÃ¸rrelse og markedsindikatorer"
             ) >= 0
           ) {
             activePane =
               "assortment";
           } else if (
             titleText.indexOf(
-              "sikker katalogmåling"
+              "sikker katalogmÃ¥ling"
             ) >= 0
           ) {
             activePane =
@@ -52519,19 +53047,19 @@ function renderMarketAnalysis(
     var labels = [
       [
         "overview",
-        "🧭 Radar"
+        "ðŸ§­ Radar"
       ],
       [
         "price",
-        "💰 Pris"
+        "ðŸ’° Pris"
       ],
       [
         "assortment",
-        "📦 Sortiment"
+        "ðŸ“¦ Sortiment"
       ],
       [
         "data",
-        "⚙️ Datainnsamling"
+        "âš™ï¸ Datainnsamling"
       ]
     ];
 
@@ -52640,7 +53168,7 @@ function renderMarketAnalysis(
 function renderPortal(sb, user, data) {
     var app = renderShell(
       "Mission Control",
-      "GolfKongen / Sportskongen – drift, varer, lager, salg, pris og innkjøp på ett sted."
+      "GolfKongen / Sportskongen â€“ drift, varer, lager, salg, pris og innkjÃ¸p pÃ¥ ett sted."
     );
 
     addUserBar(
@@ -52674,7 +53202,7 @@ function renderPortal(sb, user, data) {
       loading.innerHTML =
         "<strong>" +
         String(label || "Laster") +
-        "</strong><div style='margin-top:6px;color:#64748b;font-size:12px'>Henter bare dataene denne modulen trenger…</div>";
+        "</strong><div style='margin-top:6px;color:#64748b;font-size:12px'>Henter bare dataene denne modulen trengerâ€¦</div>";
       parent.appendChild(loading);
 
       if (data.__lazyLoading[key]) {
@@ -52706,10 +53234,10 @@ function renderPortal(sb, user, data) {
             true;
 
           /*
-           * Hvis brukeren har gått til en annen modul mens dataene
+           * Hvis brukeren har gÃ¥tt til en annen modul mens dataene
            * ble hentet, skal en sen respons aldri overskrive siden
-           * som nå er aktiv. Dataene caches og vises neste gang
-           * modulen åpnes.
+           * som nÃ¥ er aktiv. Dataene caches og vises neste gang
+           * modulen Ã¥pnes.
            */
           if (
             String(
@@ -52747,7 +53275,7 @@ function renderPortal(sb, user, data) {
     createTabs(app, {
       overview: {
         label: "Oversikt",
-        icon: "🏠",
+        icon: "ðŸ ",
         group: "Oversikt",
         description:
           "Arbeidsforsiden og det som krever oppmerksomhet.",
@@ -52761,10 +53289,10 @@ function renderPortal(sb, user, data) {
 
       booking: {
         label: "Booking",
-        icon: "📅",
+        icon: "ðŸ“…",
         group: "Drift",
         description:
-          "Åpne bookingadministrasjonen for bookinger, regler og tidsluker.",
+          "Ã…pne bookingadministrasjonen for bookinger, regler og tidsluker.",
         render: function (parent) {
           renderBookingAdmin(parent);
         }
@@ -52772,10 +53300,10 @@ function renderPortal(sb, user, data) {
 
       products: {
         label: "Produkter",
-        icon: "🛒",
+        icon: "ðŸ›’",
         group: "Varer og lager",
         description:
-          "Finn produkt og se lager, utsalgspris, innkjøpspris, margin og status.",
+          "Finn produkt og se lager, utsalgspris, innkjÃ¸pspris, margin og status.",
         render: function (parent) {
           renderProductsManager(
             parent,
@@ -52787,10 +53315,10 @@ function renderPortal(sb, user, data) {
 
       inventoryAnalytics: {
         label: "Lageranalyse",
-        icon: "📊",
+        icon: "ðŸ“Š",
         group: "Varer og lager",
         description:
-          "Hva bør kjøpes inn, hva står stille og hvor er kapital bundet.",
+          "Hva bÃ¸r kjÃ¸pes inn, hva stÃ¥r stille og hvor er kapital bundet.",
         render: function (parent) {
           renderInventoryAnalytics(
             parent,
@@ -52802,7 +53330,7 @@ function renderPortal(sb, user, data) {
 
       productControl: {
         label: "Kontrollsenter",
-        icon: "🛡️",
+        icon: "ðŸ›¡ï¸",
         group: "Varer og lager",
         description:
           "Feil, avvik og godkjente unntak for varer, lager, pris og produktdata.",
@@ -52897,7 +53425,7 @@ function renderPortal(sb, user, data) {
 
       stock: {
         label: "Varetelling",
-        icon: "📦",
+        icon: "ðŸ“¦",
         group: "Varer og lager",
         description:
           "Aktiv telling, avvik, historikk og oppdatering mot Quickbutik.",
@@ -52911,7 +53439,7 @@ function renderPortal(sb, user, data) {
             latest.status ===
               "in_progress"
           ) {
-            return "Pågår";
+            return "PÃ¥gÃ¥r";
           }
 
           return null;
@@ -52944,10 +53472,10 @@ function renderPortal(sb, user, data) {
 
       offers: {
         label: "Tilbud",
-        icon: "🧾",
+        icon: "ðŸ§¾",
         group: "Salg og pris",
         description:
-          "Lag, rediger og følg opp kundetilbud og custom print-kalkyler.",
+          "Lag, rediger og fÃ¸lg opp kundetilbud og custom print-kalkyler.",
         render: function (parent) {
           renderLazyModule(
             parent,
@@ -52977,7 +53505,7 @@ function renderPortal(sb, user, data) {
 
       salesAnalytics: {
         label: "Salgsanalyse",
-        icon: "📈",
+        icon: "ðŸ“ˆ",
         group: "Salg og pris",
         description:
           "Omsetning, solgte enheter, bestselgere og svake produkter per periode.",
@@ -52991,7 +53519,7 @@ function renderPortal(sb, user, data) {
 
       marketAnalysis: {
         label: "Markedsanalyse",
-        icon: "🧭",
+        icon: "ðŸ§­",
         group: "Salg og pris",
         description:
           "Strategisk bilde av markedet, konkurrentene og utviklingen over tid.",
@@ -53006,10 +53534,10 @@ function renderPortal(sb, user, data) {
 
       priceCheck: {
         label: "Prissjekk",
-        icon: "💰",
+        icon: "ðŸ’°",
         group: "Salg og pris",
         description:
-          "Operativ kontroll av konkrete konkurrentpriser, forslag og oppfølging.",
+          "Operativ kontroll av konkrete konkurrentpriser, forslag og oppfÃ¸lging.",
         render: function (parent) {
           renderPriceCheckDashboard(
             parent,
@@ -53020,9 +53548,9 @@ function renderPortal(sb, user, data) {
       },
 
       supplierInvoices: {
-        label: "Leverandørfakturaer",
-        icon: "📥",
-        group: "Innkjøp",
+        label: "LeverandÃ¸rfakturaer",
+        icon: "ðŸ“¥",
+        group: "InnkjÃ¸p",
         description:
           "Last opp faktura, kontroller bare usikre linjer og oppdater reell kostpris.",
         badge: function () {
@@ -53052,11 +53580,11 @@ function renderPortal(sb, user, data) {
       },
 
       suppliers: {
-        label: "Leverandører",
-        icon: "🚚",
-        group: "Innkjøp",
+        label: "LeverandÃ¸rer",
+        icon: "ðŸšš",
+        group: "InnkjÃ¸p",
         description:
-          "Leverandørregister, kontakt, valuta, MOQ og standardtillegg.",
+          "LeverandÃ¸rregister, kontakt, valuta, MOQ og standardtillegg.",
         render: function (parent) {
           renderSuppliersAddonsManager(
             parent,
@@ -53068,10 +53596,10 @@ function renderPortal(sb, user, data) {
 
       tasks: {
         label: "Oppgaver",
-        icon: "✅",
+        icon: "âœ…",
         group: "Drift",
         description:
-          "Mine, åpne, forfalte og ferdige interne oppgaver.",
+          "Mine, Ã¥pne, forfalte og ferdige interne oppgaver.",
         badge: function () {
           return (
             data.tasks ||
@@ -53099,7 +53627,7 @@ function renderPortal(sb, user, data) {
 
       systemStatus: {
         label: "Systemstatus",
-        icon: "🟢",
+        icon: "ðŸŸ¢",
         group: "System",
         description:
           "Synkjobber, teknisk status og feilmeldinger.",
@@ -53128,10 +53656,11 @@ function renderPortal(sb, user, data) {
 
       auditLog: {
         label: "Endringslogg",
-        icon: "🕘",
+        icon: "ðŸ•˜",
         group: "System",
+        fullOnly: true,
         description:
-          "Hvem eller hva som endret interne data.",
+          "Hvem som logget inn og hvem eller hva som endret interne data.",
         render: function (parent) {
           renderLazyModule(
             parent,
@@ -53161,7 +53690,7 @@ function renderPortal(sb, user, data) {
 
       settings: {
         label: "Innstillinger",
-        icon: "⚙️",
+        icon: "âš™ï¸",
         group: "System",
         description:
           "Firmainfo, standardverdier og systemoppsett.",
@@ -53174,7 +53703,7 @@ function renderPortal(sb, user, data) {
           );
         }
       }
-    }, data);
+    }, data, user);
   }
 
   function renderNoAccess(sb) {
@@ -53342,7 +53871,7 @@ function renderPortal(sb, user, data) {
 
   ]).then(function (results) {
     if (results[0].error) {
-      renderError("Kunne ikke hente leverandørtillegg: " + results[0].error.message);
+      renderError("Kunne ikke hente leverandÃ¸rtillegg: " + results[0].error.message);
       return;
     }
 
@@ -53372,7 +53901,7 @@ function renderPortal(sb, user, data) {
     }
 
     if (results[6].error) {
-      renderError("Kunne ikke hente leverandører: " + results[6].error.message);
+      renderError("Kunne ikke hente leverandÃ¸rer: " + results[6].error.message);
       return;
     }
 
@@ -53421,7 +53950,7 @@ function renderPortal(sb, user, data) {
 
     if (results[15].error) {
       renderError(
-        "Kunne ikke hente prisoppfølginger: " +
+        "Kunne ikke hente prisoppfÃ¸lginger: " +
           results[15].error.message
       );
       return;
@@ -53576,7 +54105,7 @@ function renderPortal(sb, user, data) {
         return;
       }
 
-      sb.rpc("internal_get_current_user").then(function (userResult) {
+      sb.rpc("internal_get_current_access").then(function (userResult) {
         if (userResult.error) {
           renderError("Kunne ikke sjekke tilgang: " + userResult.error.message);
           return;
@@ -53587,7 +54116,15 @@ function renderPortal(sb, user, data) {
           return;
         }
 
-        loadPortalData(sb, userResult.data[0]);
+        var currentUser = userResult.data[0];
+
+        sb.rpc("internal_record_portal_access", {
+          p_page: String(window.location.hash || "overview").replace("#admin-", "")
+        }).then(function () {
+          /* Innlogging skal fortsatt fungere dersom kun loggfÃ¸ringen feiler. */
+        });
+
+        loadPortalData(sb, currentUser);
       });
     });
   }
@@ -53598,7 +54135,7 @@ function renderPortal(sb, user, data) {
   script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
   script.onload = startPortal;
   script.onerror = function () {
-    renderError("Klarte ikke å laste Supabase-scriptet.");
+    renderError("Klarte ikke Ã¥ laste Supabase-scriptet.");
   };
 
   document.head.appendChild(script);
