@@ -1449,7 +1449,7 @@
       parent,
       greeting,
       "Dette er arbeidsforsiden. Start med det som krever oppmerksomhet, eller gå direkte til en modul.",
-      "Admin v5.21 · Produktkontroll handlingsliste"
+      "Admin v5.22 · Produktkontroll godkjente unntak"
     );
 
     var products =
@@ -21210,7 +21210,11 @@ renderStockCountDetails();
     parent.appendChild(box);
   }
 
-function renderProductControlDashboard(parent, data) {
+function renderProductControlDashboard(
+  parent,
+  data,
+  sb
+) {
   createPageHeader(
     parent,
     "Produktkontroll",
@@ -21221,20 +21225,11 @@ function renderProductControlDashboard(parent, data) {
   var issues =
     data.productControlIssues || [];
 
+  var exceptions =
+    data.productControlExceptions || [];
+
   var searchTerm = "";
   var activeFilter = "all";
-
-
-  function countBy(filterKey) {
-    return issues.filter(
-      function (issue) {
-        return issueMatchesFilter(
-          issue,
-          filterKey
-        );
-      }
-    ).length;
-  }
 
 
   function isStockIssue(issue) {
@@ -21267,6 +21262,17 @@ function renderProductControlDashboard(parent, data) {
       "missing_quickbutik_product_id",
       "disc_missing_flight",
       "missing_inventory_group"
+    ].indexOf(
+      issue.issue_type
+    ) >= 0;
+  }
+
+
+  function canAcknowledge(issue) {
+    return [
+      "missing_purchase_price",
+      "negative_margin",
+      "low_margin"
     ].indexOf(
       issue.issue_type
     ) >= 0;
@@ -21313,8 +21319,20 @@ function renderProductControlDashboard(parent, data) {
   }
 
 
-  function issueMatchesSearch(
-    issue
+  function countBy(filterKey) {
+    return issues.filter(
+      function (issue) {
+        return issueMatchesFilter(
+          issue,
+          filterKey
+        );
+      }
+    ).length;
+  }
+
+
+  function textMatchesSearch(
+    values
   ) {
     var query =
       String(
@@ -21327,7 +21345,20 @@ function renderProductControlDashboard(parent, data) {
       return true;
     }
 
-    var haystack = [
+    return values
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .indexOf(
+        query
+      ) >= 0;
+  }
+
+
+  function issueMatchesSearch(
+    issue
+  ) {
+    return textMatchesSearch([
       issue.issue_label,
       issue.message,
       issue.product_name,
@@ -21337,22 +21368,27 @@ function renderProductControlDashboard(parent, data) {
       issue.inventory_main_group,
       issue.quickbutik_product_id,
       issue.quickbutik_variant_id
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    return (
-      haystack.indexOf(
-        query
-      ) >= 0
-    );
+    ]);
   }
 
 
-  function createSeverityBadge(
-    issue
+  function exceptionMatchesSearch(
+    exceptionRow
   ) {
+    return textMatchesSearch([
+      exceptionRow.issue_label,
+      exceptionRow.issue_type,
+      exceptionRow.product_name,
+      exceptionRow.variant_name,
+      exceptionRow.quickbutik_product_id,
+      exceptionRow.quickbutik_variant_id,
+      exceptionRow.reason_code,
+      exceptionRow.note
+    ]);
+  }
+
+
+  function createSeverityBadge(issue) {
     var badge =
       el(
         "span",
@@ -21398,6 +21434,626 @@ function renderProductControlDashboard(parent, data) {
   }
 
 
+  function reasonLabel(reasonCode) {
+    var labels = {
+      intentional_low_price:
+        "Bevisst lav pris / utfasing",
+      campaign_price:
+        "Kampanje / pris satt med vilje",
+      service_no_cost:
+        "Booking / tjeneste – ingen varekost",
+      gift_card_no_cost:
+        "Gavekort – ingen innkjøpspris",
+      intentional_no_cost:
+        "Ingen innkjøpspris med vilje",
+      accepted:
+        "Godkjent som korrekt",
+      other:
+        "Annet"
+    };
+
+    return (
+      labels[reasonCode] ||
+      reasonCode ||
+      "Godkjent"
+    );
+  }
+
+
+  function quickbutikAdminUrl(row) {
+    if (
+      !row.quickbutik_product_id
+    ) {
+      return null;
+    }
+
+    return (
+      "https://platform.quickbutik.com/admin/products/edit/" +
+      encodeURIComponent(
+        String(
+          row.quickbutik_product_id
+        )
+      )
+    );
+  }
+
+
+  function reloadProductControl() {
+    return Promise.all([
+      fetchAllRows(
+        sb,
+        "internal_product_control_view",
+        "product_name",
+        true
+      ),
+
+      sb
+        .from(
+          "internal_product_control_exceptions_view"
+        )
+        .select("*")
+        .eq(
+          "is_active",
+          true
+        )
+        .order(
+          "updated_at",
+          {
+            ascending: false
+          }
+        )
+    ])
+      .then(
+        function (results) {
+          if (
+            results[0] &&
+            results[0].error
+          ) {
+            throw results[0].error;
+          }
+
+          if (
+            results[1] &&
+            results[1].error
+          ) {
+            throw results[1].error;
+          }
+
+          data.productControlIssues =
+            results[0] &&
+            results[0].data
+              ? results[0].data
+              : [];
+
+          data.productControlExceptions =
+            results[1] &&
+            results[1].data
+              ? results[1].data
+              : [];
+
+          data.__lazyLoaded =
+            data.__lazyLoaded || {};
+
+          data.__lazyLoaded
+            .productControlIssues =
+            true;
+
+          data.__lazyLoaded
+            .productControlExceptions =
+            true;
+
+          clear(
+            parent
+          );
+
+          renderProductControlDashboard(
+            parent,
+            data,
+            sb
+          );
+        }
+      )
+      .catch(
+        function (error) {
+          alert(
+            "Kunne ikke oppdatere Produktkontroll: " +
+              skReadableError(
+                error &&
+                error.message
+                  ? error.message
+                  : error
+              )
+          );
+        }
+      );
+  }
+
+
+  function defaultReasonForIssue(issue) {
+    var productName =
+      String(
+        issue.product_name ||
+        ""
+      ).toLowerCase();
+
+    if (
+      issue.issue_type ===
+      "missing_purchase_price"
+    ) {
+      if (
+        productName.indexOf(
+          "booking"
+        ) >= 0 ||
+        productName.indexOf(
+          "simulator"
+        ) >= 0 ||
+        productName.indexOf(
+          "dart"
+        ) >= 0
+      ) {
+        return "service_no_cost";
+      }
+
+      if (
+        productName.indexOf(
+          "gavekort"
+        ) >= 0 ||
+        productName.indexOf(
+          "gift card"
+        ) >= 0
+      ) {
+        return "gift_card_no_cost";
+      }
+
+      return "intentional_no_cost";
+    }
+
+    if (
+      issue.issue_type ===
+        "negative_margin" ||
+      issue.issue_type ===
+        "low_margin"
+    ) {
+      return "intentional_low_price";
+    }
+
+    return "accepted";
+  }
+
+
+  function reasonOptionsForIssue(issue) {
+    if (
+      issue.issue_type ===
+      "missing_purchase_price"
+    ) {
+      return [
+        {
+          value:
+            "service_no_cost",
+          label:
+            "Booking / tjeneste – ingen varekost"
+        },
+        {
+          value:
+            "gift_card_no_cost",
+          label:
+            "Gavekort – ingen innkjøpspris"
+        },
+        {
+          value:
+            "intentional_no_cost",
+          label:
+            "Ingen innkjøpspris med vilje"
+        },
+        {
+          value:
+            "other",
+          label:
+            "Annet"
+        }
+      ];
+    }
+
+    return [
+      {
+        value:
+          "intentional_low_price",
+        label:
+          "Bevisst lav pris / utfasing"
+      },
+      {
+        value:
+          "campaign_price",
+        label:
+          "Kampanje / pris satt med vilje"
+      },
+      {
+        value:
+          "other",
+        label:
+          "Annet"
+      }
+    ];
+  }
+
+
+  function openAcknowledgeDialog(issue) {
+    var overlay =
+      el("div");
+
+    overlay.style.position =
+      "fixed";
+    overlay.style.inset =
+      "0";
+    overlay.style.zIndex =
+      "999999";
+    overlay.style.background =
+      "rgba(15, 23, 42, 0.55)";
+    overlay.style.display =
+      "flex";
+    overlay.style.alignItems =
+      "center";
+    overlay.style.justifyContent =
+      "center";
+    overlay.style.padding =
+      "18px";
+
+
+    var modal =
+      el("div");
+
+    modal.style.width =
+      "min(560px, 100%)";
+    modal.style.maxHeight =
+      "90vh";
+    modal.style.overflowY =
+      "auto";
+    modal.style.background =
+      "#fff";
+    modal.style.borderRadius =
+      "16px";
+    modal.style.boxShadow =
+      "0 24px 70px rgba(15,23,42,.30)";
+    modal.style.padding =
+      "20px";
+
+
+    var title =
+      el(
+        "h3",
+        "Godkjenn som bevisst"
+      );
+
+    title.style.margin =
+      "0 0 6px";
+
+    modal.appendChild(
+      title
+    );
+
+
+    var description =
+      el(
+        "div",
+        String(
+          issue.product_name ||
+          ""
+        ) +
+          (
+            issue.variant_name
+              ? (
+                  " · " +
+                  issue.variant_name
+                )
+              : ""
+          )
+      );
+
+    description.style.fontWeight =
+      "800";
+
+    modal.appendChild(
+      description
+    );
+
+
+    var issueText =
+      el(
+        "div",
+        String(
+          issue.issue_label ||
+          ""
+        ) +
+          (
+            issue.message
+              ? (
+                  " – " +
+                  issue.message
+                )
+              : ""
+          )
+      );
+
+    issueText.style.margin =
+      "7px 0 16px";
+    issueText.style.color =
+      "#64748b";
+    issueText.style.fontSize =
+      "13px";
+
+    modal.appendChild(
+      issueText
+    );
+
+
+    var reasonLabelNode =
+      el(
+        "label",
+        "Hvorfor skal varselet skjules?"
+      );
+
+    reasonLabelNode.style.display =
+      "block";
+    reasonLabelNode.style.fontWeight =
+      "800";
+    reasonLabelNode.style.marginBottom =
+      "6px";
+
+    modal.appendChild(
+      reasonLabelNode
+    );
+
+
+    var reasonSelect =
+      document.createElement(
+        "select"
+      );
+
+    reasonSelect.style.width =
+      "100%";
+    reasonSelect.style.padding =
+      "10px 12px";
+    reasonSelect.style.border =
+      "1px solid #cbd5e1";
+    reasonSelect.style.borderRadius =
+      "10px";
+    reasonSelect.style.background =
+      "#fff";
+
+    var defaultReason =
+      defaultReasonForIssue(
+        issue
+      );
+
+    reasonOptionsForIssue(
+      issue
+    ).forEach(
+      function (optionData) {
+        var option =
+          document.createElement(
+            "option"
+          );
+
+        option.value =
+          optionData.value;
+
+        option.textContent =
+          optionData.label;
+
+        if (
+          optionData.value ===
+          defaultReason
+        ) {
+          option.selected =
+            true;
+        }
+
+        reasonSelect.appendChild(
+          option
+        );
+      }
+    );
+
+    modal.appendChild(
+      reasonSelect
+    );
+
+
+    var noteLabel =
+      el(
+        "label",
+        "Notat (valgfritt)"
+      );
+
+    noteLabel.style.display =
+      "block";
+    noteLabel.style.fontWeight =
+      "800";
+    noteLabel.style.margin =
+      "14px 0 6px";
+
+    modal.appendChild(
+      noteLabel
+    );
+
+
+    var noteInput =
+      document.createElement(
+        "textarea"
+      );
+
+    noteInput.rows =
+      3;
+
+    noteInput.placeholder =
+      "F.eks. selges bevisst billig for å tømme lager.";
+
+    noteInput.style.width =
+      "100%";
+    noteInput.style.boxSizing =
+      "border-box";
+    noteInput.style.padding =
+      "10px 12px";
+    noteInput.style.border =
+      "1px solid #cbd5e1";
+    noteInput.style.borderRadius =
+      "10px";
+    noteInput.style.resize =
+      "vertical";
+
+    modal.appendChild(
+      noteInput
+    );
+
+
+    var info =
+      el(
+        "div",
+        "Bare dette varselet skjules. Andre feil på samme produkt vil fortsatt vises."
+      );
+
+    info.style.marginTop =
+      "12px";
+    info.style.padding =
+      "10px 12px";
+    info.style.borderRadius =
+      "10px";
+    info.style.background =
+      "#eff6ff";
+    info.style.color =
+      "#1e40af";
+    info.style.fontSize =
+      "13px";
+
+    modal.appendChild(
+      info
+    );
+
+
+    var actions =
+      el("div");
+
+    actions.style.display =
+      "flex";
+    actions.style.justifyContent =
+      "flex-end";
+    actions.style.gap =
+      "8px";
+    actions.style.marginTop =
+      "16px";
+
+
+    var cancel =
+      createButton(
+        "Avbryt"
+      );
+
+    cancel.onclick =
+      function () {
+        overlay.remove();
+      };
+
+    actions.appendChild(
+      cancel
+    );
+
+
+    var approve =
+      createPrimaryButton(
+        "✅ Godkjenn og skjul varsel"
+      );
+
+    approve.onclick =
+      function () {
+        approve.disabled =
+          true;
+
+        approve.textContent =
+          "Lagrer…";
+
+        sb.rpc(
+          "internal_product_control_acknowledge",
+          {
+            p_product_id:
+              issue.product_id,
+
+            p_issue_type:
+              issue.issue_type,
+
+            p_variant_id:
+              issue.variant_id ||
+              null,
+
+            p_reason_code:
+              reasonSelect.value,
+
+            p_note:
+              noteInput.value ||
+              null
+          }
+        )
+          .then(
+            function (result) {
+              if (
+                result.error
+              ) {
+                throw result.error;
+              }
+
+              overlay.remove();
+
+              return reloadProductControl();
+            }
+          )
+          .catch(
+            function (error) {
+              approve.disabled =
+                false;
+
+              approve.textContent =
+                "✅ Godkjenn og skjul varsel";
+
+              alert(
+                "Kunne ikke godkjenne varselet: " +
+                  skReadableError(
+                    error &&
+                    error.message
+                      ? error.message
+                      : error
+                  )
+              );
+            }
+          );
+      };
+
+    actions.appendChild(
+      approve
+    );
+
+    modal.appendChild(
+      actions
+    );
+
+    overlay.appendChild(
+      modal
+    );
+
+    overlay.onclick =
+      function (event) {
+        if (
+          event.target ===
+          overlay
+        ) {
+          overlay.remove();
+        }
+      };
+
+    document.body.appendChild(
+      overlay
+    );
+  }
+
+
   var dangerCount =
     countBy("danger");
 
@@ -21409,6 +22065,9 @@ function renderProductControlDashboard(parent, data) {
 
   var dataCount =
     countBy("data");
+
+  var approvedCount =
+    exceptions.length;
 
 
   addProStatGrid(
@@ -21461,6 +22120,16 @@ function renderProductControlDashboard(parent, data) {
           dataCount
             ? "warning"
             : "ok"
+      },
+      {
+        label:
+          "Godkjent",
+        value:
+          String(
+            approvedCount
+          ),
+        tone:
+          "ok"
       }
     ]
   );
@@ -21479,7 +22148,7 @@ function renderProductControlDashboard(parent, data) {
 
   if (dangerCount) {
     note.textContent =
-      "Start med «Må fikses». Resten er varsler du kan ta når det passer.";
+      "Start med «Må fikses». Bevisste avvik kan godkjennes slik at de ikke kommer tilbake som støy.";
   } else if (issues.length) {
     note.textContent =
       "Ingen kritiske avvik. Det finnes noen varsler som bør følges opp.";
@@ -21558,14 +22227,22 @@ function renderProductControlDashboard(parent, data) {
 
   refresh.onclick =
     function () {
-      data._loaded.productControlIssues =
-        false;
+      refresh.disabled =
+        true;
 
-      setHash(
-        "admin-productControl"
-      );
+      refresh.textContent =
+        "Oppdaterer…";
 
-      renderApp();
+      reloadProductControl()
+        .finally(
+          function () {
+            refresh.disabled =
+              false;
+
+            refresh.textContent =
+              "↻ Oppdater";
+          }
+        );
     };
 
   controls.appendChild(
@@ -21685,6 +22362,12 @@ function renderProductControlDashboard(parent, data) {
     dataCount
   );
 
+  addFilterButton(
+    "Godkjent",
+    "approved",
+    approvedCount
+  );
+
   updateFilterButtons();
 
   parent.appendChild(
@@ -21700,31 +22383,480 @@ function renderProductControlDashboard(parent, data) {
   );
 
 
-  function quickbutikAdminUrl(
-    issue
+  function createActionLink(
+    label,
+    href,
+    primary
   ) {
-    if (
-      !issue.quickbutik_product_id
-    ) {
-      return null;
+    var link =
+      el(
+        "a",
+        label
+      );
+
+    link.href =
+      href;
+
+    link.target =
+      "_blank";
+
+    link.rel =
+      "noopener";
+
+    link.style.display =
+      "inline-flex";
+
+    link.style.padding =
+      "8px 10px";
+
+    link.style.borderRadius =
+      "9px";
+
+    link.style.textDecoration =
+      "none";
+
+    link.style.fontWeight =
+      primary
+        ? "800"
+        : "700";
+
+    link.style.whiteSpace =
+      "nowrap";
+
+    if (primary) {
+      link.style.border =
+        "1px solid #111827";
+      link.style.background =
+        "#111827";
+      link.style.color =
+        "#fff";
+    } else {
+      link.style.border =
+        "1px solid #d1d5db";
+      link.style.background =
+        "#fff";
+      link.style.color =
+        "#111827";
     }
 
-    return (
-      "https://platform.quickbutik.com/admin/products/edit/" +
-      encodeURIComponent(
-        String(
-          issue.quickbutik_product_id
+    return link;
+  }
+
+
+  function renderApprovedRows() {
+    var filtered =
+      exceptions
+        .filter(
+          exceptionMatchesSearch
         )
-      )
+        .slice()
+        .sort(
+          function (a, b) {
+            return String(
+              b.updated_at ||
+              ""
+            ).localeCompare(
+              String(
+                a.updated_at ||
+                ""
+              )
+            );
+          }
+        );
+
+
+    if (!filtered.length) {
+      var empty =
+        el(
+          "div",
+          searchTerm
+            ? "Ingen godkjente unntak matcher søket."
+            : "Ingen godkjente unntak ennå."
+        );
+
+      empty.className =
+        "sk-note";
+
+      tableArea.appendChild(
+        empty
+      );
+
+      return;
+    }
+
+
+    var meta =
+      el(
+        "div",
+        String(
+          filtered.length
+        ) +
+          (
+            filtered.length ===
+            1
+              ? " godkjent unntak"
+              : " godkjente unntak"
+          )
+      );
+
+    meta.style.fontSize =
+      "13px";
+    meta.style.color =
+      "#64748b";
+    meta.style.marginBottom =
+      "8px";
+
+    tableArea.appendChild(
+      meta
+    );
+
+
+    var wrap =
+      el("div");
+
+    wrap.style.overflowX =
+      "auto";
+    wrap.style.border =
+      "1px solid #e5e7eb";
+    wrap.style.borderRadius =
+      "14px";
+
+
+    var table =
+      el("table");
+
+    table.style.width =
+      "100%";
+    table.style.borderCollapse =
+      "collapse";
+    table.style.fontSize =
+      "14px";
+
+
+    var thead =
+      el("thead");
+
+    var headTr =
+      el("tr");
+
+    [
+      "Produkt",
+      "Godkjent avvik",
+      "Begrunnelse",
+      "Status",
+      "Handling"
+    ].forEach(
+      function (label) {
+        var th =
+          el(
+            "th",
+            label
+          );
+
+        th.style.textAlign =
+          "left";
+        th.style.padding =
+          "11px";
+        th.style.borderBottom =
+          "1px solid #e5e7eb";
+        th.style.background =
+          "#f9fafb";
+        th.style.whiteSpace =
+          "nowrap";
+
+        headTr.appendChild(
+          th
+        );
+      }
+    );
+
+    thead.appendChild(
+      headTr
+    );
+
+    table.appendChild(
+      thead
+    );
+
+
+    var tbody =
+      el("tbody");
+
+
+    filtered.forEach(
+      function (exceptionRow) {
+        var tr =
+          el("tr");
+
+
+        function tdNode(node) {
+          var td =
+            el("td");
+
+          td.style.padding =
+            "11px";
+          td.style.borderBottom =
+            "1px solid #f3f4f6";
+          td.style.verticalAlign =
+            "top";
+
+          td.appendChild(
+            node
+          );
+
+          tr.appendChild(
+            td
+          );
+        }
+
+
+        var productBox =
+          el("div");
+
+        var productName =
+          el(
+            "strong",
+            exceptionRow.product_name ||
+              "-"
+          );
+
+        productBox.appendChild(
+          productName
+        );
+
+        if (
+          exceptionRow.variant_name
+        ) {
+          var variantMeta =
+            el(
+              "div",
+              exceptionRow.variant_name
+            );
+
+          variantMeta.style.color =
+            "#64748b";
+          variantMeta.style.fontSize =
+            "13px";
+          variantMeta.style.marginTop =
+            "3px";
+
+          productBox.appendChild(
+            variantMeta
+          );
+        }
+
+        tdNode(
+          productBox
+        );
+
+
+        tdNode(
+          el(
+            "strong",
+            exceptionRow.issue_label ||
+              exceptionRow.issue_type ||
+              "-"
+          )
+        );
+
+
+        var reasonBox =
+          el("div");
+
+        reasonBox.appendChild(
+          el(
+            "strong",
+            reasonLabel(
+              exceptionRow.reason_code
+            )
+          )
+        );
+
+        if (
+          exceptionRow.note
+        ) {
+          var noteNode =
+            el(
+              "div",
+              exceptionRow.note
+            );
+
+          noteNode.style.marginTop =
+            "3px";
+          noteNode.style.color =
+            "#64748b";
+          noteNode.style.fontSize =
+            "13px";
+
+          reasonBox.appendChild(
+            noteNode
+          );
+        }
+
+        tdNode(
+          reasonBox
+        );
+
+
+        var statusBadge =
+          el(
+            "span",
+            exceptionRow
+              .condition_still_present
+              ? "Skjules fortsatt"
+              : "Forholdet er ikke aktivt nå"
+          );
+
+        statusBadge.style.display =
+          "inline-flex";
+        statusBadge.style.padding =
+          "5px 8px";
+        statusBadge.style.borderRadius =
+          "999px";
+        statusBadge.style.fontSize =
+          "12px";
+        statusBadge.style.fontWeight =
+          "800";
+
+        if (
+          exceptionRow
+            .condition_still_present
+        ) {
+          statusBadge.style.background =
+            "#dcfce7";
+          statusBadge.style.color =
+            "#166534";
+        } else {
+          statusBadge.style.background =
+            "#f1f5f9";
+          statusBadge.style.color =
+            "#475569";
+        }
+
+        tdNode(
+          statusBadge
+        );
+
+
+        var actionBox =
+          el("div");
+
+        actionBox.style.display =
+          "flex";
+        actionBox.style.gap =
+          "7px";
+        actionBox.style.flexWrap =
+          "wrap";
+
+
+        var qbUrl =
+          quickbutikAdminUrl(
+            exceptionRow
+          );
+
+        if (qbUrl) {
+          actionBox.appendChild(
+            createActionLink(
+              "Åpne i Quickbutik",
+              qbUrl,
+              false
+            )
+          );
+        }
+
+
+        var reopen =
+          createButton(
+            "Gjenåpne varsel"
+          );
+
+        reopen.onclick =
+          function () {
+            var confirmed =
+              window.confirm(
+                "Gjenåpne dette varselet?\n\n" +
+                "Det vil vises i Produktkontroll igjen så lenge forholdet fortsatt er til stede."
+              );
+
+            if (!confirmed) {
+              return;
+            }
+
+            reopen.disabled =
+              true;
+
+            reopen.textContent =
+              "Gjenåpner…";
+
+            sb.rpc(
+              "internal_product_control_unacknowledge",
+              {
+                p_exception_id:
+                  exceptionRow.id
+              }
+            )
+              .then(
+                function (result) {
+                  if (
+                    result.error
+                  ) {
+                    throw result.error;
+                  }
+
+                  return reloadProductControl();
+                }
+              )
+              .catch(
+                function (error) {
+                  reopen.disabled =
+                    false;
+
+                  reopen.textContent =
+                    "Gjenåpne varsel";
+
+                  alert(
+                    "Kunne ikke gjenåpne varselet: " +
+                      skReadableError(
+                        error &&
+                        error.message
+                          ? error.message
+                          : error
+                      )
+                  );
+                }
+              );
+          };
+
+        actionBox.appendChild(
+          reopen
+        );
+
+        tdNode(
+          actionBox
+        );
+
+        tbody.appendChild(
+          tr
+        );
+      }
+    );
+
+
+    table.appendChild(
+      tbody
+    );
+
+    wrap.appendChild(
+      table
+    );
+
+    tableArea.appendChild(
+      wrap
     );
   }
 
 
-  function renderRows() {
-    clear(
-      tableArea
-    );
-
+  function renderIssueRows() {
     var filtered =
       issues
         .filter(
@@ -21820,10 +22952,8 @@ function renderProductControlDashboard(parent, data) {
 
     resultMeta.style.fontSize =
       "13px";
-
     resultMeta.style.color =
       "#64748b";
-
     resultMeta.style.marginBottom =
       "8px";
 
@@ -21837,10 +22967,8 @@ function renderProductControlDashboard(parent, data) {
 
     wrap.style.overflowX =
       "auto";
-
     wrap.style.border =
       "1px solid #e5e7eb";
-
     wrap.style.borderRadius =
       "14px";
 
@@ -21850,10 +22978,8 @@ function renderProductControlDashboard(parent, data) {
 
     table.style.width =
       "100%";
-
     table.style.borderCollapse =
       "collapse";
-
     table.style.fontSize =
       "14px";
 
@@ -21881,16 +23007,12 @@ function renderProductControlDashboard(parent, data) {
 
         th.style.textAlign =
           "left";
-
         th.style.padding =
           "11px";
-
         th.style.borderBottom =
           "1px solid #e5e7eb";
-
         th.style.background =
           "#f9fafb";
-
         th.style.whiteSpace =
           "nowrap";
 
@@ -21919,18 +23041,14 @@ function renderProductControlDashboard(parent, data) {
           el("tr");
 
 
-        function tdNode(
-          node
-        ) {
+        function tdNode(node) {
           var td =
             el("td");
 
           td.style.padding =
             "11px";
-
           td.style.borderBottom =
             "1px solid #f3f4f6";
-
           td.style.verticalAlign =
             "top";
 
@@ -21944,9 +23062,7 @@ function renderProductControlDashboard(parent, data) {
         }
 
 
-        function tdText(
-          value
-        ) {
+        function tdText(value) {
           tdNode(
             el(
               "span",
@@ -21970,15 +23086,12 @@ function renderProductControlDashboard(parent, data) {
         var issueBox =
           el("div");
 
-        var issueLabel =
+        issueBox.appendChild(
           el(
             "strong",
             issue.issue_label ||
               "-"
-          );
-
-        issueBox.appendChild(
-          issueLabel
+          )
         );
 
 
@@ -21991,13 +23104,10 @@ function renderProductControlDashboard(parent, data) {
 
         msg.style.color =
           "#64748b";
-
         msg.style.fontSize =
           "13px";
-
         msg.style.marginTop =
           "3px";
-
         msg.style.maxWidth =
           "440px";
 
@@ -22013,15 +23123,12 @@ function renderProductControlDashboard(parent, data) {
         var productBox =
           el("div");
 
-        var productName =
+        productBox.appendChild(
           el(
             "strong",
             issue.product_name ||
               "-"
-          );
-
-        productBox.appendChild(
-          productName
+          )
         );
 
 
@@ -22046,10 +23153,8 @@ function renderProductControlDashboard(parent, data) {
 
         meta.style.color =
           "#64748b";
-
         meta.style.fontSize =
           "13px";
-
         meta.style.marginTop =
           "3px";
 
@@ -22113,10 +23218,8 @@ function renderProductControlDashboard(parent, data) {
 
         actionBox.style.display =
           "flex";
-
         actionBox.style.gap =
           "7px";
-
         actionBox.style.flexWrap =
           "wrap";
 
@@ -22127,99 +23230,46 @@ function renderProductControlDashboard(parent, data) {
           );
 
         if (qbUrl) {
-          var quickbutik =
-            el(
-              "a",
-              "Åpne i Quickbutik"
-            );
-
-          quickbutik.href =
-            qbUrl;
-
-          quickbutik.target =
-            "_blank";
-
-          quickbutik.rel =
-            "noopener";
-
-          quickbutik.style.display =
-            "inline-flex";
-
-          quickbutik.style.padding =
-            "8px 10px";
-
-          quickbutik.style.borderRadius =
-            "9px";
-
-          quickbutik.style.border =
-            "1px solid #111827";
-
-          quickbutik.style.background =
-            "#111827";
-
-          quickbutik.style.color =
-            "#fff";
-
-          quickbutik.style.textDecoration =
-            "none";
-
-          quickbutik.style.fontWeight =
-            "800";
-
-          quickbutik.style.whiteSpace =
-            "nowrap";
-
           actionBox.appendChild(
-            quickbutik
+            createActionLink(
+              "Åpne i Quickbutik",
+              qbUrl,
+              true
+            )
           );
         }
 
 
         if (issue.product_url) {
-          var publicLink =
-            el(
-              "a",
-              "Se i nettbutikk"
+          actionBox.appendChild(
+            createActionLink(
+              "Se i nettbutikk",
+              issue.product_url,
+              false
+            )
+          );
+        }
+
+
+        if (
+          canAcknowledge(
+            issue
+          )
+        ) {
+          var acknowledge =
+            createButton(
+              "✓ Godkjenn som OK"
             );
 
-          publicLink.href =
-            issue.product_url;
-
-          publicLink.target =
-            "_blank";
-
-          publicLink.rel =
-            "noopener";
-
-          publicLink.style.display =
-            "inline-flex";
-
-          publicLink.style.padding =
-            "8px 10px";
-
-          publicLink.style.borderRadius =
-            "9px";
-
-          publicLink.style.border =
-            "1px solid #d1d5db";
-
-          publicLink.style.background =
-            "#fff";
-
-          publicLink.style.color =
-            "#111827";
-
-          publicLink.style.textDecoration =
-            "none";
-
-          publicLink.style.fontWeight =
-            "700";
-
-          publicLink.style.whiteSpace =
-            "nowrap";
+          acknowledge.onclick =
+            function () {
+              openAcknowledgeDialog(
+                issue
+              );
+            };
 
           actionBox.appendChild(
-            publicLink
+            acknowledge
           );
         }
 
@@ -22246,6 +23296,23 @@ function renderProductControlDashboard(parent, data) {
     tableArea.appendChild(
       wrap
     );
+  }
+
+
+  function renderRows() {
+    clear(
+      tableArea
+    );
+
+    if (
+      activeFilter ===
+      "approved"
+    ) {
+      renderApprovedRows();
+      return;
+    }
+
+    renderIssueRows();
   }
 
 
@@ -45564,17 +46631,68 @@ function renderPortal(sb, user, data) {
             "productControlIssues",
             "produktkontroll",
             function () {
-              return fetchAllRows(
-                sb,
-                "internal_product_control_view",
-                "product_name",
-                true
-              );
+              return Promise.all([
+                fetchAllRows(
+                  sb,
+                  "internal_product_control_view",
+                  "product_name",
+                  true
+                ),
+
+                sb
+                  .from(
+                    "internal_product_control_exceptions_view"
+                  )
+                  .select("*")
+                  .eq(
+                    "is_active",
+                    true
+                  )
+                  .order(
+                    "updated_at",
+                    {
+                      ascending: false
+                    }
+                  )
+              ])
+                .then(
+                  function (results) {
+                    if (
+                      results[0] &&
+                      results[0].error
+                    ) {
+                      return results[0];
+                    }
+
+                    if (
+                      results[1] &&
+                      results[1].error
+                    ) {
+                      return results[1];
+                    }
+
+                    data.productControlExceptions =
+                      results[1] &&
+                      results[1].data
+                        ? results[1].data
+                        : [];
+
+                    data.__lazyLoaded =
+                      data.__lazyLoaded || {};
+
+                    data.__lazyLoaded
+                      .productControlExceptions =
+                      true;
+
+                    return results[0];
+                  }
+                );
             },
             function () {
               renderProductControlDashboard(
                 parent,
-                data
+                data,
+                sb
               );
             }
           );
@@ -46120,6 +47238,7 @@ function renderPortal(sb, user, data) {
       customers: results[7].data || [],
       stockCounts: results[8].data || [],
       productControlIssues: results[9].data || [],
+      productControlExceptions: [],
       stockCountItems: results[10].data || [],
       priceComparisons: results[11].data || [],
       priceCompetitors: results[12].data || [],
@@ -46146,6 +47265,7 @@ function renderPortal(sb, user, data) {
         stockCountItems: false,
         productQualityIssues: false,
         productControlIssues: false,
+        productControlExceptions: false,
         auditLog: false
       },
       __lazyLoading: {}
