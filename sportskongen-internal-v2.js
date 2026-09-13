@@ -2531,7 +2531,7 @@
     createPageHeader(
       parent,
       "Zettle-salg",
-      "Test tilkoblingen f\u00f8r salg lagres. Testen leser bare Zettle-kvitteringer og endrer verken lager, salgstall eller Supabase.",
+      "Kontroller Zettle-salget mot Quickbutik f\u00f8r du importerer. Importen endrer aldri lageret.",
       "Kun full kontroll"
     );
 
@@ -2540,14 +2540,14 @@
 
     var title = el(
       "h3",
-      "Test Zettle-tilkoblingen"
+      "Zettle-kobling og salgsimport"
     );
     title.style.marginTop = "0";
     card.appendChild(title);
 
     var description = el(
       "p",
-      "Henter inntil 100 kvitteringer fra de siste sju dagene. Ingen opplysninger blir lagret i denne testen."
+      "Test koblingen, kontroller deretter ett \u00e5r med salg f\u00f8r du importerer. Samme kvittering blir ikke lagret to ganger."
     );
     description.style.color =
       "#64748b";
@@ -2557,12 +2557,81 @@
       createPrimaryButton(
         "Test Zettle n\u00e5"
       );
+    var previewButton =
+      createSecondaryButton(
+        "Forh\u00e5ndsvis 365 dager"
+      );
+    previewButton.style.marginLeft =
+      "8px";
+    var importButton =
+      createPrimaryButton(
+        "Importer Zettle-salg"
+      );
+    importButton.style.marginLeft =
+      "8px";
+    importButton.disabled = true;
 
     var resultBox = el("div");
     resultBox.className = "sk-note";
     resultBox.style.display = "none";
     resultBox.style.marginTop = "14px";
     resultBox.style.whiteSpace = "pre-wrap";
+
+    function getAccessToken() {
+      return sb.auth.getSession()
+        .then(function (sessionResult) {
+          var session =
+            sessionResult &&
+            sessionResult.data
+              ? sessionResult.data.session
+              : null;
+
+          if (
+            sessionResult.error ||
+            !session ||
+            !session.access_token
+          ) {
+            throw new Error(
+              "Fant ingen aktiv innlogging. Last siden p\u00e5 nytt og logg inn igjen."
+            );
+          }
+
+          return session.access_token;
+        });
+    }
+
+    function readResponse(response) {
+      return response.text()
+        .then(function (responseText) {
+          var responseData = null;
+
+          try {
+            responseData = responseText
+              ? JSON.parse(responseText)
+              : null;
+          } catch (error) {
+            responseData = {
+              raw_response:
+                responseText
+            };
+          }
+
+          if (
+            !response.ok ||
+            !responseData ||
+            responseData.ok !== true
+          ) {
+            throw new Error(
+              "Zettle-kallet feilet (HTTP " +
+              String(response.status) +
+              "): " +
+              JSON.stringify(responseData)
+            );
+          }
+
+          return responseData;
+        });
+    }
 
     testButton.onclick =
       function () {
@@ -2579,25 +2648,9 @@
         resultBox.textContent =
           "Kontrollerer innlogging og kobler til Zettle\u2026";
 
-        sb.auth.getSession()
+        getAccessToken()
           .then(
-            function (sessionResult) {
-              var session =
-                sessionResult &&
-                sessionResult.data
-                  ? sessionResult.data.session
-                  : null;
-
-              if (
-                sessionResult.error ||
-                !session ||
-                !session.access_token
-              ) {
-                throw new Error(
-                  "Fant ingen aktiv innlogging. Last siden p\u00e5 nytt og logg inn igjen."
-                );
-              }
-
+            function (accessToken) {
               return fetch(
                 "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/zettle-test?days=7",
                 {
@@ -2605,63 +2658,15 @@
                   headers: {
                     "Authorization":
                       "Bearer " +
-                      session.access_token
+                      accessToken
                   }
                 }
               );
             }
           )
+          .then(readResponse)
           .then(
-            function (response) {
-              return response
-                .text()
-                .then(
-                  function (responseText) {
-                    var responseData = null;
-
-                    try {
-                      responseData =
-                        responseText
-                          ? JSON.parse(
-                              responseText
-                            )
-                          : null;
-                    } catch (error) {
-                      responseData = {
-                        raw_response:
-                          responseText
-                      };
-                    }
-
-                    return {
-                      ok: response.ok,
-                      status:
-                        response.status,
-                      data:
-                        responseData
-                    };
-                  }
-                );
-            }
-          )
-          .then(
-            function (result) {
-              if (
-                !result.ok ||
-                !result.data ||
-                result.data.ok !== true
-              ) {
-                throw new Error(
-                  "Zettle-testen feilet (HTTP " +
-                  String(result.status) +
-                  "): " +
-                  JSON.stringify(
-                    result.data
-                  )
-                );
-              }
-
-              var data = result.data;
+            function (data) {
               var skuLines = Number(
                 data.product_lines_with_sku ||
                 0
@@ -2719,13 +2724,216 @@
           );
       };
 
+    function fetchZettleBatch(
+      token,
+      dryRun,
+      lastPurchaseHash
+    ) {
+      var endpoint =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-zettle-sales" +
+        "?days=365&limit=100&dryRun=" +
+        (dryRun ? "true" : "false");
+
+      if (lastPurchaseHash) {
+        endpoint +=
+          "&lastPurchaseHash=" +
+          encodeURIComponent(
+            lastPurchaseHash
+          );
+      }
+
+      return fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Authorization":
+            "Bearer " + token
+        }
+      }).then(readResponse);
+    }
+
+    function runZettleImport(dryRun) {
+      var activeButton = dryRun
+        ? previewButton
+        : importButton;
+      var originalText =
+        activeButton.textContent;
+      var totals = {
+        purchases: 0,
+        lines: 0,
+        matched: 0,
+        unmatched: 0,
+        amount: 0,
+        pages: 0,
+        samples: []
+      };
+
+      testButton.disabled = true;
+      previewButton.disabled = true;
+      importButton.disabled = true;
+      activeButton.textContent = dryRun
+        ? "Kontrollerer\u2026"
+        : "Importerer\u2026";
+      resultBox.style.display = "block";
+      resultBox.className = "sk-note";
+      resultBox.textContent = dryRun
+        ? "Kontrollerer Zettle-salg mot Quickbutik-SKU-er\u2026"
+        : "Importerer Zettle-salg. Lageret r\u00f8res ikke\u2026";
+
+      return getAccessToken()
+        .then(function (token) {
+          function readPage(lastHash) {
+            return fetchZettleBatch(
+              token,
+              dryRun,
+              lastHash
+            ).then(function (data) {
+              totals.pages += 1;
+              totals.purchases += Number(
+                data.purchases_read || 0
+              );
+              totals.lines += Number(
+                data.product_lines || 0
+              );
+              totals.matched += Number(
+                data.matched_lines || 0
+              );
+              totals.unmatched += Number(
+                data.unmatched_lines || 0
+              );
+              totals.amount += Number(
+                data.amount_inc_vat || 0
+              );
+              totals.samples =
+                totals.samples.concat(
+                  data.unmatched_sample || []
+                ).slice(0, 20);
+
+              resultBox.textContent =
+                (dryRun
+                  ? "Kontrollerer"
+                  : "Importerer") +
+                " Zettle-salg\u2026\nPuljer: " +
+                String(totals.pages) +
+                "\nKvitteringer: " +
+                String(totals.purchases) +
+                "\nProduktlinjer: " +
+                String(totals.lines);
+
+              if (
+                data.has_more &&
+                data.last_purchase_hash &&
+                totals.pages < 200
+              ) {
+                return readPage(
+                  data.last_purchase_hash
+                );
+              }
+
+              return totals;
+            });
+          }
+
+          return readPage("");
+        })
+        .then(function () {
+          totals.amount = Math.round(
+            totals.amount * 100
+          ) / 100;
+          var unmatchedText =
+            totals.unmatched > 0
+              ? "\n\nIkke koblet: " +
+                String(totals.unmatched) +
+                " linje(r). Disse holdes utenfor analysen.\n" +
+                totals.samples.map(
+                  function (row) {
+                    return "- " +
+                      String(
+                        row.sku ||
+                        "uten SKU"
+                      ) +
+                      " \u00b7 " +
+                      String(
+                        row.name ||
+                        "Ukjent vare"
+                      ) +
+                      " (" +
+                      String(
+                        row.reason ||
+                        "ukjent"
+                      ) +
+                      ")";
+                  }
+                ).join("\n")
+              : "\n\nAlle produktlinjer er koblet.";
+
+          resultBox.className =
+            totals.unmatched > 0
+              ? "sk-warning"
+              : "sk-success";
+          resultBox.textContent =
+            (dryRun
+              ? "Forh\u00e5ndsvisning ferdig."
+              : "Import ferdig.") +
+            "\n\nKvitteringer: " +
+            String(totals.purchases) +
+            "\nProduktlinjer: " +
+            String(totals.lines) +
+            "\nKoblet til Quickbutik: " +
+            String(totals.matched) +
+            "\nBel\u00f8p inkl. mva: " +
+            formatMoney(totals.amount) +
+            unmatchedText +
+            (dryRun
+              ? "\n\nIngen data ble lagret og lageret ble ikke endret."
+              : "\n\nSalgene er lagret. Lageret ble ikke endret.");
+
+          if (dryRun) {
+            importButton.disabled = false;
+          }
+        })
+        .catch(function (error) {
+          resultBox.className =
+            "sk-warning";
+          resultBox.textContent =
+            error && error.message
+              ? error.message
+              : String(error);
+        })
+        .finally(function () {
+          testButton.disabled = false;
+          previewButton.disabled = false;
+          activeButton.textContent =
+            originalText;
+
+          if (!dryRun) {
+            importButton.disabled = true;
+          }
+        });
+    }
+
+    previewButton.onclick = function () {
+      runZettleImport(true);
+    };
+
+    importButton.onclick = function () {
+      if (!window.confirm(
+        "Importer kontrollerte Zettle-salg for de siste 365 dagene? Lageret blir ikke endret."
+      )) {
+        return;
+      }
+
+      runZettleImport(false);
+    };
+
     card.appendChild(testButton);
+    card.appendChild(previewButton);
+    card.appendChild(importButton);
     card.appendChild(resultBox);
     parent.appendChild(card);
 
     var next = el(
       "div",
-      "N\u00e5r testen er godkjent, bygger vi import med kanalmerking, dublettkontroll, returer og produktkobling."
+      "Returer trekkes fra. Bare sikkert SKU-koblede linjer tas med i salgsanalysen."
     );
     next.className = "sk-note";
     next.style.marginTop = "14px";
