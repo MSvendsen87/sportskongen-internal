@@ -1548,7 +1548,8 @@
 
   function renderOverviewDashboard(
     parent,
-    data
+    data,
+    user
   ) {
     var hour =
       new Date().getHours();
@@ -1886,6 +1887,41 @@
     parent.appendChild(
       attention
     );
+
+
+    addDashboardSectionTitle(
+      parent,
+      "Lagerkontroll",
+      "Kontroll av lagerendringer og mulige manuelle justeringer."
+    );
+
+    var adjustmentCard =
+      createDashboardActionCard(
+        parent,
+        "\ud83d\udd12",
+        "Vis manuelle justeringer i Quickbutik",
+        isFullControl(user)
+          ? "\u00c5pne den detaljerte kontrollen av registrerte lagerendringer."
+          : "Detaljene er bare tilgjengelige for administratorer med full kontroll.",
+        "warning",
+        null
+      );
+
+    adjustmentCard.onclick =
+      function () {
+        if (!isFullControl(user)) {
+          window.alert(
+            "Lagerendringer kontrolleres mot salg, varemottak og varetelling.\n\nDetaljene er bare tilgjengelige for administratorer med full kontroll."
+          );
+          return;
+        }
+
+        if (skPortalNavigate) {
+          skPortalNavigate(
+            "inventoryAdjustments"
+          );
+        }
+      };
 
 
     addDashboardSectionTitle(
@@ -2326,6 +2362,164 @@
     );
     parent.appendChild(
       grid
+    );
+  }
+
+
+  function renderInventoryAdjustmentControl(
+    parent,
+    data
+  ) {
+    createPageHeader(
+      parent,
+      "Manuelle lagerjusteringer",
+      "Viser lagerendringer som er registrert n\u00e5r produktdata hentes fra Quickbutik. Endringene m\u00e5 kontrolleres mot salg, varemottak og varetelling f\u00f8r det trekkes en konklusjon.",
+      "Kun full kontroll"
+    );
+
+    var rows =
+      data.inventoryAdjustments || [];
+
+    var decreases =
+      rows.filter(
+        function (row) {
+          return Number(
+            row.quantity_change || 0
+          ) < 0;
+        }
+      );
+
+    addProStatGrid(
+      parent,
+      [
+        {
+          label:
+            "Registrerte endringer",
+          value:
+            String(rows.length),
+          tone:
+            rows.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Reduksjoner",
+          value:
+            String(decreases.length),
+          tone:
+            decreases.length
+              ? "warning"
+              : "ok"
+        },
+        {
+          label:
+            "Kontrollstatus",
+          value:
+            "Historikk aktiv",
+          tone:
+            "ok"
+        }
+      ]
+    );
+
+    var explanation = el(
+      "div",
+      "En registrert reduksjon er ikke i seg selv bevis p\u00e5 en manuell justering. Inntil Zettle-salg er koblet inn, kan et butikksalg forklare enkelte endringer. Bruk derfor oversikten som avvikskontroll, ikke som personbevis."
+    );
+    explanation.className =
+      "sk-warning";
+    explanation.style.margin =
+      "14px 0";
+    parent.appendChild(
+      explanation
+    );
+
+    var displayRows =
+      rows.map(
+        function (row) {
+          var change =
+            Number(
+              row.quantity_change || 0
+            );
+
+          return {
+            detected_at_text:
+              formatAdminDateTime(
+                row.detected_at
+              ),
+            product_text:
+              row.product_name || "-",
+            variant_text:
+              row.variant_name || "-",
+            previous_quantity:
+              row.previous_quantity,
+            new_quantity:
+              row.new_quantity,
+            change_text:
+              change > 0
+                ? "+" + String(change)
+                : String(change),
+            source_text:
+              row.change_source ===
+                "quickbutik"
+                ? "Quickbutik-synk"
+                : (
+                    row.change_source ||
+                    "Ukjent"
+                  )
+          };
+        }
+      );
+
+    addTable(
+      parent,
+      [
+        {
+          key:
+            "detected_at_text",
+          label:
+            "Oppdaget"
+        },
+        {
+          key:
+            "product_text",
+          label:
+            "Produkt"
+        },
+        {
+          key:
+            "variant_text",
+          label:
+            "Variant"
+        },
+        {
+          key:
+            "previous_quantity",
+          label:
+            "F\u00f8r"
+        },
+        {
+          key:
+            "new_quantity",
+          label:
+            "Etter"
+        },
+        {
+          key:
+            "change_text",
+          label:
+            "Endring"
+        },
+        {
+          key:
+            "source_text",
+          label:
+            "Kilde"
+        }
+      ],
+      displayRows,
+      "Ingen lagerendringer er registrert enn\u00e5. Historikken fylles n\u00e5r en senere produktsynk oppdager en endret saldo."
     );
   }
 
@@ -53872,7 +54066,8 @@ function renderPortal(sb, user, data) {
         render: function (parent) {
           renderOverviewDashboard(
             parent,
-            data
+            data,
+            user
           );
         }
       },
@@ -53914,6 +54109,40 @@ function renderPortal(sb, user, data) {
             parent,
             data,
             sb
+          );
+        }
+      },
+
+      inventoryAdjustments: {
+        label: "Lagerjusteringer",
+        icon: "\ud83d\udd12",
+        group: "Varer og lager",
+        fullOnly: true,
+        description:
+          "Registrerte lagerendringer og kontroll av mulige manuelle justeringer.",
+        render: function (parent) {
+          renderLazyModule(
+            parent,
+            "inventoryAdjustments",
+            "lagerendringer",
+            function () {
+              return sb
+                .from(
+                  "internal_inventory_adjustment_view"
+                )
+                .select("*")
+                .order(
+                  "detected_at",
+                  { ascending: false }
+                )
+                .limit(500);
+            },
+            function () {
+              renderInventoryAdjustmentControl(
+                parent,
+                data
+              );
+            }
           );
         }
       },
