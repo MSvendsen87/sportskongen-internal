@@ -2372,157 +2372,208 @@
   ) {
     createPageHeader(
       parent,
-      "Manuelle lagerjusteringer",
-      "Viser lagerendringer som er registrert n\u00e5r produktdata hentes fra Quickbutik. Endringene m\u00e5 kontrolleres mot salg, varemottak og varetelling f\u00f8r det trekkes en konklusjon.",
+      "Lagerjusteringer og avstemming",
+      "Hver lagerendring som oppdages ved Quickbutik-synk avstemmes automatisk mot registrerte salg, varemottak og varetelling i samme tidsrom.",
       "Kun full kontroll"
     );
 
     var rows =
       data.inventoryAdjustments || [];
 
-    var decreases =
-      rows.filter(
-        function (row) {
-          return Number(
-            row.quantity_change || 0
-          ) < 0;
-        }
-      );
+    var explained = rows.filter(
+      function (row) {
+        return row.reconciliation_status ===
+          "explained";
+      }
+    );
+
+    var needsReview = rows.filter(
+      function (row) {
+        return (
+          row.reconciliation_status ===
+            "partly_explained" ||
+          row.reconciliation_status ===
+            "unexplained"
+        );
+      }
+    );
+
+    var warmingUp = rows.filter(
+      function (row) {
+        return row.reconciliation_status ===
+          "no_window";
+      }
+    );
 
     addProStatGrid(
       parent,
       [
         {
-          label:
-            "Registrerte endringer",
-          value:
-            String(rows.length),
-          tone:
-            rows.length
-              ? "warning"
-              : "ok"
+          label: "Registrerte endringer",
+          value: String(rows.length),
+          tone: rows.length ? "warning" : "ok"
         },
         {
-          label:
-            "Reduksjoner",
-          value:
-            String(decreases.length),
-          tone:
-            decreases.length
-              ? "warning"
-              : "ok"
+          label: "Automatisk forklart",
+          value: String(explained.length),
+          tone: "ok"
         },
         {
-          label:
-            "Kontrollstatus",
-          value:
-            "Historikk aktiv",
-          tone:
-            "ok"
+          label: "Må undersøkes",
+          value: String(needsReview.length),
+          tone: needsReview.length ? "warning" : "ok"
+        },
+        {
+          label: "Ny historikk",
+          value: String(warmingUp.length),
+          tone: warmingUp.length ? "warning" : "ok"
         }
       ]
     );
 
     var explanation = el(
       "div",
-      "En registrert reduksjon er ikke i seg selv bevis p\u00e5 en manuell justering. Inntil Zettle-salg er koblet inn, kan et butikksalg forklare enkelte endringer. Bruk derfor oversikten som avvikskontroll, ikke som personbevis."
+      "Systemet sammenligner automatisk faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Bare restavvik bør undersøkes som mulig manuell lagerjustering."
     );
-    explanation.className =
-      "sk-warning";
-    explanation.style.margin =
-      "14px 0";
-    parent.appendChild(
-      explanation
-    );
+    explanation.className = "sk-note";
+    explanation.style.margin = "14px 0";
+    parent.appendChild(explanation);
 
-    var displayRows =
-      rows.map(
-        function (row) {
-          var change =
-            Number(
-              row.quantity_change || 0
-            );
+    var displayRows = rows.map(
+      function (row) {
+        var change = Number(
+          row.quantity_change || 0
+        );
+        var reconciliationStatus =
+          row.reconciliation_status ||
+          "no_window";
+        var statusText =
+          reconciliationStatus === "explained"
+            ? "\u2705 Forklart"
+            : (
+                reconciliationStatus ===
+                  "partly_explained"
+                  ? "\u26a0\ufe0f Delvis forklart"
+                  : (
+                      reconciliationStatus ===
+                        "unexplained"
+                        ? "\ud83d\udd34 Uforklart"
+                        : "\u23f3 Ny historikk"
+                    )
+              );
 
-          return {
-            detected_at_text:
-              formatAdminDateTime(
-                row.detected_at
-              ),
-            product_text:
-              row.product_name || "-",
-            variant_text:
-              row.variant_name || "-",
-            previous_quantity:
-              row.previous_quantity,
-            new_quantity:
-              row.new_quantity,
-            change_text:
-              change > 0
-                ? "+" + String(change)
-                : String(change),
-            source_text:
-              row.change_source ===
-                "quickbutik"
-                ? "Quickbutik-synk"
-                : (
-                    row.change_source ||
-                    "Ukjent"
-                  )
-          };
+        var salesQty = Number(
+          row.total_sales_qty || 0
+        );
+        var webQty = Number(
+          row.quickbutik_sales_qty || 0
+        );
+        var storeQty = Number(
+          row.zettle_sales_qty || 0
+        );
+        var receivedQty = Number(
+          row.received_qty || 0
+        );
+        var countQty = Number(
+          row.stock_count_adjustment_qty || 0
+        );
+
+        var detailParts = [];
+        if (salesQty) {
+          detailParts.push(
+            "Salg " +
+              String(salesQty) +
+              " (nett " +
+              String(webQty) +
+              " / butikk " +
+              String(storeQty) +
+              ")"
+          );
         }
-      );
+        if (receivedQty) {
+          detailParts.push(
+            "Varemottak +" +
+              String(receivedQty)
+          );
+        }
+        if (countQty) {
+          detailParts.push(
+            "Varetelling " +
+              (countQty > 0 ? "+" : "") +
+              String(countQty)
+          );
+        }
+
+        return {
+          detected_at_text:
+            formatAdminDateTime(
+              row.detected_at
+            ),
+          product_text:
+            row.product_name || "-",
+          variant_text:
+            row.variant_name || "-",
+          previous_quantity:
+            row.previous_quantity,
+          new_quantity:
+            row.new_quantity,
+          change_text:
+            change > 0
+              ? "+" + String(change)
+              : String(change),
+          reconciliation_text:
+            statusText,
+          explanation_text:
+            row.reconciliation_text ||
+            (
+              detailParts.length
+                ? detailParts.join(" \u00b7 ")
+                : "Ingen automatisk forklaring tilgjengelig."
+            )
+        };
+      }
+    );
 
     addTable(
       parent,
       [
         {
-          key:
-            "detected_at_text",
-          label:
-            "Oppdaget"
+          key: "detected_at_text",
+          label: "Oppdaget"
         },
         {
-          key:
-            "product_text",
-          label:
-            "Produkt"
+          key: "product_text",
+          label: "Produkt"
         },
         {
-          key:
-            "variant_text",
-          label:
-            "Variant"
+          key: "variant_text",
+          label: "Variant"
         },
         {
-          key:
-            "previous_quantity",
-          label:
-            "F\u00f8r"
+          key: "previous_quantity",
+          label: "Før"
         },
         {
-          key:
-            "new_quantity",
-          label:
-            "Etter"
+          key: "new_quantity",
+          label: "Etter"
         },
         {
-          key:
-            "change_text",
-          label:
-            "Endring"
+          key: "change_text",
+          label: "Endring"
         },
         {
-          key:
-            "source_text",
-          label:
-            "Kilde"
+          key: "reconciliation_text",
+          label: "Avstemming"
+        },
+        {
+          key: "explanation_text",
+          label: "Forklaring"
         }
       ],
       displayRows,
-      "Ingen lagerendringer er registrert enn\u00e5. Historikken fylles n\u00e5r en senere produktsynk oppdager en endret saldo."
+      "Ingen lagerendringer er registrert ennå. Første senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
     );
   }
-
 
   function renderZettleIntegration(
     parent,
@@ -3306,11 +3357,20 @@
     left.appendChild(h1);
     left.appendChild(p);
 
+    var right = el("div");
+    right.className = "sk-top-actions";
+    right.style.display = "flex";
+    right.style.alignItems = "center";
+    right.style.gap = "8px";
+    right.style.flexWrap = "wrap";
+    right.style.justifyContent = "flex-end";
+
     var badge = el("div", "\ud83d\udd12 Sportskongen intern");
     badge.className = "sk-badge";
+    right.appendChild(badge);
 
     top.appendChild(left);
-    top.appendChild(badge);
+    top.appendChild(right);
 
     app.appendChild(top);
     root.appendChild(app);
@@ -54367,6 +54427,493 @@ function renderMarketAnalysis(
 }
 
 
+function renderGlobalSyncControl(app, sb, user) {
+  if (!isFullControl(user)) {
+    return;
+  }
+
+  var actions = app.querySelector(
+    ".sk-top-actions"
+  );
+  var topLine = app.querySelector(
+    ".sk-topline"
+  );
+
+  if (!actions || !topLine) {
+    return;
+  }
+
+  var syncButton =
+    createPrimaryButton(
+      "\ud83d\udd04 Oppdater alt"
+    );
+  syncButton.style.background =
+    "#16a34a";
+  syncButton.style.borderColor =
+    "#16a34a";
+  syncButton.style.color = "#fff";
+  syncButton.style.padding =
+    "8px 12px";
+  syncButton.style.fontSize =
+    "12px";
+  syncButton.style.fontWeight =
+    "900";
+  syncButton.title =
+    "Synk produkter, Quickbutik-salg og Zettle-salg i ett kjør.";
+
+  actions.insertBefore(
+    syncButton,
+    actions.firstChild
+  );
+
+  var status = el("div");
+  status.className = "sk-note";
+  status.style.display = "none";
+  status.style.margin = "0";
+  status.style.borderRadius = "0";
+  status.style.borderLeft = "0";
+  status.style.borderRight = "0";
+  status.style.whiteSpace = "pre-wrap";
+  status.style.fontSize = "12px";
+  status.style.lineHeight = "1.5";
+
+  if (topLine.nextSibling) {
+    app.insertBefore(
+      status,
+      topLine.nextSibling
+    );
+  } else {
+    app.appendChild(status);
+  }
+
+  function setStatus(text, tone) {
+    status.style.display = "block";
+    status.className =
+      tone === "success"
+        ? "sk-success"
+        : (
+            tone === "warning"
+              ? "sk-warning"
+              : "sk-note"
+          );
+    status.style.margin = "0";
+    status.style.borderRadius = "0";
+    status.style.borderLeft = "0";
+    status.style.borderRight = "0";
+    status.style.whiteSpace = "pre-wrap";
+    status.textContent = text;
+  }
+
+  function getToken() {
+    return sb.auth.getSession()
+      .then(function (sessionResult) {
+        var session =
+          sessionResult &&
+          sessionResult.data
+            ? sessionResult.data.session
+            : null;
+
+        if (
+          sessionResult.error ||
+          !session ||
+          !session.access_token
+        ) {
+          throw new Error(
+            "Fant ingen aktiv innlogging. Last siden på nytt og logg inn igjen."
+          );
+        }
+
+        return session.access_token;
+      });
+  }
+
+  function readWorkerResponse(response) {
+    return response.text()
+      .then(function (text) {
+        var data = null;
+
+        try {
+          data = text
+            ? JSON.parse(text)
+            : null;
+        } catch (error) {
+          data = {
+            raw_response: text
+          };
+        }
+
+        if (
+          !response.ok ||
+          !data ||
+          data.ok !== true
+        ) {
+          throw new Error(
+            "Synk feilet (HTTP " +
+              String(response.status) +
+              "): " +
+              JSON.stringify(data)
+          );
+        }
+
+        return data;
+      });
+  }
+
+  function workerFetch(
+    url,
+    token,
+    method
+  ) {
+    return fetch(url, {
+      method: method || "GET",
+      headers: {
+        "Authorization":
+          "Bearer " + token
+      }
+    }).then(readWorkerResponse);
+  }
+
+  function syncProducts(token) {
+    var limit = 25;
+    var offset = 0;
+    var totals = {
+      batches: 0,
+      processed: 0,
+      created: 0,
+      updated: 0,
+      failed: 0
+    };
+
+    function nextBatch() {
+      setStatus(
+        "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutik…" +
+          "\nPulje " +
+          String(totals.batches + 1) +
+          " \u00b7 behandlet " +
+          String(totals.processed),
+        "note"
+      );
+
+      var url =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-products" +
+        "?limit=" +
+        String(limit) +
+        "&offset=" +
+        String(offset) +
+        "&dryRun=false";
+
+      return workerFetch(
+        url,
+        token,
+        "GET"
+      ).then(function (data) {
+        totals.batches += 1;
+        totals.processed += Number(
+          data.count || 0
+        );
+        totals.created += Number(
+          data.created || 0
+        );
+        totals.updated += Number(
+          data.updated || 0
+        );
+        totals.failed += Number(
+          data.failed || 0
+        );
+
+        if (data.is_final_page === true) {
+          return totals;
+        }
+
+        offset += limit;
+        return new Promise(
+          function (resolve) {
+            setTimeout(
+              function () {
+                resolve(nextBatch());
+              },
+              250
+            );
+          }
+        );
+      });
+    }
+
+    return nextBatch();
+  }
+
+  function syncQuickbutikSales(token) {
+    var limit = 250;
+    var offset = 0;
+    var totals = {
+      batches: 0,
+      orders: 0,
+      items: 0
+    };
+
+    function nextBatch() {
+      setStatus(
+        "\u2705 1/4 \u00b7 Produkter synket" +
+          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste 365 dager…" +
+          "\nPulje " +
+          String(totals.batches + 1) +
+          " \u00b7 ordre " +
+          String(totals.orders),
+        "note"
+      );
+
+      var url =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-sales" +
+        "?days=365&limit=" +
+        String(limit) +
+        "&offset=" +
+        String(offset) +
+        "&dryRun=false";
+
+      return workerFetch(
+        url,
+        token,
+        "GET"
+      ).then(function (data) {
+        totals.batches += 1;
+        totals.orders += Number(
+          data.orders_read || 0
+        );
+        totals.items += Number(
+          data.items_read || 0
+        );
+
+        if (!data.has_more) {
+          return totals;
+        }
+
+        offset = Number(
+          data.next_offset !== undefined
+            ? data.next_offset
+            : offset + limit
+        );
+
+        return nextBatch();
+      });
+    }
+
+    return nextBatch();
+  }
+
+  function syncZettle(
+    token,
+    dryRun
+  ) {
+    var lastHash = "";
+    var totals = {
+      pages: 0,
+      purchases: 0,
+      lines: 0,
+      matched: 0,
+      unmatched: 0,
+      amount: 0
+    };
+
+    function nextPage() {
+      setStatus(
+        "\u2705 1/4 \u00b7 Produkter synket" +
+          "\n\u2705 2/4 \u00b7 Quickbutik-salg oppdatert" +
+          "\n" +
+          (dryRun
+            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle 365 dager…"
+            : "\u2705 3/4 \u00b7 Zettle-kontroll ferdig\n\u23f3 4/4 \u00b7 Importerer Zettle-salg…") +
+          "\nPuljer " +
+          String(totals.pages) +
+          " \u00b7 kvitteringer " +
+          String(totals.purchases),
+        "note"
+      );
+
+      var url =
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-zettle-sales" +
+        "?days=365&limit=100&dryRun=" +
+        (dryRun ? "true" : "false");
+
+      if (lastHash) {
+        url +=
+          "&lastPurchaseHash=" +
+          encodeURIComponent(lastHash);
+      }
+
+      return workerFetch(
+        url,
+        token,
+        "POST"
+      ).then(function (data) {
+        totals.pages += 1;
+        totals.purchases += Number(
+          data.purchases_read || 0
+        );
+        totals.lines += Number(
+          data.product_lines || 0
+        );
+        totals.matched += Number(
+          data.matched_lines || 0
+        );
+        totals.unmatched += Number(
+          data.unmatched_lines || 0
+        );
+        totals.amount += Number(
+          data.amount_inc_vat || 0
+        );
+
+        if (
+          data.has_more &&
+          data.last_purchase_hash &&
+          totals.pages < 200
+        ) {
+          lastHash =
+            data.last_purchase_hash;
+          return nextPage();
+        }
+
+        totals.amount =
+          Math.round(
+            totals.amount * 100
+          ) / 100;
+        return totals;
+      });
+    }
+
+    return nextPage();
+  }
+
+  syncButton.onclick = function () {
+    if (
+      !window.confirm(
+        "Oppdater alt nå?\n\nDette gjør i riktig rekkefølge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste 365 dager\n3. Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
+      )
+    ) {
+      return;
+    }
+
+    var originalText =
+      syncButton.textContent;
+    var summary = {
+      products: null,
+      quickbutikSales: null,
+      zettlePreview: null,
+      zettleImport: null
+    };
+
+    syncButton.disabled = true;
+    syncButton.textContent =
+      "Oppdaterer…";
+
+    setStatus(
+      "Starter samlet oppdatering…",
+      "note"
+    );
+
+    getToken()
+      .then(function (token) {
+        summary.token = token;
+        return syncProducts(token);
+      })
+      .then(function (productResult) {
+        summary.products =
+          productResult;
+        return syncQuickbutikSales(
+          summary.token
+        );
+      })
+      .then(function (salesResult) {
+        summary.quickbutikSales =
+          salesResult;
+        return syncZettle(
+          summary.token,
+          true
+        );
+      })
+      .then(function (previewResult) {
+        summary.zettlePreview =
+          previewResult;
+        return syncZettle(
+          summary.token,
+          false
+        );
+      })
+      .then(function (importResult) {
+        summary.zettleImport =
+          importResult;
+        delete summary.token;
+
+        setStatus(
+          "\u2705 Alt er oppdatert." +
+            "\n\nProdukter: " +
+            String(
+              summary.products.processed || 0
+            ) +
+            " behandlet \u00b7 " +
+            String(
+              summary.products.updated || 0
+            ) +
+            " oppdatert \u00b7 " +
+            String(
+              summary.products.failed || 0
+            ) +
+            " feil" +
+            "\nQuickbutik-salg: " +
+            String(
+              summary.quickbutikSales.orders || 0
+            ) +
+            " ordre \u00b7 " +
+            String(
+              summary.quickbutikSales.items || 0
+            ) +
+            " varelinjer" +
+            "\nZettle: " +
+            String(
+              summary.zettleImport.purchases || 0
+            ) +
+            " kvitteringer \u00b7 " +
+            String(
+              summary.zettleImport.lines || 0
+            ) +
+            " varelinjer \u00b7 " +
+            String(
+              summary.zettleImport.matched || 0
+            ) +
+            " koblet \u00b7 " +
+            String(
+              summary.zettleImport.unmatched || 0
+            ) +
+            " holdt utenfor" +
+            "\n\nLageranalyse og lageravstemming bruker nå de oppdaterte dataene. Siden lastes på nytt…",
+          summary.products.failed > 0
+            ? "warning"
+            : "success"
+        );
+
+        setTimeout(
+          function () {
+            window.location.reload();
+          },
+          1800
+        );
+      })
+      .catch(function (error) {
+        delete summary.token;
+        syncButton.disabled = false;
+        syncButton.textContent =
+          originalText;
+        setStatus(
+          "Oppdateringen stoppet. Ingen senere steg ble kjørt etter feilen.\n\nFeil: " +
+            (error && error.message
+              ? error.message
+              : String(error)),
+          "warning"
+        );
+      });
+  };
+}
+
+
 function renderPortal(sb, user, data) {
     var app = renderShell(
       "Mission Control",
@@ -54374,6 +54921,12 @@ function renderPortal(sb, user, data) {
     );
 
     addUserBar(
+      app,
+      sb,
+      user
+    );
+
+    renderGlobalSyncControl(
       app,
       sb,
       user
