@@ -2558,7 +2558,7 @@
         "Test Zettle n\u00e5"
       );
     var previewButton =
-      createSecondaryButton(
+      createButton(
         "Forh\u00e5ndsvis 365 dager"
       );
     previewButton.style.marginLeft =
@@ -2881,7 +2881,8 @@
             "\nKoblet til Quickbutik: " +
             String(totals.matched) +
             "\nBel\u00f8p inkl. mva: " +
-            formatMoney(totals.amount) +
+            money(totals.amount) +
+            " kr" +
             unmatchedText +
             (dryRun
               ? "\n\nIngen data ble lagret og lageret ble ikke endret."
