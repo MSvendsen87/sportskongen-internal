@@ -54574,8 +54574,15 @@ function renderGlobalSyncControl(app, sb, user) {
   }
 
   function syncProducts(token) {
-    var limit = 25;
+    /*
+     * Cloudflare Worker har en grense for hvor mange underkall én invokasjon
+     * kan gjøre. Produktsynken kan bruke flere underkall per produkt/variant.
+     * Start derfor med den stabile puljestørrelsen 10, og gå automatisk ned
+     * til 5 og 2 dersom en spesielt tung pulje fortsatt treffer grensen.
+     */
+    var limit = 10;
     var offset = 0;
+    var subrequestRetries = 0;
     var totals = {
       batches: 0,
       processed: 0,
@@ -54584,13 +54591,31 @@ function renderGlobalSyncControl(app, sb, user) {
       failed: 0
     };
 
+    function isSubrequestLimitError(error) {
+      var text = String(
+        error && error.message
+          ? error.message
+          : error || ""
+      ).toLowerCase();
+
+      return (
+        text.indexOf("too many subrequests") >= 0 ||
+        (
+          text.indexOf("subrequest") >= 0 &&
+          text.indexOf("limit") >= 0
+        )
+      );
+    }
+
     function nextBatch() {
       setStatus(
         "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutik…" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 behandlet " +
-          String(totals.processed),
+          String(totals.processed) +
+          " \u00b7 puljestørrelse " +
+          String(limit),
         "note"
       );
 
@@ -54607,6 +54632,7 @@ function renderGlobalSyncControl(app, sb, user) {
         token,
         "GET"
       ).then(function (data) {
+        subrequestRetries = 0;
         totals.batches += 1;
         totals.processed += Number(
           data.count || 0
@@ -54625,17 +54651,57 @@ function renderGlobalSyncControl(app, sb, user) {
           return totals;
         }
 
-        offset += limit;
+        var processedThisBatch = Number(
+          data.count || 0
+        );
+
+        offset += processedThisBatch > 0
+          ? processedThisBatch
+          : limit;
+
         return new Promise(
           function (resolve) {
             setTimeout(
               function () {
                 resolve(nextBatch());
               },
-              250
+              350
             );
           }
         );
+      }).catch(function (error) {
+        if (
+          isSubrequestLimitError(error) &&
+          limit > 2 &&
+          subrequestRetries < 3
+        ) {
+          limit = Math.max(
+            2,
+            Math.floor(limit / 2)
+          );
+          subrequestRetries += 1;
+
+          setStatus(
+            "\u26a0\ufe0f Quickbutik-puljen var for tung for Cloudflare." +
+              "\nPrøver samme sted på nytt med " +
+              String(limit) +
+              " produkter per pulje…",
+            "warning"
+          );
+
+          return new Promise(
+            function (resolve) {
+              setTimeout(
+                function () {
+                  resolve(nextBatch());
+                },
+                700
+              );
+            }
+          );
+        }
+
+        throw error;
       });
     }
 
@@ -54643,7 +54709,7 @@ function renderGlobalSyncControl(app, sb, user) {
   }
 
   function syncQuickbutikSales(token) {
-    var limit = 250;
+    var limit = 100;
     var offset = 0;
     var totals = {
       batches: 0,
