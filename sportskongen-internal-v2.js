@@ -27487,6 +27487,320 @@ function renderProductControlDashboard(
   }
 
 
+  var productControlCostSyncRunning =
+    false;
+
+
+  function runProductControlPurchaseCostSync(
+    button,
+    resultBox
+  ) {
+    if (
+      productControlCostSyncRunning
+    ) {
+      return Promise.resolve(
+        false
+      );
+    }
+
+    var confirmed =
+      window.confirm(
+        "Synke alle gjenst\u00e5ende dokumenterte innkj\u00f8pspriser til Quickbutik?\n\n" +
+        "Kun innkj\u00f8pspris eks. mva. sendes. Lager, salgspris og synlighet endres ikke."
+      );
+
+    if (!confirmed) {
+      return Promise.resolve(
+        false
+      );
+    }
+
+    productControlCostSyncRunning =
+      true;
+
+    var originalLabel =
+      button.textContent;
+
+    var accessToken =
+      null;
+
+    var batchNumber =
+      0;
+
+    var totalRequested =
+      0;
+
+    var totalMarked =
+      0;
+
+    var latestSummary =
+      null;
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      "Starter kostsynk\u2026";
+
+    resultBox.style.display =
+      "block";
+
+    resultBox.textContent =
+      "Henter innlogget sesjon\u2026";
+
+
+    function updateProgress(
+      message
+    ) {
+      resultBox.textContent =
+        message;
+    }
+
+
+    function runBatch() {
+      batchNumber += 1;
+
+      if (
+        batchNumber > 100
+      ) {
+        throw new Error(
+          "Sikkerhetsstopp: mer enn 100 kostprisbatcher."
+        );
+      }
+
+      button.textContent =
+        "Synker batch " +
+        String(
+          batchNumber
+        ) +
+        "\u2026";
+
+      updateProgress(
+        "Batch " +
+        String(
+          batchNumber
+        ) +
+        " kj\u00f8rer.\n\n" +
+        "Sendt hittil: " +
+        String(
+          totalRequested
+        ) +
+        "\nMarkert synket: " +
+        String(
+          totalMarked
+        )
+      );
+
+      return fetch(
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-purchase-prices?dryRun=false&limit=20",
+        {
+          method:
+            "GET",
+          headers: {
+            "Authorization":
+              "Bearer " +
+              accessToken
+          }
+        }
+      )
+        .then(
+          function (response) {
+            return response
+              .text()
+              .then(
+                function (responseText) {
+                  var responseData =
+                    null;
+
+                  try {
+                    responseData =
+                      responseText
+                        ? JSON.parse(
+                            responseText
+                          )
+                        : null;
+                  } catch (error) {
+                    responseData = {
+                      raw_response:
+                        responseText
+                    };
+                  }
+
+                  return {
+                    ok:
+                      response.ok,
+                    status:
+                      response.status,
+                    data:
+                      responseData
+                  };
+                }
+              );
+          }
+        )
+        .then(
+          function (result) {
+            if (
+              !result.ok ||
+              !result.data ||
+              result.data.ok !== true
+            ) {
+              throw new Error(
+                "Kostprissynk feilet (HTTP " +
+                String(
+                  result.status
+                ) +
+                "): " +
+                JSON.stringify(
+                  result.data
+                )
+              );
+            }
+
+            var requested =
+              Number(
+                result.data.requested ||
+                0
+              );
+
+            var marked =
+              Number(
+                result.data.marked_synced ||
+                0
+              );
+
+            totalRequested +=
+              requested;
+
+            totalMarked +=
+              marked;
+
+            latestSummary =
+              result.data.summary ||
+              latestSummary;
+
+            if (
+              requested === 0 ||
+              (
+                latestSummary &&
+                Number(
+                  latestSummary.needs_sync ||
+                  0
+                ) === 0
+              )
+            ) {
+              return true;
+            }
+
+            return runBatch();
+          }
+        );
+    }
+
+
+    return sb.auth
+      .getSession()
+      .then(
+        function (sessionResult) {
+          if (
+            sessionResult.error
+          ) {
+            throw sessionResult.error;
+          }
+
+          var session =
+            sessionResult.data &&
+            sessionResult.data.session;
+
+          accessToken =
+            session &&
+            session.access_token;
+
+          if (!accessToken) {
+            throw new Error(
+              "Fant ikke innlogget Supabase-sesjon. Logg inn p\u00e5 nytt og pr\u00f8v igjen."
+            );
+          }
+
+          return runBatch();
+        }
+      )
+      .then(
+        function () {
+          var remaining =
+            latestSummary
+              ? Number(
+                  latestSummary.needs_sync ||
+                  0
+                )
+              : 0;
+
+          updateProgress(
+            "KOSTSYNK FERDIG\n\n" +
+            "Sendt: " +
+            String(
+              totalRequested
+            ) +
+            "\nMarkert synket: " +
+            String(
+              totalMarked
+            ) +
+            "\nGjenst\u00e5r: " +
+            String(
+              remaining
+            ) +
+            "\n\nLager, salgspris og synlighet er ikke endret."
+          );
+
+          alert(
+            "Kostprissynken er ferdig. " +
+            String(
+              totalMarked
+            ) +
+            " kostpriser ble markert som synket."
+          );
+
+          return true;
+        }
+      )
+      .catch(
+        function (error) {
+          var message =
+            skReadableError(
+              error &&
+              error.message
+                ? error.message
+                : error
+            );
+
+          updateProgress(
+            "KOSTSYNK STOPPET\n\n" +
+            message
+          );
+
+          alert(
+            "Kostprissynken ble stoppet:\n\n" +
+            message
+          );
+
+          return false;
+        }
+      )
+      .finally(
+        function () {
+          productControlCostSyncRunning =
+            false;
+
+          button.disabled =
+            false;
+
+          button.textContent =
+            originalLabel;
+        }
+      );
+  }
+
+
   function defaultReasonForIssue(issue) {
     var productName =
       String(
@@ -28326,7 +28640,7 @@ function renderProductControlDashboard(
     syncPurchaseCosts.onclick =
       function () {
         var syncPromise =
-          runFullQuickbutikPurchasePriceSync(
+          runProductControlPurchaseCostSync(
             syncPurchaseCosts,
             purchaseCostSyncResult
           );
@@ -28337,8 +28651,14 @@ function renderProductControlDashboard(
             "function"
         ) {
           syncPromise.then(
-            function () {
-              return reloadProductControl();
+            function (syncSucceeded) {
+              if (
+                syncSucceeded
+              ) {
+                return reloadProductControl();
+              }
+
+              return null;
             }
           );
         }
