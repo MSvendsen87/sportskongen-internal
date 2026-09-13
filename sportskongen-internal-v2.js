@@ -1895,15 +1895,27 @@
       "Kontroll av lagerendringer og mulige manuelle justeringer."
     );
 
+    var openInventoryAdjustments = (
+      data.inventoryAdjustments || []
+    ).filter(function (row) {
+      return (
+        row.review_status !== "reviewed" &&
+        (
+          row.reconciliation_status === "unexplained" ||
+          row.reconciliation_status === "partly_explained"
+        )
+      );
+    });
+
     var adjustmentCard =
       createDashboardActionCard(
         parent,
-        "\ud83d\udd12",
-        "Vis manuelle justeringer i Quickbutik",
-        isFullControl(user)
-          ? "\u00c5pne den detaljerte kontrollen av registrerte lagerendringer."
-          : "Detaljene er bare tilgjengelige for administratorer med full kontroll.",
-        "warning",
+        openInventoryAdjustments.length,
+        "Uforklarte lagerendringer",
+        openInventoryAdjustments.length
+          ? "Lagerendringer som må forklares og behandles."
+          : "Ingen uforklarte lagerendringer akkurat nå.",
+        openInventoryAdjustments.length ? "danger" : "ok",
         null
       );
 
@@ -2366,6 +2378,31 @@
   }
 
 
+  function renderInventoryRelatedLinks(parent) {
+    var wrap = el("div");
+    wrap.style.display = "flex";
+    wrap.style.flexWrap = "wrap";
+    wrap.style.gap = "8px";
+    wrap.style.margin = "0 0 14px";
+
+    [
+      ["📊 Lageranalyse", "inventoryAnalytics"],
+      ["🔒 Lagerjusteringer", "inventoryAdjustments"],
+      ["📦 Varetelling", "stock"],
+      ["🛡️ Kontrollsenter", "productControl"]
+    ].forEach(function (item) {
+      var button = createButton(item[0]);
+      button.onclick = function () {
+        if (skPortalNavigate) {
+          skPortalNavigate(item[1]);
+        }
+      };
+      wrap.appendChild(button);
+    });
+
+    parent.appendChild(wrap);
+  }
+
   function renderInventoryAdjustmentControl(
     parent,
     data,
@@ -2377,6 +2414,8 @@
       "Hver lagerendring som oppdages ved Quickbutik-synk avstemmes automatisk mot registrerte salg, varemottak og varetelling i samme tidsrom. Admin endrer aldri lageret.",
       "Kun full kontroll"
     );
+
+    renderInventoryRelatedLinks(parent);
 
     var rows =
       data.inventoryAdjustments || [];
@@ -2581,8 +2620,25 @@
       }
     );
 
+    var logDetails = document.createElement("details");
+    logDetails.style.margin = "14px 0";
+    logDetails.style.border = "1px solid #dbe4ee";
+    logDetails.style.borderRadius = "12px";
+    logDetails.style.background = "#fff";
+
+    var logSummary = document.createElement("summary");
+    logSummary.textContent = "Vis logg over lagerendringer (" + String(displayRows.length) + ")";
+    logSummary.style.cursor = "pointer";
+    logSummary.style.fontWeight = "800";
+    logSummary.style.padding = "12px 14px";
+    logDetails.appendChild(logSummary);
+
+    var logBody = el("div");
+    logBody.style.padding = "0 10px 10px";
+    logDetails.appendChild(logBody);
+
     addTable(
-      parent,
+      logBody,
       [
         {
           key: "change_window_text",
@@ -2620,6 +2676,8 @@
       displayRows,
       "Ingen lagerendringer er registrert ennå. Første senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
     );
+
+    parent.appendChild(logDetails);
 
     if (!needsReview.length) {
       return;
@@ -4167,6 +4225,10 @@
                 var tab = tabs[key];
 
                 if (tab.fullOnly === true && !isFullControl(user)) {
+                  return false;
+                }
+
+                if (tab.hiddenFromNav === true) {
                   return false;
                 }
 
@@ -22470,6 +22532,7 @@ addTable(addonsSection.body, [
       "Varer og lager"
     );
 
+    renderInventoryRelatedLinks(parent);
 
     var counts =
       (
@@ -27940,6 +28003,42 @@ function renderProductControlDashboard(
     "Feil og avvik som krever handling. Start med \u00abM\u00e5 fikses\u00bb, og godkjenn bevisste avvik slik at de ikke kommer tilbake som st\u00f8y.",
     "Mission Control"
   );
+
+  renderInventoryRelatedLinks(parent);
+
+  var inventoryAdjustmentRows =
+    data.inventoryAdjustments || [];
+
+  var unresolvedInventoryAdjustments =
+    inventoryAdjustmentRows.filter(function (row) {
+      return (
+        row.review_status !== "reviewed" &&
+        (
+          row.reconciliation_status === "unexplained" ||
+          row.reconciliation_status === "partly_explained"
+        )
+      );
+    });
+
+  if (unresolvedInventoryAdjustments.length) {
+    var inventoryAlert = el("div");
+    inventoryAlert.className = "sk-danger-zone";
+    inventoryAlert.style.marginBottom = "14px";
+    inventoryAlert.style.cursor = "pointer";
+    inventoryAlert.innerHTML =
+      "<strong>🔴 " +
+      String(unresolvedInventoryAdjustments.length) +
+      " uforklart" +
+      (unresolvedInventoryAdjustments.length === 1 ?
+        " lagerendring" : " lagerendringer") +
+      "</strong><div style='margin-top:5px'>Åpne Lagerjusteringer for å undersøke og forklare avvikene.</div>";
+    inventoryAlert.onclick = function () {
+      if (skPortalNavigate) {
+        skPortalNavigate("inventoryAdjustments");
+      }
+    };
+    parent.appendChild(inventoryAlert);
+  }
 
   var issues =
     data.productControlIssues || [];
@@ -44628,6 +44727,8 @@ function renderInventoryAnalytics(
     "Varer og lager"
   );
 
+  renderInventoryRelatedLinks(parent);
+
   var rows =
     data.inventoryAnalytics || [];
 
@@ -55265,6 +55366,18 @@ function renderPortal(sb, user, data) {
         fullOnly: true,
         description:
           "Registrerte lagerendringer og kontroll av mulige manuelle justeringer.",
+        badge: function () {
+          return (data.inventoryAdjustments || []).filter(function (row) {
+            return (
+              row.review_status !== "reviewed" &&
+              (
+                row.reconciliation_status === "unexplained" ||
+                row.reconciliation_status === "partly_explained"
+              )
+            );
+          }).length;
+        },
+        badgeTone: "danger",
         render: function (parent) {
           renderLazyModule(
             parent,
@@ -55300,7 +55413,7 @@ function renderPortal(sb, user, data) {
         description:
           "Feil, avvik og godkjente unntak for varer, lager, pris og produktdata.",
         badge: function () {
-          return (
+          var productDangerCount = (
             data.productControlIssues ||
             []
           ).filter(
@@ -55311,6 +55424,21 @@ function renderPortal(sb, user, data) {
               );
             }
           ).length;
+
+          var inventoryDangerCount = (
+            data.inventoryAdjustments ||
+            []
+          ).filter(function (row) {
+            return (
+              row.review_status !== "reviewed" &&
+              (
+                row.reconciliation_status === "unexplained" ||
+                row.reconciliation_status === "partly_explained"
+              )
+            );
+          }).length;
+
+          return productDangerCount + inventoryDangerCount;
         },
         badgeTone:
           "danger",
@@ -55487,6 +55615,7 @@ function renderPortal(sb, user, data) {
         icon: "\ud83d\udcb3",
         group: "Salg og pris",
         fullOnly: true,
+        hiddenFromNav: true,
         description:
           "Test og kontroller Zettle-tilkoblingen f\u00f8r butikksalg importeres.",
         render: function (parent) {
@@ -55819,7 +55948,11 @@ function renderPortal(sb, user, data) {
       true
     ),
 
-    Promise.resolve({ data: [], error: null }),
+    sb
+      .from("internal_inventory_adjustment_view")
+      .select("*")
+      .order("detected_at", { ascending: false })
+      .limit(500),
 
     sb
       .from("internal_tasks")
@@ -55975,7 +56108,7 @@ function renderPortal(sb, user, data) {
 
     if (results[20].error) {
       renderError(
-        "Kunne ikke hente produktkvalitet: " +
+        "Kunne ikke hente lagerjusteringer: " +
           results[20].error.message
       );
       return;
@@ -56045,6 +56178,8 @@ function renderPortal(sb, user, data) {
         results[18].data || [],
       inventoryAnalytics:
         results[19].data || [],
+      inventoryAdjustments:
+        results[20].data || [],
       productQualityIssues: [],
       tasks:
         results[21].data || [],
@@ -56062,6 +56197,7 @@ function renderPortal(sb, user, data) {
         productQualityIssues: false,
         productControlIssues: false,
         productControlExceptions: false,
+        inventoryAdjustments: true,
         auditLog: false
       },
       __lazyLoading: {}
