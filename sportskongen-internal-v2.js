@@ -2523,6 +2523,215 @@
     );
   }
 
+
+  function renderZettleIntegration(
+    parent,
+    sb
+  ) {
+    createPageHeader(
+      parent,
+      "Zettle-salg",
+      "Test tilkoblingen f\u00f8r salg lagres. Testen leser bare Zettle-kvitteringer og endrer verken lager, salgstall eller Supabase.",
+      "Kun full kontroll"
+    );
+
+    var card = el("div");
+    card.className = "sk-card";
+
+    var title = el(
+      "h3",
+      "Test Zettle-tilkoblingen"
+    );
+    title.style.marginTop = "0";
+    card.appendChild(title);
+
+    var description = el(
+      "p",
+      "Henter inntil 100 kvitteringer fra de siste sju dagene. Ingen opplysninger blir lagret i denne testen."
+    );
+    description.style.color =
+      "#64748b";
+    card.appendChild(description);
+
+    var testButton =
+      createPrimaryButton(
+        "Test Zettle n\u00e5"
+      );
+
+    var resultBox = el("div");
+    resultBox.className = "sk-note";
+    resultBox.style.display = "none";
+    resultBox.style.marginTop = "14px";
+    resultBox.style.whiteSpace = "pre-wrap";
+
+    testButton.onclick =
+      function () {
+        var originalText =
+          testButton.textContent;
+
+        testButton.disabled = true;
+        testButton.textContent =
+          "Tester Zettle\u2026";
+        resultBox.style.display =
+          "block";
+        resultBox.className =
+          "sk-note";
+        resultBox.textContent =
+          "Kontrollerer innlogging og kobler til Zettle\u2026";
+
+        sb.auth.getSession()
+          .then(
+            function (sessionResult) {
+              var session =
+                sessionResult &&
+                sessionResult.data
+                  ? sessionResult.data.session
+                  : null;
+
+              if (
+                sessionResult.error ||
+                !session ||
+                !session.access_token
+              ) {
+                throw new Error(
+                  "Fant ingen aktiv innlogging. Last siden p\u00e5 nytt og logg inn igjen."
+                );
+              }
+
+              return fetch(
+                "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/zettle-test?days=7",
+                {
+                  method: "GET",
+                  headers: {
+                    "Authorization":
+                      "Bearer " +
+                      session.access_token
+                  }
+                }
+              );
+            }
+          )
+          .then(
+            function (response) {
+              return response
+                .text()
+                .then(
+                  function (responseText) {
+                    var responseData = null;
+
+                    try {
+                      responseData =
+                        responseText
+                          ? JSON.parse(
+                              responseText
+                            )
+                          : null;
+                    } catch (error) {
+                      responseData = {
+                        raw_response:
+                          responseText
+                      };
+                    }
+
+                    return {
+                      ok: response.ok,
+                      status:
+                        response.status,
+                      data:
+                        responseData
+                    };
+                  }
+                );
+            }
+          )
+          .then(
+            function (result) {
+              if (
+                !result.ok ||
+                !result.data ||
+                result.data.ok !== true
+              ) {
+                throw new Error(
+                  "Zettle-testen feilet (HTTP " +
+                  String(result.status) +
+                  "): " +
+                  JSON.stringify(
+                    result.data
+                  )
+                );
+              }
+
+              var data = result.data;
+              var skuLines = Number(
+                data.product_lines_with_sku ||
+                0
+              );
+              var allLines = Number(
+                data.product_lines_found ||
+                0
+              );
+              var skuPercent =
+                allLines > 0
+                  ? Math.round(
+                      skuLines /
+                      allLines *
+                      100
+                    )
+                  : 0;
+
+              resultBox.className =
+                "sk-success";
+              resultBox.textContent =
+                "Zettle er koblet til.\n\n" +
+                "Kvitteringer siste 7 dager: " +
+                String(
+                  data.purchases_found ||
+                  0
+                ) +
+                "\nProduktlinjer: " +
+                String(allLines) +
+                "\nLinjer med SKU: " +
+                String(skuLines) +
+                " av " +
+                String(allLines) +
+                " (" +
+                String(skuPercent) +
+                " %)\n\n" +
+                "Ingen data ble lagret og lageret ble ikke endret.";
+            }
+          )
+          .catch(
+            function (error) {
+              resultBox.className =
+                "sk-warning";
+              resultBox.textContent =
+                error && error.message
+                  ? error.message
+                  : String(error);
+            }
+          )
+          .finally(
+            function () {
+              testButton.disabled = false;
+              testButton.textContent =
+                originalText;
+            }
+          );
+      };
+
+    card.appendChild(testButton);
+    card.appendChild(resultBox);
+    parent.appendChild(card);
+
+    var next = el(
+      "div",
+      "N\u00e5r testen er godkjent, bygger vi import med kanalmerking, dublettkontroll, returer og produktkobling."
+    );
+    next.className = "sk-note";
+    next.style.marginTop = "14px";
+    parent.appendChild(next);
+  }
+
   function renderOffersHub(parent, data, sb) {
     createPageHeader(parent, "Tilbud", "Lag og f\u00f8lg opp kundetilbud. Custom print og arkiv ligger p\u00e5 samme side, men er lukket til du trenger dem.", "Salg og pris");
     addMobileAdvice(parent);
@@ -54332,6 +54541,21 @@ function renderPortal(sb, user, data) {
           renderSalesAnalytics(
             parent,
             data
+          );
+        }
+      },
+
+      zettle: {
+        label: "Zettle",
+        icon: "\ud83d\udcb3",
+        group: "Salg og pris",
+        fullOnly: true,
+        description:
+          "Test og kontroller Zettle-tilkoblingen f\u00f8r butikksalg importeres.",
+        render: function (parent) {
+          renderZettleIntegration(
+            parent,
+            sb
           );
         }
       },
