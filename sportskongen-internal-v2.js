@@ -2368,12 +2368,13 @@
 
   function renderInventoryAdjustmentControl(
     parent,
-    data
+    data,
+    sb
   ) {
     createPageHeader(
       parent,
       "Lagerjusteringer og avstemming",
-      "Hver lagerendring som oppdages ved Quickbutik-synk avstemmes automatisk mot registrerte salg, varemottak og varetelling i samme tidsrom.",
+      "Hver lagerendring som oppdages ved Quickbutik-synk avstemmes automatisk mot registrerte salg, varemottak og varetelling i samme tidsrom. Admin endrer aldri lageret.",
       "Kun full kontroll"
     );
 
@@ -2387,13 +2388,22 @@
       }
     );
 
+    var reviewed = rows.filter(
+      function (row) {
+        return row.review_status === "reviewed";
+      }
+    );
+
     var needsReview = rows.filter(
       function (row) {
         return (
-          row.reconciliation_status ===
-            "partly_explained" ||
-          row.reconciliation_status ===
-            "unexplained"
+          row.review_status !== "reviewed" &&
+          (
+            row.reconciliation_status ===
+              "partly_explained" ||
+            row.reconciliation_status ===
+              "unexplained"
+          )
         );
       }
     );
@@ -2424,6 +2434,11 @@
           tone: needsReview.length ? "warning" : "ok"
         },
         {
+          label: "Behandlet manuelt",
+          value: String(reviewed.length),
+          tone: "ok"
+        },
+        {
           label: "Ny historikk",
           value: String(warmingUp.length),
           tone: warmingUp.length ? "warning" : "ok"
@@ -2433,11 +2448,29 @@
 
     var explanation = el(
       "div",
-      "Systemet sammenligner automatisk faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Bare restavvik bør undersøkes som mulig manuell lagerjustering."
+      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Tidspunktet vises som et intervall fordi vi vet at endringen skjedde mellom de to synkene, ikke nøyaktig når. Uforklarlige avvik må ha en skriftlig forklaring før de kan merkes som undersøkt."
     );
     explanation.className = "sk-note";
     explanation.style.margin = "14px 0";
     parent.appendChild(explanation);
+
+    function changeWindowText(row) {
+      if (
+        row.observation_from_at &&
+        row.observation_to_at
+      ) {
+        return (
+          formatAdminDateTime(row.observation_from_at) +
+          " – " +
+          formatAdminDateTime(row.observation_to_at)
+        );
+      }
+      if (row.observation_to_at) {
+        return "Først oppdaget " +
+          formatAdminDateTime(row.observation_to_at);
+      }
+      return formatAdminDateTime(row.detected_at);
+    }
 
     var displayRows = rows.map(
       function (row) {
@@ -2447,20 +2480,25 @@
         var reconciliationStatus =
           row.reconciliation_status ||
           "no_window";
-        var statusText =
-          reconciliationStatus === "explained"
-            ? "\u2705 Forklart"
-            : (
-                reconciliationStatus ===
-                  "partly_explained"
-                  ? "\u26a0\ufe0f Delvis forklart"
-                  : (
-                      reconciliationStatus ===
-                        "unexplained"
-                        ? "\ud83d\udd34 Uforklart"
-                        : "\u23f3 Ny historikk"
-                    )
-              );
+        var isReviewed =
+          row.review_status === "reviewed";
+        var statusText = isReviewed
+          ? "🔵 Behandlet"
+          : (
+              reconciliationStatus === "explained"
+                ? "✅ Forklart"
+                : (
+                    reconciliationStatus ===
+                      "partly_explained"
+                      ? "⚠️ Delvis forklart"
+                      : (
+                          reconciliationStatus ===
+                            "unexplained"
+                            ? "🔴 Uforklart"
+                            : "⏳ Ny historikk"
+                        )
+                  )
+            );
 
         var salesQty = Number(
           row.total_sales_qty || 0
@@ -2504,11 +2542,25 @@
           );
         }
 
+        var explanationText =
+          row.reconciliation_text ||
+          (
+            detailParts.length
+              ? detailParts.join(" · ")
+              : "Ingen automatisk forklaring tilgjengelig."
+          );
+
+        if (isReviewed) {
+          explanationText +=
+            " · Behandlet " +
+            formatAdminDateTime(row.reviewed_at) +
+            ": " +
+            (row.review_note || "-");
+        }
+
         return {
-          detected_at_text:
-            formatAdminDateTime(
-              row.detected_at
-            ),
+          change_window_text:
+            changeWindowText(row),
           product_text:
             row.product_name || "-",
           variant_text:
@@ -2524,12 +2576,7 @@
           reconciliation_text:
             statusText,
           explanation_text:
-            row.reconciliation_text ||
-            (
-              detailParts.length
-                ? detailParts.join(" \u00b7 ")
-                : "Ingen automatisk forklaring tilgjengelig."
-            )
+            explanationText
         };
       }
     );
@@ -2538,8 +2585,8 @@
       parent,
       [
         {
-          key: "detected_at_text",
-          label: "Oppdaget"
+          key: "change_window_text",
+          label: "Ca. tidspunkt"
         },
         {
           key: "product_text",
@@ -2573,6 +2620,133 @@
       displayRows,
       "Ingen lagerendringer er registrert ennå. Første senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
     );
+
+    if (!needsReview.length) {
+      return;
+    }
+
+    var reviewTitle = el(
+      "h3",
+      "Avvik som må undersøkes"
+    );
+    reviewTitle.style.marginTop = "24px";
+    parent.appendChild(reviewTitle);
+
+    var reviewIntro = el(
+      "p",
+      "Forklaring er obligatorisk. Merk bare avvik som behandlet når dere faktisk har tatt stilling til hvorfor lageret endret seg."
+    );
+    reviewIntro.style.color = "#6b7280";
+    parent.appendChild(reviewIntro);
+
+    needsReview.forEach(function (row) {
+      var card = el("div");
+      card.style.border = "1px solid #fecaca";
+      card.style.background = "#fff7f7";
+      card.style.borderRadius = "14px";
+      card.style.padding = "14px";
+      card.style.margin = "12px 0";
+
+      var title = el(
+        "div",
+        (row.product_name || "Ukjent produkt") +
+          (row.variant_name && row.variant_name !== "-"
+            ? " · " + row.variant_name
+            : "")
+      );
+      title.style.fontWeight = "800";
+      title.style.marginBottom = "6px";
+      card.appendChild(title);
+
+      var change = Number(row.quantity_change || 0);
+      var meta = el(
+        "div",
+        "Lager " +
+          String(row.previous_quantity) +
+          " → " +
+          String(row.new_quantity) +
+          " (" +
+          (change > 0 ? "+" : "") +
+          String(change) +
+          ") · Ca. tidspunkt: " +
+          changeWindowText(row)
+      );
+      meta.style.marginBottom = "7px";
+      card.appendChild(meta);
+
+      var autoText = el(
+        "div",
+        row.reconciliation_text ||
+          "Ingen automatisk forklaring tilgjengelig."
+      );
+      autoText.style.color = "#7f1d1d";
+      autoText.style.marginBottom = "10px";
+      card.appendChild(autoText);
+
+      var input = el("textarea");
+      input.placeholder =
+        "Forklaring er påkrevd, f.eks. manuelt korrigert i Quickbutik, svinn, feil lager fra tidligere eller annen kjent årsak.";
+      input.style.width = "100%";
+      input.style.minHeight = "82px";
+      input.style.padding = "10px";
+      input.style.border = "1px solid #d1d5db";
+      input.style.borderRadius = "10px";
+      input.style.boxSizing = "border-box";
+      card.appendChild(input);
+
+      var button = createPrimaryButton(
+        "Merk som undersøkt"
+      );
+      button.style.marginTop = "9px";
+      card.appendChild(button);
+
+      var result = el("div");
+      result.style.marginTop = "8px";
+      result.style.fontSize = "13px";
+      card.appendChild(result);
+
+      button.onclick = function () {
+        var note = String(input.value || "").trim();
+        if (note.length < 3) {
+          result.textContent =
+            "⚠️ Skriv en forklaring før avviket kan merkes som undersøkt.";
+          result.style.color = "#991b1b";
+          input.focus();
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Lagrer…";
+        result.textContent = "";
+
+        sb.rpc(
+          "internal_review_inventory_adjustment",
+          {
+            p_adjustment_id: row.id,
+            p_note: note
+          }
+        ).then(function (response) {
+          if (response.error) {
+            button.disabled = false;
+            button.textContent = "Merk som undersøkt";
+            result.textContent =
+              "Kunne ikke lagre: " +
+              response.error.message;
+            result.style.color = "#991b1b";
+            return;
+          }
+
+          result.textContent =
+            "✅ Avviket er merket som undersøkt.";
+          result.style.color = "#166534";
+          setTimeout(function () {
+            window.location.reload();
+          }, 700);
+        });
+      };
+
+      parent.appendChild(card);
+    });
   }
 
   function renderZettleIntegration(
@@ -54574,15 +54748,8 @@ function renderGlobalSyncControl(app, sb, user) {
   }
 
   function syncProducts(token) {
-    /*
-     * Cloudflare Worker har en grense for hvor mange underkall én invokasjon
-     * kan gjøre. Produktsynken kan bruke flere underkall per produkt/variant.
-     * Start derfor med den stabile puljestørrelsen 10, og gå automatisk ned
-     * til 5 og 2 dersom en spesielt tung pulje fortsatt treffer grensen.
-     */
-    var limit = 10;
+    var limit = 25;
     var offset = 0;
-    var subrequestRetries = 0;
     var totals = {
       batches: 0,
       processed: 0,
@@ -54591,31 +54758,13 @@ function renderGlobalSyncControl(app, sb, user) {
       failed: 0
     };
 
-    function isSubrequestLimitError(error) {
-      var text = String(
-        error && error.message
-          ? error.message
-          : error || ""
-      ).toLowerCase();
-
-      return (
-        text.indexOf("too many subrequests") >= 0 ||
-        (
-          text.indexOf("subrequest") >= 0 &&
-          text.indexOf("limit") >= 0
-        )
-      );
-    }
-
     function nextBatch() {
       setStatus(
         "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutik…" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 behandlet " +
-          String(totals.processed) +
-          " \u00b7 puljestørrelse " +
-          String(limit),
+          String(totals.processed),
         "note"
       );
 
@@ -54632,7 +54781,6 @@ function renderGlobalSyncControl(app, sb, user) {
         token,
         "GET"
       ).then(function (data) {
-        subrequestRetries = 0;
         totals.batches += 1;
         totals.processed += Number(
           data.count || 0
@@ -54651,57 +54799,17 @@ function renderGlobalSyncControl(app, sb, user) {
           return totals;
         }
 
-        var processedThisBatch = Number(
-          data.count || 0
-        );
-
-        offset += processedThisBatch > 0
-          ? processedThisBatch
-          : limit;
-
+        offset += limit;
         return new Promise(
           function (resolve) {
             setTimeout(
               function () {
                 resolve(nextBatch());
               },
-              350
+              250
             );
           }
         );
-      }).catch(function (error) {
-        if (
-          isSubrequestLimitError(error) &&
-          limit > 2 &&
-          subrequestRetries < 3
-        ) {
-          limit = Math.max(
-            2,
-            Math.floor(limit / 2)
-          );
-          subrequestRetries += 1;
-
-          setStatus(
-            "\u26a0\ufe0f Quickbutik-puljen var for tung for Cloudflare." +
-              "\nPrøver samme sted på nytt med " +
-              String(limit) +
-              " produkter per pulje…",
-            "warning"
-          );
-
-          return new Promise(
-            function (resolve) {
-              setTimeout(
-                function () {
-                  resolve(nextBatch());
-                },
-                700
-              );
-            }
-          );
-        }
-
-        throw error;
       });
     }
 
@@ -54709,7 +54817,7 @@ function renderGlobalSyncControl(app, sb, user) {
   }
 
   function syncQuickbutikSales(token) {
-    var limit = 100;
+    var limit = 250;
     var offset = 0;
     var totals = {
       batches: 0,
@@ -55177,7 +55285,8 @@ function renderPortal(sb, user, data) {
             function () {
               renderInventoryAdjustmentControl(
                 parent,
-                data
+                data,
+                sb
               );
             }
           );
