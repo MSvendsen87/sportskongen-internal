@@ -1897,15 +1897,9 @@
 
     var openInventoryAdjustments = (
       data.inventoryAdjustments || []
-    ).filter(function (row) {
-      return (
-        row.review_status !== "reviewed" &&
-        (
-          row.reconciliation_status === "unexplained" ||
-          row.reconciliation_status === "partly_explained"
-        )
-      );
-    });
+    ).filter(
+      inventoryAdjustmentNeedsReview
+    );
 
     var adjustmentCard =
       createDashboardActionCard(
@@ -2403,6 +2397,38 @@
     parent.appendChild(wrap);
   }
 
+  function inventoryInvoiceFollowupStatus(row) {
+    return String(
+      row && row.invoice_followup_status
+        ? row.invoice_followup_status
+        : "not_pending"
+    );
+  }
+
+  function inventoryAdjustmentNeedsReview(row) {
+    var invoiceStatus =
+      inventoryInvoiceFollowupStatus(row);
+
+    if (
+      row.review_status === "reviewed" ||
+      invoiceStatus === "waiting" ||
+      invoiceStatus === "registered"
+    ) {
+      return false;
+    }
+
+    if (invoiceStatus === "overdue") {
+      return true;
+    }
+
+    return (
+      row.reconciliation_status ===
+        "partly_explained" ||
+      row.reconciliation_status ===
+        "unexplained"
+    );
+  }
+
   function renderInventoryAdjustmentControl(
     parent,
     data,
@@ -2422,8 +2448,13 @@
 
     var explained = rows.filter(
       function (row) {
-        return row.reconciliation_status ===
-          "explained";
+        return (
+          row.reconciliation_status ===
+            "explained" ||
+          inventoryInvoiceFollowupStatus(
+            row
+          ) === "registered"
+        );
       }
     );
 
@@ -2434,15 +2465,15 @@
     );
 
     var needsReview = rows.filter(
+      inventoryAdjustmentNeedsReview
+    );
+
+    var waitingForInvoice = rows.filter(
       function (row) {
         return (
-          row.review_status !== "reviewed" &&
-          (
-            row.reconciliation_status ===
-              "partly_explained" ||
-            row.reconciliation_status ===
-              "unexplained"
-          )
+          inventoryInvoiceFollowupStatus(
+            row
+          ) === "waiting"
         );
       }
     );
@@ -2478,6 +2509,11 @@
           tone: "ok"
         },
         {
+          label: "Venter på faktura",
+          value: String(waitingForInvoice.length),
+          tone: waitingForInvoice.length ? "warning" : "ok"
+        },
+        {
           label: "Ny historikk",
           value: String(warmingUp.length),
           tone: warmingUp.length ? "warning" : "ok"
@@ -2487,7 +2523,7 @@
 
     var explanation = el(
       "div",
-      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Tidspunktet vises som et intervall fordi vi vet at endringen skjedde mellom de to synkene, ikke nøyaktig når. Uforklarlige avvik må ha en skriftlig forklaring før de kan merkes som undersøkt."
+      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. På positive lagerøkninger kan du velge «Faktura kommer senere». Linjen skjules da fra arbeidslisten fram til fakturaen registreres, eller til det har gått 30 dager. Uforklarlige avvik må ellers ha en skriftlig forklaring før de kan merkes som undersøkt."
     );
     explanation.className = "sk-note";
     explanation.style.margin = "14px 0";
@@ -2521,20 +2557,36 @@
           "no_window";
         var isReviewed =
           row.review_status === "reviewed";
+        var invoiceStatus =
+          inventoryInvoiceFollowupStatus(
+            row
+          );
         var statusText = isReviewed
           ? "🔵 Behandlet"
           : (
-              reconciliationStatus === "explained"
-                ? "✅ Forklart"
+              invoiceStatus === "registered"
+                ? "✅ Faktura registrert"
                 : (
-                    reconciliationStatus ===
-                      "partly_explained"
-                      ? "⚠️ Delvis forklart"
+                    invoiceStatus === "waiting"
+                      ? "🧾 Venter på faktura"
                       : (
-                          reconciliationStatus ===
-                            "unexplained"
-                            ? "🔴 Uforklart"
-                            : "⏳ Ny historikk"
+                          invoiceStatus === "overdue"
+                            ? "🔴 Faktura mangler"
+                            : (
+                                reconciliationStatus === "explained"
+                                  ? "✅ Forklart"
+                                  : (
+                                      reconciliationStatus ===
+                                        "partly_explained"
+                                        ? "⚠️ Delvis forklart"
+                                        : (
+                                            reconciliationStatus ===
+                                              "unexplained"
+                                              ? "🔴 Uforklart"
+                                              : "⏳ Ny historikk"
+                                          )
+                                    )
+                              )
                         )
                   )
             );
@@ -2588,6 +2640,37 @@
               ? detailParts.join(" · ")
               : "Ingen automatisk forklaring tilgjengelig."
           );
+
+        if (invoiceStatus === "waiting") {
+          explanationText =
+            "Faktura registreres senere. Skjult fra arbeidslisten til " +
+            formatAdminDateTime(
+              row.invoice_due_at
+            ) +
+            ".";
+        }
+
+        if (invoiceStatus === "registered") {
+          explanationText =
+            "Faktura registrert senere med " +
+            String(
+              Number(
+                row.later_invoice_received_qty ||
+                0
+              )
+            ) +
+            " stk i varemottak " +
+            formatAdminDateTime(
+              row.later_invoice_registered_at
+            ) +
+            ".";
+        }
+
+        if (invoiceStatus === "overdue") {
+          explanationText =
+            "Fakturaen er fortsatt ikke registrert etter 30 dager. " +
+            "Kontroller lagerøkningen og registrer fakturaen eller skriv en forklaring.";
+        }
 
         if (isReviewed) {
           explanationText +=
@@ -2734,8 +2817,14 @@
 
       var autoText = el(
         "div",
-        row.reconciliation_text ||
-          "Ingen automatisk forklaring tilgjengelig."
+        inventoryInvoiceFollowupStatus(
+          row
+        ) === "overdue"
+          ? "Fakturaen er fortsatt ikke registrert etter 30 dager."
+          : (
+              row.reconciliation_text ||
+              "Ingen automatisk forklaring tilgjengelig."
+            )
       );
       autoText.style.color = "#7f1d1d";
       autoText.style.marginBottom = "10px";
@@ -2757,6 +2846,21 @@
       );
       button.style.marginTop = "9px";
       card.appendChild(button);
+
+      var invoiceButton = null;
+      if (
+        change > 0 &&
+        inventoryInvoiceFollowupStatus(
+          row
+        ) !== "overdue"
+      ) {
+        invoiceButton = createButton(
+          "🧾 Faktura kommer senere"
+        );
+        invoiceButton.style.marginTop = "9px";
+        invoiceButton.style.marginLeft = "8px";
+        card.appendChild(invoiceButton);
+      }
 
       var result = el("div");
       result.style.marginTop = "8px";
@@ -2802,6 +2906,40 @@
           }, 700);
         });
       };
+
+      if (invoiceButton) {
+        invoiceButton.onclick = function () {
+          invoiceButton.disabled = true;
+          invoiceButton.textContent =
+            "Lagrer…";
+          result.textContent = "";
+
+          sb.rpc(
+            "internal_defer_inventory_adjustment_invoice",
+            {
+              p_adjustment_id: row.id
+            }
+          ).then(function (response) {
+            if (response.error) {
+              invoiceButton.disabled = false;
+              invoiceButton.textContent =
+                "🧾 Faktura kommer senere";
+              result.textContent =
+                "Kunne ikke lagre: " +
+                response.error.message;
+              result.style.color = "#991b1b";
+              return;
+            }
+
+            result.textContent =
+              "✅ Skjult fram til fakturaen registreres eller 30-dagersfristen utløper.";
+            result.style.color = "#166534";
+            setTimeout(function () {
+              window.location.reload();
+            }, 700);
+          });
+        };
+      }
 
       parent.appendChild(card);
     });
@@ -28010,15 +28148,9 @@ function renderProductControlDashboard(
     data.inventoryAdjustments || [];
 
   var unresolvedInventoryAdjustments =
-    inventoryAdjustmentRows.filter(function (row) {
-      return (
-        row.review_status !== "reviewed" &&
-        (
-          row.reconciliation_status === "unexplained" ||
-          row.reconciliation_status === "partly_explained"
-        )
-      );
-    });
+    inventoryAdjustmentRows.filter(
+      inventoryAdjustmentNeedsReview
+    );
 
   if (unresolvedInventoryAdjustments.length) {
     var inventoryAlert = el("div");
@@ -55433,15 +55565,11 @@ function renderPortal(sb, user, data) {
         description:
           "Registrerte lagerendringer og kontroll av mulige manuelle justeringer.",
         badge: function () {
-          return (data.inventoryAdjustments || []).filter(function (row) {
-            return (
-              row.review_status !== "reviewed" &&
-              (
-                row.reconciliation_status === "unexplained" ||
-                row.reconciliation_status === "partly_explained"
-              )
-            );
-          }).length;
+          return (
+            data.inventoryAdjustments || []
+          ).filter(
+            inventoryAdjustmentNeedsReview
+          ).length;
         },
         badgeTone: "danger",
         render: function (parent) {
@@ -55494,15 +55622,9 @@ function renderPortal(sb, user, data) {
           var inventoryDangerCount = (
             data.inventoryAdjustments ||
             []
-          ).filter(function (row) {
-            return (
-              row.review_status !== "reviewed" &&
-              (
-                row.reconciliation_status === "unexplained" ||
-                row.reconciliation_status === "partly_explained"
-              )
-            );
-          }).length;
+          ).filter(
+            inventoryAdjustmentNeedsReview
+          ).length;
 
           return productDangerCount + inventoryDangerCount;
         },
