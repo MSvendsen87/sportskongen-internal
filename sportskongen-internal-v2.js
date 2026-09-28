@@ -12524,6 +12524,520 @@ createBtn.onclick = function () {
     }
 
 
+    function parseDiscGolfShopWebshopPdf(
+      pages
+    ) {
+      var fullLines = [];
+
+      (pages || []).forEach(
+        function (page) {
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var clean =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (clean) {
+                fullLines.push(
+                  clean
+                );
+              }
+            }
+          );
+        }
+      );
+
+      var fullText =
+        fullLines.join("\n");
+
+      /*
+       * Nytt DiscGolfShop-format fra nettbutikken:
+       *
+       *   Fakturanummer: 100000662
+       *   Ordredato: 23. sep. 2026
+       *   Produkter Produktbetegnelse Pris Antall Mva Delsum
+       *   MVP Trail MVP Trail-Neutron 112,- 6 168,- 672,-
+       *   Plast
+       *   Neutron
+       *
+       * PDF-en deler enkelte ord over flere tekstlinjer. Materialet etter
+       * "Plast" er stabilt og brukes sammen med produktnavnet i første
+       * kolonne. Pris, MVA og delsum er oppgitt eksklusiv MVA per varelinje.
+       */
+      if (
+        !/Discgolfshop\s+AS/i.test(
+          fullText
+        ) ||
+        !/Fakturanummer\s*:/i.test(
+          fullText
+        ) ||
+        !/Ordredato\s*:/i.test(
+          fullText
+        )
+      ) {
+        return null;
+      }
+
+      var invoiceNoMatch =
+        fullText.match(
+          /Fakturanummer\s*:\s*([0-9]+)/i
+        );
+
+      var invoiceDateMatch =
+        fullText.match(
+          /Ordredato\s*:\s*(\d{1,2})\.\s*([A-Za-z\u00c6\u00d8\u00c5\u00e6\u00f8\u00e5]+)\.?\s*(\d{4})/i
+        );
+
+      if (
+        !invoiceNoMatch ||
+        !invoiceDateMatch
+      ) {
+        return null;
+      }
+
+      var monthNames = {
+        jan: "01",
+        feb: "02",
+        mar: "03",
+        apr: "04",
+        mai: "05",
+        jun: "06",
+        jul: "07",
+        aug: "08",
+        sep: "09",
+        okt: "10",
+        nov: "11",
+        des: "12"
+      };
+
+      var monthKey =
+        String(
+          invoiceDateMatch[2] || ""
+        )
+          .toLowerCase()
+          .replace(
+            /\.$/,
+            ""
+          )
+          .slice(
+            0,
+            3
+          );
+
+      var invoiceDate =
+        monthNames[
+          monthKey
+        ]
+          ? (
+              invoiceDateMatch[3] +
+              "-" +
+              monthNames[
+                monthKey
+              ] +
+              "-" +
+              String(
+                invoiceDateMatch[1]
+              ).padStart(
+                2,
+                "0"
+              )
+            )
+          : "";
+
+      if (!invoiceDate) {
+        return null;
+      }
+
+      function webshopAmount(
+        value
+      ) {
+        return parseNordicNumber(
+          String(
+            value || ""
+          ).replace(
+            /,-(?=\s*$)/,
+            ",00"
+          )
+        );
+      }
+
+      var rowPattern =
+        /^((?:MVP|Axiom)\s+.+?)\s+((?:MVP|Axiom)\s+.+?)\s+(\d[\d\s.]*,(?:\d{2}|-))\s+(\d+(?:[.,]\d+)?)\s+(\d[\d\s.]*,(?:\d{2}|-))\s+(\d[\d\s.]*,(?:\d{2}|-))$/i;
+
+      var rows = [];
+      var pending = null;
+
+      function finishWebshopRow() {
+        if (!pending) {
+          return;
+        }
+
+        var material =
+          pending.material
+            .join(" ")
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
+
+        var description =
+          pending.product_name;
+
+        if (material) {
+          description +=
+            " - " +
+            material;
+        } else if (
+          pending.product_description
+        ) {
+          description =
+            pending.product_description;
+        }
+
+        var quantity =
+          webshopAmount(
+            pending.quantity
+          );
+
+        var unitPrice =
+          webshopAmount(
+            pending.unit_price
+          );
+
+        var vatAmount =
+          webshopAmount(
+            pending.vat_amount
+          );
+
+        var lineTotal =
+          webshopAmount(
+            pending.line_total
+          );
+
+        if (
+          quantity === null ||
+          quantity <= 0 ||
+          unitPrice === null ||
+          lineTotal === null
+        ) {
+          pending = null;
+          return;
+        }
+
+        var vatPercent =
+          lineTotal > 0 &&
+          vatAmount !== null
+            ? Math.round(
+                (
+                  vatAmount /
+                  lineTotal
+                ) *
+                10000
+              ) /
+              100
+            : 25;
+
+        rows.push({
+          line_number:
+            rows.length + 1,
+          supplier_sku:
+            null,
+          ean:
+            null,
+          description:
+            description,
+          quantity:
+            quantity,
+          unit_price:
+            unitPrice,
+          line_total:
+            lineTotal,
+          list_unit_price:
+            unitPrice,
+          discount_percent:
+            0,
+          gross_line_total:
+            lineTotal +
+            (
+              vatAmount ||
+              0
+            ),
+          vat_percent:
+            vatPercent
+        });
+
+        pending = null;
+      }
+
+      (pages || []).forEach(
+        function (page) {
+          var inTable = false;
+
+          (
+            page.lines || []
+          ).forEach(
+            function (rawLine) {
+              var line =
+                String(
+                  rawLine || ""
+                )
+                  .replace(
+                    /\u00a0/g,
+                    " "
+                  )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim();
+
+              if (!line) {
+                return;
+              }
+
+              if (
+                /Produkter/i.test(
+                  line
+                ) &&
+                /Produktbetegnelse/i.test(
+                  line
+                ) &&
+                /Delsum/i.test(
+                  line
+                )
+              ) {
+                finishWebshopRow();
+                inTable = true;
+                return;
+              }
+
+              if (!inTable) {
+                return;
+              }
+
+              if (
+                /^Delsum\s*:/i.test(
+                  line
+                ) ||
+                /^Totalsum\b/i.test(
+                  line
+                )
+              ) {
+                finishWebshopRow();
+                inTable = false;
+                return;
+              }
+
+              var rowMatch =
+                line.match(
+                  rowPattern
+                );
+
+              if (rowMatch) {
+                finishWebshopRow();
+
+                pending = {
+                  product_name:
+                    rowMatch[1],
+                  product_description:
+                    rowMatch[2],
+                  unit_price:
+                    rowMatch[3],
+                  quantity:
+                    rowMatch[4],
+                  vat_amount:
+                    rowMatch[5],
+                  line_total:
+                    rowMatch[6],
+                  saw_plastic:
+                    false,
+                  material:
+                    []
+                };
+
+                return;
+              }
+
+              if (!pending) {
+                return;
+              }
+
+              if (
+                /^Plast$/i.test(
+                  line
+                )
+              ) {
+                pending.saw_plastic =
+                  true;
+                return;
+              }
+
+              if (
+                pending.saw_plastic
+              ) {
+                pending.material.push(
+                  line
+                );
+              }
+            }
+          );
+
+          finishWebshopRow();
+        }
+      );
+
+      if (rows.length === 0) {
+        return null;
+      }
+
+      var shippingMatch =
+        fullText.match(
+          /(?:^|\n)\s*Frakt\s*:\s*(\d[\d\s.]*,(?:\d{2}|-))(?:\s|$)/im
+        ) ||
+        fullText.match(
+          /Totale\s+fraktkostnader\s+(\d[\d\s.]*,(?:\d{2}|-))/i
+        );
+
+      var netMatch =
+        fullText.match(
+          /Totalsum\s+eks\.\s*mva\s*:\s*(\d[\d\s.]*,(?:\d{2}|-))/i
+        );
+
+      var vatMatch =
+        fullText.match(
+          /(?:^|\n)\s*Mva\s*:\s*(\d[\d\s.]*,(?:\d{2}|-))/im
+        );
+
+      var grossMatch =
+        fullText.match(
+          /Totalsum\s+inkl\.\s*mva\s*:\s*(\d[\d\s.]*,(?:\d{2}|-))/i
+        );
+
+      var shippingTotal =
+        shippingMatch
+          ? webshopAmount(
+              shippingMatch[1]
+            )
+          : 0;
+
+      var costs =
+        shippingTotal > 0
+          ? [
+              {
+                cost_type:
+                  "shipping",
+                description:
+                  "Frakt",
+                amount:
+                  shippingTotal,
+                allocation_method:
+                  "by_value",
+                vat_percent:
+                  25
+              }
+            ]
+          : [];
+
+      var goodsTotal =
+        rows.reduce(
+          function (
+            sum,
+            row
+          ) {
+            return (
+              sum +
+              num(
+                row.line_total
+              )
+            );
+          },
+          0
+        );
+
+      var invoiceTotal =
+        netMatch
+          ? webshopAmount(
+              netMatch[1]
+            )
+          : null;
+
+      var vatTotal =
+        vatMatch
+          ? webshopAmount(
+              vatMatch[1]
+            )
+          : null;
+
+      var grossTotal =
+        grossMatch
+          ? webshopAmount(
+              grossMatch[1]
+            )
+          : null;
+
+      var computedTotal =
+        goodsTotal +
+        shippingTotal;
+
+      return {
+        parser:
+          "discgolfshop-webshop-v1",
+        parser_label:
+          "DiscGolfShop AS",
+        supplier_hint:
+          "DiscGolfShop AS",
+        invoice_number:
+          invoiceNoMatch[1],
+        invoice_date:
+          invoiceDate,
+        due_date:
+          "",
+        currency:
+          "NOK",
+        rows:
+          rows,
+        costs:
+          costs,
+        goods_total:
+          goodsTotal,
+        shipping_total:
+          shippingTotal,
+        invoice_total:
+          invoiceTotal,
+        total_label:
+          "Totalsum eks. MVA",
+        vat_total:
+          vatTotal,
+        gross_total:
+          grossTotal,
+        computed_total:
+          computedTotal,
+        difference:
+          invoiceTotal === null
+            ? null
+            : Math.abs(
+                computedTotal -
+                invoiceTotal
+              ),
+        raw_text:
+          fullText
+      };
+    }
+
+
     function parseDiscGolfShopPdf(
       pages
     ) {
@@ -13620,6 +14134,15 @@ createBtn.onclick = function () {
 
       parsed =
         parseSuneSportPdf(
+          pages
+        );
+
+      if (parsed) {
+        return parsed;
+      }
+
+      parsed =
+        parseDiscGolfShopWebshopPdf(
           pages
         );
 
