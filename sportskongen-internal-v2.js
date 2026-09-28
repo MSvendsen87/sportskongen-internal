@@ -1907,8 +1907,8 @@
         openInventoryAdjustments.length,
         "Uforklarte lagerendringer",
         openInventoryAdjustments.length
-          ? "Lagerendringer som mÃ¥ forklares og behandles."
-          : "Ingen uforklarte lagerendringer akkurat nÃ¥.",
+          ? "Lagerendringer som må forklares og behandles."
+          : "Ingen uforklarte lagerendringer akkurat nå.",
         openInventoryAdjustments.length ? "danger" : "ok",
         null
       );
@@ -2380,10 +2380,10 @@
     wrap.style.margin = "0 0 14px";
 
     [
-      ["ðŸ“Š Lageranalyse", "inventoryAnalytics"],
-      ["ðŸ”’ Lagerjusteringer", "inventoryAdjustments"],
-      ["ðŸ“¦ Varetelling", "stock"],
-      ["ðŸ›¡ï¸ Kontrollsenter", "productControl"]
+      ["📊 Lageranalyse", "inventoryAnalytics"],
+      ["🔒 Lagerjusteringer", "inventoryAdjustments"],
+      ["📦 Varetelling", "stock"],
+      ["🛡️ Kontrollsenter", "productControl"]
     ].forEach(function (item) {
       var button = createButton(item[0]);
       button.onclick = function () {
@@ -2554,7 +2554,7 @@
           tone: "ok"
         },
         {
-          label: "MÃ¥ undersÃ¸kes",
+          label: "Må undersøkes",
           value: String(needsReview.length),
           tone: needsReview.length ? "warning" : "ok"
         },
@@ -2564,12 +2564,12 @@
           tone: "ok"
         },
         {
-          label: "Venter pÃ¥ faktura",
+          label: "Venter på faktura",
           value: String(waitingForInvoice.length),
           tone: waitingForInvoice.length ? "warning" : "ok"
         },
         {
-          label: "Venter pÃ¥ kundeordre",
+          label: "Venter på kundeordre",
           value: String(waitingForCustomerOrder.length),
           tone: waitingForCustomerOrder.length ? "warning" : "ok"
         },
@@ -2583,7 +2583,7 @@
 
     var explanation = el(
       "div",
-      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Betalte Quickbutik-ordre som venter pÃ¥ pakking gjenkjennes automatisk og forklarer lagerreduksjonen uten manuell behandling. Bruk Â«Kundeordre venter pÃ¥ pakkingÂ» bare dersom ordren ennÃ¥ ikke er kommet inn i salgsdataene. LagerÃ¸kninger kan settes pÃ¥ Â«Faktura kommer senereÂ» i opptil 30 dager."
+      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Betalte Quickbutik-ordre som venter på pakking gjenkjennes automatisk og forklarer lagerreduksjonen uten manuell behandling. Bruk «Kundeordre venter på pakking» bare dersom ordren ennå ikke er kommet inn i salgsdataene. Lagerøkninger kan settes på «Faktura kommer senere» i opptil 30 dager."
     );
     explanation.className = "sk-note";
     explanation.style.margin = "14px 0";
@@ -2596,12 +2596,12 @@
       ) {
         return (
           formatAdminDateTime(row.observation_from_at) +
-          " â€“ " +
+          " – " +
           formatAdminDateTime(row.observation_to_at)
         );
       }
       if (row.observation_to_at) {
-        return "FÃ¸rst oppdaget " +
+        return "Først oppdaget " +
           formatAdminDateTime(row.observation_to_at);
       }
       return formatAdminDateTime(row.detected_at);
@@ -2626,40 +2626,40 @@
             row
           );
         var statusText = isReviewed
-          ? "ðŸ”µ Behandlet"
+          ? "🔵 Behandlet"
           : (
               deferralStatus === "resolved"
                 ? (
                     deferralReason === "customer_order"
-                      ? "âœ… Kundeordre matchet"
-                      : "âœ… Faktura registrert"
+                      ? "✅ Kundeordre matchet"
+                      : "✅ Faktura registrert"
                   )
                 : (
                     deferralStatus === "waiting"
                       ? (
                           deferralReason === "customer_order"
-                            ? "ðŸ“¦ Venter pÃ¥ kundeordre"
-                            : "ðŸ§¾ Venter pÃ¥ faktura"
+                            ? "📦 Venter på kundeordre"
+                            : "🧾 Venter på faktura"
                         )
                       : (
                           deferralStatus === "overdue"
                             ? (
                                 deferralReason === "customer_order"
-                                  ? "ðŸ”´ Kundeordre ikke funnet"
-                                  : "ðŸ”´ Faktura mangler"
+                                  ? "🔴 Kundeordre ikke funnet"
+                                  : "🔴 Faktura mangler"
                               )
                             : (
                                 reconciliationStatus === "explained"
-                                  ? "âœ… Forklart"
+                                  ? "✅ Forklart"
                                   : (
                                       reconciliationStatus ===
                                         "partly_explained"
-                                        ? "âš ï¸ Delvis forklart"
+                                        ? "⚠️ Delvis forklart"
                                         : (
                                             reconciliationStatus ===
                                               "unexplained"
-                                              ? "ðŸ”´ Uforklart"
-                                              : "â³ Ny historikk"
+                                              ? "🔴 Uforklart"
+                                              : "⏳ Ny historikk"
                                           )
                                     )
                               )
@@ -2713,7 +2713,7 @@
           row.reconciliation_text ||
           (
             detailParts.length
-              ? detailParts.join(" Â· ")
+              ? detailParts.join(" · ")
               : "Ingen automatisk forklaring tilgjengelig."
           );
 
@@ -2721,7 +2721,7 @@
           explanationText =
             deferralReason === "customer_order"
               ? (
-                  "Kundeordre venter pÃ¥ pakking. Skjult fra arbeidslisten til " +
+                  "Kundeordre venter på pakking. Skjult fra arbeidslisten til " +
                   formatAdminDateTime(
                     row.deferred_until
                   ) +
@@ -2740,7 +2740,7 @@
         if (deferralStatus === "resolved") {
           explanationText =
             deferralReason === "customer_order"
-              ? "Kundeordren er nÃ¥ funnet i salgsdataene og lagerendringen er automatisk forklart."
+              ? "Kundeordren er nå funnet i salgsdataene og lagerendringen er automatisk forklart."
               : (
                   "Faktura registrert senere med " +
                   String(
@@ -2761,12 +2761,12 @@
           explanationText =
             deferralReason === "customer_order"
               ? "Kundeordren er fortsatt ikke funnet etter 7 dager. Kontroller ordren eller skriv en forklaring."
-              : "Fakturaen er fortsatt ikke registrert etter 30 dager. Kontroller lagerÃ¸kningen og registrer fakturaen eller skriv en forklaring.";
+              : "Fakturaen er fortsatt ikke registrert etter 30 dager. Kontroller lagerøkningen og registrer fakturaen eller skriv en forklaring.";
         }
 
         if (isReviewed) {
           explanationText +=
-            " Â· Behandlet " +
+            " · Behandlet " +
             formatAdminDateTime(row.reviewed_at) +
             ": " +
             (row.review_note || "-");
@@ -2829,7 +2829,7 @@
         },
         {
           key: "previous_quantity",
-          label: "FÃ¸r"
+          label: "Før"
         },
         {
           key: "new_quantity",
@@ -2849,7 +2849,7 @@
         }
       ],
       displayRows,
-      "Ingen lagerendringer er registrert ennÃ¥. FÃ¸rste senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
+      "Ingen lagerendringer er registrert ennå. Første senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
     );
 
     parent.appendChild(logDetails);
@@ -2860,14 +2860,14 @@
 
     var reviewTitle = el(
       "h3",
-      "Avvik som mÃ¥ undersÃ¸kes"
+      "Avvik som må undersøkes"
     );
     reviewTitle.style.marginTop = "24px";
     parent.appendChild(reviewTitle);
 
     var reviewIntro = el(
       "p",
-      "Forklaring er obligatorisk. Merk bare avvik som behandlet nÃ¥r dere faktisk har tatt stilling til hvorfor lageret endret seg."
+      "Forklaring er obligatorisk. Merk bare avvik som behandlet når dere faktisk har tatt stilling til hvorfor lageret endret seg."
     );
     reviewIntro.style.color = "#6b7280";
     parent.appendChild(reviewIntro);
@@ -2921,7 +2921,7 @@
 
     var customerOrderButton =
       createPrimaryButton(
-        "ðŸ“¦ Kundeordre venter pÃ¥ pakking Â· 7 dager"
+        "📦 Kundeordre venter på pakking · 7 dager"
       );
     customerOrderButton.disabled = true;
     bulkTop.appendChild(
@@ -2930,7 +2930,7 @@
 
     var supplierInvoiceButton =
       createButton(
-        "ðŸ§¾ Faktura kommer senere Â· 30 dager"
+        "🧾 Faktura kommer senere · 30 dager"
       );
     supplierInvoiceButton.disabled = true;
     bulkTop.appendChild(
@@ -3023,8 +3023,8 @@
       if (!eligible.length) {
         bulkResult.textContent =
           wantsCustomerOrder
-            ? "âš ï¸ Velg minst Ã©n lagerreduksjon."
-            : "âš ï¸ Velg minst Ã©n lagerÃ¸kning.";
+            ? "⚠️ Velg minst én lagerreduksjon."
+            : "⚠️ Velg minst én lagerøkning.";
         bulkResult.style.color = "#991b1b";
         return;
       }
@@ -3034,7 +3034,7 @@
       bulkResult.textContent =
         "Lagrer " +
         String(eligible.length) +
-        " linje(r) samletâ€¦";
+        " linje(r) samlet…";
       bulkResult.style.color = "#1e3a8a";
 
       sb.rpc(
@@ -3060,12 +3060,12 @@
         }
 
         bulkResult.textContent =
-          "âœ… " +
+          "✅ " +
           String(
             response.data ||
             eligible.length
           ) +
-          " linje(r) er satt pÃ¥ vent. Oppdaterer sidenâ€¦";
+          " linje(r) er satt på vent. Oppdaterer siden…";
         bulkResult.style.color = "#166534";
         setTimeout(function () {
           window.location.reload();
@@ -3109,7 +3109,7 @@
         document.createTextNode(
           (row.product_name || "Ukjent produkt") +
             (row.variant_name && row.variant_name !== "-"
-              ? " Â· " + row.variant_name
+              ? " · " + row.variant_name
               : "")
         )
       );
@@ -3133,12 +3133,12 @@
         "div",
         "Lager " +
           String(row.previous_quantity) +
-          " â†’ " +
+          " → " +
           String(row.new_quantity) +
           " (" +
           (change > 0 ? "+" : "") +
           String(change) +
-          ") Â· Ca. tidspunkt: " +
+          ") · Ca. tidspunkt: " +
           changeWindowText(row)
       );
       meta.style.marginBottom = "7px";
@@ -3167,7 +3167,7 @@
 
       var input = el("textarea");
       input.placeholder =
-        "Forklaring er pÃ¥krevd, f.eks. manuelt korrigert i Quickbutik, svinn, feil lager fra tidligere eller annen kjent Ã¥rsak.";
+        "Forklaring er påkrevd, f.eks. manuelt korrigert i Quickbutik, svinn, feil lager fra tidligere eller annen kjent årsak.";
       input.style.width = "100%";
       input.style.minHeight = "82px";
       input.style.padding = "10px";
@@ -3177,7 +3177,7 @@
       card.appendChild(input);
 
       var button = createPrimaryButton(
-        "Merk som undersÃ¸kt"
+        "Merk som undersøkt"
       );
       button.style.marginTop = "9px";
       card.appendChild(button);
@@ -3191,14 +3191,14 @@
         var note = String(input.value || "").trim();
         if (note.length < 3) {
           result.textContent =
-            "âš ï¸ Skriv en forklaring fÃ¸r avviket kan merkes som undersÃ¸kt.";
+            "⚠️ Skriv en forklaring før avviket kan merkes som undersøkt.";
           result.style.color = "#991b1b";
           input.focus();
           return;
         }
 
         button.disabled = true;
-        button.textContent = "Lagrerâ€¦";
+        button.textContent = "Lagrer…";
         result.textContent = "";
 
         sb.rpc(
@@ -3210,7 +3210,7 @@
         ).then(function (response) {
           if (response.error) {
             button.disabled = false;
-            button.textContent = "Merk som undersÃ¸kt";
+            button.textContent = "Merk som undersøkt";
             result.textContent =
               "Kunne ikke lagre: " +
               response.error.message;
@@ -3219,7 +3219,7 @@
           }
 
           result.textContent =
-            "âœ… Avviket er merket som undersÃ¸kt.";
+            "✅ Avviket er merket som undersøkt.";
           result.style.color = "#166534";
           setTimeout(function () {
             window.location.reload();
@@ -7264,7 +7264,7 @@ savePriceBtn.onclick = function () {
 
       var note = el(
         "div",
-        "Faktiske lagerendringer er grÃ¸nne. Salg, Ã¥pne kundeordre, varemottak og varetelling vises som forklaring og blir ikke lagt til en gang til."
+        "Faktiske lagerendringer er grønne. Salg, åpne kundeordre, varemottak og varetelling vises som forklaring og blir ikke lagt til en gang til."
       );
       note.className =
         "sk-note";
@@ -7283,12 +7283,12 @@ savePriceBtn.onclick = function () {
         "10px";
 
       [
-        "NÃ¥vÃ¦rende lager: " +
+        "Nåværende lager: " +
           String(
             effectiveStock(
               product
             ) === null
-              ? "â€“"
+              ? "–"
               : effectiveStock(
                   product
                 )
@@ -7297,7 +7297,7 @@ savePriceBtn.onclick = function () {
           String(
             actualChanges.length
           ),
-        "Reservert i Ã¥pne ordre: " +
+        "Reservert i åpne ordre: " +
           String(openOrderQty)
       ].forEach(
         function (textValue) {
@@ -7326,7 +7326,7 @@ savePriceBtn.onclick = function () {
       if (!rows.length) {
         var empty = el(
           "div",
-          "Ingen lagerhistorikk er registrert for dette produktet ennÃ¥."
+          "Ingen lagerhistorikk er registrert for dette produktet ennå."
         );
         empty.className =
           "sk-note";
@@ -7410,7 +7410,7 @@ savePriceBtn.onclick = function () {
             0
           );
 
-          var stockText = "â€“";
+          var stockText = "–";
           if (
             row.stock_before !==
               null &&
@@ -7425,7 +7425,7 @@ savePriceBtn.onclick = function () {
               String(
                 row.stock_before
               ) +
-              " â†’ " +
+              " → " +
               String(
                 row.stock_after
               );
@@ -7436,18 +7436,18 @@ savePriceBtn.onclick = function () {
               row.event_at
             ),
             row.event_label ||
-              "â€“",
+              "–",
             row.variant_name ||
-              "â€“",
+              "–",
             quantity > 0
               ? "+" +
                 String(quantity)
               : String(quantity),
             stockText,
             row.reference ||
-              "â€“",
+              "–",
             row.details ||
-              "â€“"
+              "–"
           ].forEach(
             function (
               value,
@@ -7518,7 +7518,7 @@ savePriceBtn.onclick = function () {
       }
 
       host.textContent =
-        "Laster lagerhistorikkâ€¦";
+        "Laster lagerhistorikk…";
 
       if (
         state
@@ -13347,7 +13347,7 @@ createBtn.onclick = function () {
        *   Neutron
        *
        * PDF-en deler enkelte ord over flere tekstlinjer. Materialet etter
-       * "Plast" er stabilt og brukes sammen med produktnavnet i fÃ¸rste
+       * "Plast" er stabilt og brukes sammen med produktnavnet i første
        * kolonne. Pris, MVA og delsum er oppgitt eksklusiv MVA per varelinje.
        */
       if (
@@ -29455,12 +29455,12 @@ function renderProductControlDashboard(
     inventoryAlert.style.marginBottom = "14px";
     inventoryAlert.style.cursor = "pointer";
     inventoryAlert.innerHTML =
-      "<strong>ðŸ”´ " +
+      "<strong>🔴 " +
       String(unresolvedInventoryAdjustments.length) +
       " uforklart" +
       (unresolvedInventoryAdjustments.length === 1 ?
         " lagerendring" : " lagerendringer") +
-      "</strong><div style='margin-top:5px'>Ã…pne Lagerjusteringer for Ã¥ undersÃ¸ke og forklare avvikene.</div>";
+      "</strong><div style='margin-top:5px'>Åpne Lagerjusteringer for å undersøke og forklare avvikene.</div>";
     inventoryAlert.onclick = function () {
       if (skPortalNavigate) {
         skPortalNavigate("inventoryAdjustments");
@@ -56163,7 +56163,7 @@ function renderGlobalSyncControl(app, sb, user) {
   syncButton.style.fontWeight =
     "900";
   syncButton.title =
-    "Synk produkter, Quickbutik-salg og Zettle-salg i ett kjÃ¸r.";
+    "Synk produkter, Quickbutik-salg og Zettle-salg i ett kjør.";
 
   actions.insertBefore(
     syncButton,
@@ -56223,7 +56223,7 @@ function renderGlobalSyncControl(app, sb, user) {
           !session.access_token
         ) {
           throw new Error(
-            "Fant ingen aktiv innlogging. Last siden pÃ¥ nytt og logg inn igjen."
+            "Fant ingen aktiv innlogging. Last siden på nytt og logg inn igjen."
           );
         }
 
@@ -56279,9 +56279,9 @@ function renderGlobalSyncControl(app, sb, user) {
 
   function syncProducts(token) {
     /*
-     * Cloudflare Worker har en grense for hvor mange underkall Ã©n invokasjon
-     * kan gjÃ¸re. Produktsynken kan bruke flere underkall per produkt/variant.
-     * Start derfor med den stabile puljestÃ¸rrelsen 10, og gÃ¥ automatisk ned
+     * Cloudflare Worker har en grense for hvor mange underkall én invokasjon
+     * kan gjøre. Produktsynken kan bruke flere underkall per produkt/variant.
+     * Start derfor med den stabile puljestørrelsen 10, og gå automatisk ned
      * til 5 og 2 dersom en spesielt tung pulje fortsatt treffer grensen.
      */
     var limit = 10;
@@ -56313,12 +56313,12 @@ function renderGlobalSyncControl(app, sb, user) {
 
     function nextBatch() {
       setStatus(
-        "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutikâ€¦" +
+        "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutik…" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 behandlet " +
           String(totals.processed) +
-          " \u00b7 puljestÃ¸rrelse " +
+          " \u00b7 puljestørrelse " +
           String(limit),
         "note"
       );
@@ -56387,9 +56387,9 @@ function renderGlobalSyncControl(app, sb, user) {
 
           setStatus(
             "\u26a0\ufe0f Quickbutik-puljen var for tung for Cloudflare." +
-              "\nPrÃ¸ver samme sted pÃ¥ nytt med " +
+              "\nPrøver samme sted på nytt med " +
               String(limit) +
-              " produkter per puljeâ€¦",
+              " produkter per pulje…",
             "warning"
           );
 
@@ -56424,7 +56424,7 @@ function renderGlobalSyncControl(app, sb, user) {
     function nextBatch() {
       setStatus(
         "\u2705 1/4 \u00b7 Produkter synket" +
-          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste 365 dagerâ€¦" +
+          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste 365 dager…" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 ordre " +
@@ -56490,8 +56490,8 @@ function renderGlobalSyncControl(app, sb, user) {
           "\n\u2705 2/4 \u00b7 Quickbutik-salg oppdatert" +
           "\n" +
           (dryRun
-            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle 365 dagerâ€¦"
-            : "\u2705 3/4 \u00b7 Zettle-kontroll ferdig\n\u23f3 4/4 \u00b7 Importerer Zettle-salgâ€¦") +
+            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle 365 dager…"
+            : "\u2705 3/4 \u00b7 Zettle-kontroll ferdig\n\u23f3 4/4 \u00b7 Importerer Zettle-salg…") +
           "\nPuljer " +
           String(totals.pages) +
           " \u00b7 kvitteringer " +
@@ -56556,7 +56556,7 @@ function renderGlobalSyncControl(app, sb, user) {
   syncButton.onclick = function () {
     if (
       !window.confirm(
-        "Oppdater alt nÃ¥?\n\nDette gjÃ¸r i riktig rekkefÃ¸lge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste 365 dager\n3. Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
+        "Oppdater alt nå?\n\nDette gjør i riktig rekkefølge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste 365 dager\n3. Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
       )
     ) {
       return;
@@ -56573,10 +56573,10 @@ function renderGlobalSyncControl(app, sb, user) {
 
     syncButton.disabled = true;
     syncButton.textContent =
-      "Oppdatererâ€¦";
+      "Oppdaterer…";
 
     setStatus(
-      "Starter samlet oppdateringâ€¦",
+      "Starter samlet oppdatering…",
       "note"
     );
 
@@ -56654,7 +56654,7 @@ function renderGlobalSyncControl(app, sb, user) {
               summary.zettleImport.unmatched || 0
             ) +
             " holdt utenfor" +
-            "\n\nLageranalyse og lageravstemming bruker nÃ¥ de oppdaterte dataene. Siden lastes pÃ¥ nyttâ€¦",
+            "\n\nLageranalyse og lageravstemming bruker nå de oppdaterte dataene. Siden lastes på nytt…",
           summary.products.failed > 0
             ? "warning"
             : "success"
@@ -56673,7 +56673,7 @@ function renderGlobalSyncControl(app, sb, user) {
         syncButton.textContent =
           originalText;
         setStatus(
-          "Oppdateringen stoppet. Ingen senere steg ble kjÃ¸rt etter feilen.\n\nFeil: " +
+          "Oppdateringen stoppet. Ingen senere steg ble kjørt etter feilen.\n\nFeil: " +
             (error && error.message
               ? error.message
               : String(error)),
@@ -56683,6 +56683,850 @@ function renderGlobalSyncControl(app, sb, user) {
   };
 }
 
+
+function skBarcodeDigits(value) {
+  return String(value || "").replace(/[^0-9]/g, "");
+}
+
+function skEan13CheckDigit(firstTwelve) {
+  var digits = skBarcodeDigits(firstTwelve);
+
+  if (digits.length !== 12) {
+    return null;
+  }
+
+  var sum = 0;
+
+  for (var i = 0; i < 12; i += 1) {
+    sum += Number(digits.charAt(i)) * (i % 2 === 0 ? 1 : 3);
+  }
+
+  return String((10 - (sum % 10)) % 10);
+}
+
+function skNormalizeEan13(value) {
+  var digits = skBarcodeDigits(value);
+
+  if (digits.length === 12) {
+    digits = "0" + digits;
+  }
+
+  if (digits.length !== 13) {
+    return null;
+  }
+
+  if (
+    skEan13CheckDigit(
+      digits.slice(0, 12)
+    ) !== digits.charAt(12)
+  ) {
+    return null;
+  }
+
+  return digits;
+}
+
+function skEan13Bits(ean13) {
+  var code = skNormalizeEan13(ean13);
+
+  if (!code) {
+    return null;
+  }
+
+  var leftOdd = [
+    "0001101", "0011001", "0010011", "0111101", "0100011",
+    "0110001", "0101111", "0111011", "0110111", "0001011"
+  ];
+  var leftEven = [
+    "0100111", "0110011", "0011011", "0100001", "0011101",
+    "0111001", "0000101", "0010001", "0001001", "0010111"
+  ];
+  var right = [
+    "1110010", "1100110", "1101100", "1000010", "1011100",
+    "1001110", "1010000", "1000100", "1001000", "1110100"
+  ];
+  var parity = [
+    "LLLLLL", "LLGLGG", "LLGGLG", "LLGGGL", "LGLLGG",
+    "LGGLLG", "LGGGLL", "LGLGLG", "LGLGGL", "LGGLGL"
+  ];
+  var first = Number(code.charAt(0));
+  var bits = "101";
+
+  for (var i = 1; i <= 6; i += 1) {
+    var digit = Number(code.charAt(i));
+    bits += parity[first].charAt(i - 1) === "L"
+      ? leftOdd[digit]
+      : leftEven[digit];
+  }
+
+  bits += "01010";
+
+  for (var j = 7; j <= 12; j += 1) {
+    bits += right[Number(code.charAt(j))];
+  }
+
+  return bits + "101";
+}
+
+function skBarcodeEscape(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function skEan13Svg(value) {
+  var ean13 = skNormalizeEan13(value);
+  var bits = skEan13Bits(ean13);
+
+  if (!bits) {
+    return "";
+  }
+
+  var quiet = 11;
+  var bars = [];
+
+  for (var i = 0; i < bits.length; i += 1) {
+    if (bits.charAt(i) !== "1") {
+      continue;
+    }
+
+    var guard =
+      i < 3 ||
+      (i >= 45 && i < 50) ||
+      i >= 92;
+
+    bars.push(
+      "<rect x='" +
+        String(quiet + i) +
+        "' y='0' width='1' height='" +
+        (guard ? "34" : "29") +
+        "'/>"
+    );
+  }
+
+  return (
+    "<svg class='sk-label-barcode' xmlns='http://www.w3.org/2000/svg' " +
+    "viewBox='0 0 117 44' role='img' aria-label='EAN-13 " +
+    skBarcodeEscape(ean13) +
+    "'>" +
+    "<g fill='#000' shape-rendering='crispEdges'>" +
+    bars.join("") +
+    "</g>" +
+    "<text x='58.5' y='43' text-anchor='middle' " +
+    "font-family='Arial, sans-serif' font-size='8.5' letter-spacing='1.7'>" +
+    skBarcodeEscape(ean13) +
+    "</text></svg>"
+  );
+}
+
+function skBarcodeVariantText(row) {
+  var productName = String(row && row.product_name || "").trim();
+  var sku = String(row && row.variant_sku || "").trim();
+  var variantName = String(row && row.variant_name || "").trim();
+  var clean = sku;
+
+  if (
+    sku &&
+    productName &&
+    sku.toLowerCase().slice(-productName.length) ===
+      productName.toLowerCase()
+  ) {
+    clean = sku.slice(0, sku.length - productName.length)
+      .replace(/[-\s]+$/, "");
+  }
+
+  if (clean && clean !== productName) {
+    return clean.replace(/\s*-\s*/g, " · ");
+  }
+
+  if (variantName && !/^variant\s+\d+$/i.test(variantName)) {
+    return variantName;
+  }
+
+  return row && row.target_type === "variant"
+    ? "Variant"
+    : "Standardvare";
+}
+
+function skBuildLabelHtml(row, includePrice) {
+  var ean13 = skNormalizeEan13(row && row.barcode);
+
+  if (!ean13) {
+    return "";
+  }
+
+  var price = "";
+
+  if (includePrice && Number(row.sales_price_inc_vat) > 0) {
+    price =
+      "<span class='sk-label-price'>" +
+      skBarcodeEscape(
+        Number(row.sales_price_inc_vat).toLocaleString(
+          "nb-NO",
+          {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+          }
+        ) + " kr"
+      ) +
+      "</span>";
+  }
+
+  return (
+    "<section class='sk-label'>" +
+      "<div class='sk-label-brand'>GolfKongen.no" + price + "</div>" +
+      "<div class='sk-label-product'>" +
+        skBarcodeEscape(row.product_name || "Produkt") +
+      "</div>" +
+      "<div class='sk-label-variant'>" +
+        skBarcodeEscape(skBarcodeVariantText(row)) +
+      "</div>" +
+      skEan13Svg(ean13) +
+    "</section>"
+  );
+}
+
+function skPrintBarcodeLabels(rows, selected, includePrice) {
+  var labels = [];
+
+  (rows || []).forEach(function (row) {
+    var quantity = Number(selected[row.target_id] || 0);
+    var html = skBuildLabelHtml(row, includePrice);
+
+    if (!html || quantity < 1) {
+      return;
+    }
+
+    quantity = Math.min(Math.floor(quantity), 500);
+
+    for (var i = 0; i < quantity; i += 1) {
+      labels.push(html);
+    }
+  });
+
+  if (!labels.length) {
+    window.alert(
+      "Velg minst én vare med gyldig EAN-13 før du skriver ut."
+    );
+    return;
+  }
+
+  var printWindow = window.open("", "_blank");
+
+  if (!printWindow) {
+    window.alert(
+      "Nettleseren blokkerte utskriftsvinduet. Tillat sprettoppvinduer og prøv igjen."
+    );
+    return;
+  }
+
+  var documentHtml =
+    "<!doctype html><html lang='nb'><head><meta charset='utf-8'>" +
+    "<title>GolfKongen etiketter</title><style>" +
+    "@page{size:62mm 29mm;margin:0;}" +
+    "*{box-sizing:border-box;}html,body{margin:0;padding:0;background:#fff;}" +
+    ".sk-label{width:62mm;height:29mm;padding:1.4mm 2.2mm 1mm;" +
+      "overflow:hidden;page-break-after:always;break-after:page;" +
+      "font-family:Arial,sans-serif;color:#000;display:flex;flex-direction:column;}" +
+    ".sk-label:last-child{page-break-after:auto;break-after:auto;}" +
+    ".sk-label-brand{height:3.5mm;font-size:9pt;font-weight:900;line-height:3.5mm;}" +
+    ".sk-label-price{float:right;font-size:8pt;}" +
+    ".sk-label-product{font-size:8.7pt;font-weight:800;line-height:3.4mm;" +
+      "height:3.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+    ".sk-label-variant{font-size:7.2pt;line-height:3mm;height:3mm;" +
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+    ".sk-label-barcode{display:block;width:55mm;height:17.5mm;margin:-0.2mm auto 0;}" +
+    "</style></head><body>" +
+    labels.join("") +
+    "<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},180);});<\/script>" +
+    "</body></html>";
+
+  printWindow.document.open();
+  printWindow.document.write(documentHtml);
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function renderBarcodeLabelsManager(parent, data, sb) {
+  clear(parent);
+
+  var rows = (data.barcodeLabels || []).filter(function (row) {
+    return row && row.is_active !== false;
+  });
+  var selected = {};
+
+  createPageHeader(
+    parent,
+    "Etiketter og strekkoder",
+    "Velg varer, opprett manglende EAN-13 og skriv direkte på Brother DK-11209 (62 × 29 mm).",
+    "Brother QL-700"
+  );
+
+  addProStatGrid(parent, [
+    {
+      label: "Varer og varianter",
+      value: String(rows.length)
+    },
+    {
+      label: "Klar til utskrift",
+      value: String(rows.filter(function (row) {
+        return !!skNormalizeEan13(row.barcode);
+      }).length)
+    },
+    {
+      label: "Mangler strekkode",
+      value: String(rows.filter(function (row) {
+        return !skBarcodeDigits(row.barcode);
+      }).length),
+      tone: "warning"
+    },
+    {
+      label: "Ugyldig format",
+      value: String(rows.filter(function (row) {
+        return skBarcodeDigits(row.barcode) && !skNormalizeEan13(row.barcode);
+      }).length),
+      tone: "danger"
+    }
+  ]);
+
+  var info = el("div");
+  info.className = "sk-note";
+  info.textContent =
+    "Eksisterende GTIN fra Quickbutik beholdes. Nye koder opprettes bare for valgte varer som mangler kode, og lagres i Quickbutik før de kan skrives ut.";
+  parent.appendChild(info);
+
+  var controls = el("div");
+  controls.className = "sk-card";
+  controls.style.display = "grid";
+  controls.style.gridTemplateColumns = "minmax(220px,2fr) minmax(160px,1fr) auto";
+  controls.style.gap = "10px";
+  controls.style.alignItems = "end";
+
+  var searchWrap = el("label");
+  searchWrap.style.fontSize = "12px";
+  searchWrap.style.fontWeight = "800";
+  searchWrap.textContent = "Søk etter produkt, variant eller strekkode";
+  var search = el("input");
+  search.type = "search";
+  search.placeholder = "Skriv navn, farge, vekt eller nummer…";
+  search.style.width = "100%";
+  search.style.marginTop = "5px";
+  search.style.padding = "10px";
+  search.style.border = "1px solid #cbd5e1";
+  search.style.borderRadius = "9px";
+  searchWrap.appendChild(search);
+
+  var filterWrap = el("label");
+  filterWrap.style.fontSize = "12px";
+  filterWrap.style.fontWeight = "800";
+  filterWrap.textContent = "Strekkodestatus";
+  var filter = el("select");
+  filter.style.width = "100%";
+  filter.style.marginTop = "5px";
+  filter.style.padding = "10px";
+  filter.style.border = "1px solid #cbd5e1";
+  filter.style.borderRadius = "9px";
+  [
+    ["all", "Alle"],
+    ["ready", "Klar til utskrift"],
+    ["missing", "Mangler strekkode"],
+    ["invalid", "Ugyldig kode"]
+  ].forEach(function (optionData) {
+    var option = el("option", optionData[1]);
+    option.value = optionData[0];
+    filter.appendChild(option);
+  });
+  filterWrap.appendChild(filter);
+
+  var stockWrap = el("label");
+  stockWrap.style.display = "flex";
+  stockWrap.style.alignItems = "center";
+  stockWrap.style.gap = "7px";
+  stockWrap.style.fontSize = "12px";
+  stockWrap.style.fontWeight = "800";
+  stockWrap.style.paddingBottom = "9px";
+  var inStockOnly = el("input");
+  inStockOnly.type = "checkbox";
+  inStockOnly.checked = true;
+  stockWrap.appendChild(inStockOnly);
+  stockWrap.appendChild(el("span", "Bare varer på lager"));
+
+  controls.appendChild(searchWrap);
+  controls.appendChild(filterWrap);
+  controls.appendChild(stockWrap);
+  parent.appendChild(controls);
+
+  var actionCard = el("div");
+  actionCard.className = "sk-card";
+  actionCard.style.display = "flex";
+  actionCard.style.gap = "8px";
+  actionCard.style.flexWrap = "wrap";
+  actionCard.style.alignItems = "center";
+
+  var selectVisibleButton = createButton("Velg alle synlige");
+  var clearButton = createButton("Fjern valg");
+  var stockQuantityButton = createButton("Antall = lager");
+  var generateButton = createPrimaryButton("Opprett manglende EAN-13");
+  var printButton = createPrimaryButton("Skriv ut etiketter");
+  printButton.style.background = "#166534";
+  printButton.style.borderColor = "#166534";
+
+  var includePriceLabel = el("label");
+  includePriceLabel.style.display = "flex";
+  includePriceLabel.style.alignItems = "center";
+  includePriceLabel.style.gap = "6px";
+  includePriceLabel.style.fontSize = "12px";
+  var includePrice = el("input");
+  includePrice.type = "checkbox";
+  includePriceLabel.appendChild(includePrice);
+  includePriceLabel.appendChild(el("span", "Ta med pris"));
+
+  var selectedText = el("strong", "0 etiketter valgt");
+  selectedText.style.marginLeft = "auto";
+  selectedText.style.fontSize = "12px";
+
+  actionCard.appendChild(selectVisibleButton);
+  actionCard.appendChild(clearButton);
+  actionCard.appendChild(stockQuantityButton);
+  actionCard.appendChild(generateButton);
+  actionCard.appendChild(printButton);
+  actionCard.appendChild(includePriceLabel);
+  actionCard.appendChild(selectedText);
+  parent.appendChild(actionCard);
+
+  var status = el("div");
+  status.style.display = "none";
+  parent.appendChild(status);
+
+  var preview = el("div");
+  preview.className = "sk-card";
+  preview.style.display = "none";
+  preview.style.background = "#f8fafc";
+  parent.appendChild(preview);
+
+  var listInfo = el("div");
+  listInfo.style.fontSize = "12px";
+  listInfo.style.color = "#64748b";
+  listInfo.style.margin = "10px 0";
+  parent.appendChild(listInfo);
+
+  var list = el("div");
+  list.style.display = "grid";
+  list.style.gap = "7px";
+  parent.appendChild(list);
+
+  var visibleRows = [];
+
+  function setStatus(message, tone) {
+    status.style.display = "block";
+    status.className = tone === "success"
+      ? "sk-success"
+      : (tone === "warning" ? "sk-warning" : "sk-note");
+    status.textContent = message;
+  }
+
+  function selectedCount() {
+    var count = 0;
+
+    Object.keys(selected).forEach(function (key) {
+      count += Math.max(0, Number(selected[key] || 0));
+    });
+
+    return count;
+  }
+
+  function updateSelectionSummary() {
+    selectedText.textContent =
+      String(selectedCount()) + " etiketter valgt";
+
+    var first = rows.find(function (row) {
+      return Number(selected[row.target_id] || 0) > 0 &&
+        !!skNormalizeEan13(row.barcode);
+    });
+
+    if (!first) {
+      preview.style.display = "none";
+      preview.innerHTML = "";
+      return;
+    }
+
+    preview.style.display = "block";
+    preview.innerHTML =
+      "<div style='font-size:12px;font-weight:800;margin-bottom:8px'>Forhåndsvisning av første etikett</div>" +
+      "<div style='width:62mm;height:29mm;background:#fff;border:1px solid #94a3b8;overflow:hidden'>" +
+        skBuildLabelHtml(first, includePrice.checked) +
+      "</div>";
+
+    var label = preview.querySelector(".sk-label");
+    var svg = preview.querySelector(".sk-label-barcode");
+    var brandLine = preview.querySelector(".sk-label-brand");
+    var productLine = preview.querySelector(".sk-label-product");
+    var variantLine = preview.querySelector(".sk-label-variant");
+
+    if (label) {
+      label.style.width = "62mm";
+      label.style.height = "29mm";
+      label.style.padding = "1.4mm 2.2mm 1mm";
+      label.style.fontFamily = "Arial, sans-serif";
+      label.style.display = "flex";
+      label.style.flexDirection = "column";
+    }
+
+    if (svg) {
+      svg.style.width = "55mm";
+      svg.style.height = "17.5mm";
+      svg.style.display = "block";
+      svg.style.margin = "-0.2mm auto 0";
+    }
+
+    if (brandLine) {
+      brandLine.style.height = "3.5mm";
+      brandLine.style.fontSize = "9pt";
+      brandLine.style.fontWeight = "900";
+      brandLine.style.lineHeight = "3.5mm";
+    }
+
+    if (productLine) {
+      productLine.style.height = "3.4mm";
+      productLine.style.fontSize = "8.7pt";
+      productLine.style.fontWeight = "800";
+      productLine.style.lineHeight = "3.4mm";
+      productLine.style.whiteSpace = "nowrap";
+      productLine.style.overflow = "hidden";
+    }
+
+    if (variantLine) {
+      variantLine.style.height = "3mm";
+      variantLine.style.fontSize = "7.2pt";
+      variantLine.style.lineHeight = "3mm";
+      variantLine.style.whiteSpace = "nowrap";
+      variantLine.style.overflow = "hidden";
+    }
+  }
+
+  function rowMatches(row) {
+    var query = String(search.value || "").trim().toLowerCase();
+    var digits = skBarcodeDigits(row.barcode);
+    var valid = !!skNormalizeEan13(row.barcode);
+
+    if (inStockOnly.checked && Number(row.stock_quantity || 0) <= 0) {
+      return false;
+    }
+
+    if (filter.value === "ready" && !valid) {
+      return false;
+    }
+
+    if (filter.value === "missing" && digits) {
+      return false;
+    }
+
+    if (filter.value === "invalid" && (!digits || valid)) {
+      return false;
+    }
+
+    if (!query) {
+      return true;
+    }
+
+    var haystack = [
+      row.product_name,
+      row.brand,
+      row.category,
+      row.variant_name,
+      row.variant_sku,
+      row.barcode,
+      row.quickbutik_product_id,
+      row.quickbutik_variant_id
+    ].join(" ").toLowerCase();
+
+    return haystack.indexOf(query) >= 0;
+  }
+
+  function rebuildList() {
+    clear(list);
+    visibleRows = rows.filter(rowMatches);
+    var limited = visibleRows.slice(0, 250);
+
+    listInfo.textContent =
+      String(visibleRows.length) + " treff" +
+      (visibleRows.length > limited.length
+        ? " · viser de første 250, bruk søk for å avgrense"
+        : "");
+
+    if (!limited.length) {
+      var empty = el("div", "Ingen varer passer filteret.");
+      empty.className = "sk-note";
+      list.appendChild(empty);
+      updateSelectionSummary();
+      return;
+    }
+
+    limited.forEach(function (row) {
+      var item = el("div");
+      item.className = "sk-card";
+      item.style.padding = "10px 12px";
+      item.style.display = "grid";
+      item.style.gridTemplateColumns = "26px minmax(220px,2fr) minmax(150px,1fr) 90px";
+      item.style.gap = "10px";
+      item.style.alignItems = "center";
+
+      var checkbox = el("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = Number(selected[row.target_id] || 0) > 0;
+      checkbox.setAttribute("aria-label", "Velg " + String(row.product_name || "produkt"));
+
+      var nameBox = el("div");
+      var productName = el("strong", row.product_name || "Ukjent produkt");
+      productName.style.display = "block";
+      productName.style.fontSize = "13px";
+      var variant = el("div", skBarcodeVariantText(row));
+      variant.style.fontSize = "11px";
+      variant.style.color = "#475569";
+      variant.style.marginTop = "2px";
+      nameBox.appendChild(productName);
+      nameBox.appendChild(variant);
+
+      var codeBox = el("div");
+      var normalized = skNormalizeEan13(row.barcode);
+      var rawDigits = skBarcodeDigits(row.barcode);
+      var codeTitle = el(
+        "strong",
+        normalized
+          ? normalized
+          : (rawDigits ? "Ugyldig: " + rawDigits : "Mangler strekkode")
+      );
+      codeTitle.style.display = "block";
+      codeTitle.style.fontSize = "12px";
+      codeTitle.style.color = normalized
+        ? "#166534"
+        : (rawDigits ? "#991b1b" : "#92400e");
+      var meta = el(
+        "div",
+        "Lager " + String(Number(row.stock_quantity || 0)) +
+          " · " +
+          (row.target_type === "variant" ? "Variant" : "Produkt")
+      );
+      meta.style.fontSize = "10px";
+      meta.style.color = "#64748b";
+      meta.style.marginTop = "3px";
+      codeBox.appendChild(codeTitle);
+      codeBox.appendChild(meta);
+
+      var quantity = el("input");
+      quantity.type = "number";
+      quantity.min = "1";
+      quantity.max = "500";
+      quantity.step = "1";
+      quantity.value = String(Math.max(1, Number(selected[row.target_id] || 1)));
+      quantity.title = "Antall etiketter";
+      quantity.style.width = "82px";
+      quantity.style.padding = "8px";
+      quantity.style.border = "1px solid #cbd5e1";
+      quantity.style.borderRadius = "8px";
+
+      checkbox.onchange = function () {
+        if (checkbox.checked) {
+          selected[row.target_id] = Math.max(1, Number(quantity.value || 1));
+        } else {
+          delete selected[row.target_id];
+        }
+
+        updateSelectionSummary();
+      };
+
+      quantity.onchange = function () {
+        var value = Math.max(1, Math.min(500, Math.floor(Number(quantity.value || 1))));
+        quantity.value = String(value);
+
+        if (checkbox.checked) {
+          selected[row.target_id] = value;
+          updateSelectionSummary();
+        }
+      };
+
+      item.appendChild(checkbox);
+      item.appendChild(nameBox);
+      item.appendChild(codeBox);
+      item.appendChild(quantity);
+      list.appendChild(item);
+    });
+
+    updateSelectionSummary();
+  }
+
+  search.oninput = rebuildList;
+  filter.onchange = rebuildList;
+  inStockOnly.onchange = rebuildList;
+  includePrice.onchange = updateSelectionSummary;
+
+  selectVisibleButton.onclick = function () {
+    visibleRows.slice(0, 250).forEach(function (row) {
+      selected[row.target_id] = Math.max(1, Number(selected[row.target_id] || 1));
+    });
+    rebuildList();
+  };
+
+  clearButton.onclick = function () {
+    selected = {};
+    rebuildList();
+  };
+
+  stockQuantityButton.onclick = function () {
+    rows.forEach(function (row) {
+      if (Number(selected[row.target_id] || 0) > 0) {
+        selected[row.target_id] = Math.max(
+          1,
+          Math.min(500, Math.floor(Number(row.stock_quantity || 1)))
+        );
+      }
+    });
+    rebuildList();
+  };
+
+  printButton.onclick = function () {
+    skPrintBarcodeLabels(rows, selected, includePrice.checked);
+  };
+
+  generateButton.onclick = function () {
+    var targets = rows.filter(function (row) {
+      return Number(selected[row.target_id] || 0) > 0 &&
+        !skBarcodeDigits(row.barcode);
+    }).map(function (row) {
+      return {
+        target_type: row.target_type,
+        target_id: row.target_id
+      };
+    });
+
+    if (!targets.length) {
+      window.alert(
+        "Ingen valgte varer mangler strekkode. Du kan skrive ut de valgte direkte."
+      );
+      return;
+    }
+
+    if (targets.length > 50) {
+      window.alert(
+        "Velg maksimalt 50 varer uten strekkode om gangen."
+      );
+      return;
+    }
+
+    if (!window.confirm(
+      "Opprett " + String(targets.length) +
+      " nye EAN-13-koder og lagre dem i Quickbutik? Eksisterende koder blir ikke endret."
+    )) {
+      return;
+    }
+
+    generateButton.disabled = true;
+    generateButton.textContent = "Oppretter…";
+    setStatus(
+      "Oppretter og lagrer strekkoder i Quickbutik…",
+      "note"
+    );
+
+    sb.auth.getSession()
+      .then(function (sessionResult) {
+        var session = sessionResult && sessionResult.data
+          ? sessionResult.data.session
+          : null;
+
+        if (!session || !session.access_token) {
+          throw new Error(
+            "Fant ingen aktiv innlogging. Last siden på nytt og logg inn igjen."
+          );
+        }
+
+        return fetch(
+          "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/assign-barcodes",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer " + session.access_token,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ targets: targets })
+          }
+        );
+      })
+      .then(function (response) {
+        return response.text().then(function (text) {
+          var result = null;
+
+          try {
+            result = text ? JSON.parse(text) : null;
+          } catch (error) {
+            result = { ok: false, error: text || "Ukjent svar fra Worker." };
+          }
+
+          if (!response.ok && !result) {
+            throw new Error("HTTP " + String(response.status));
+          }
+
+          return result;
+        });
+      })
+      .then(function (result) {
+        (result.results || []).forEach(function (item) {
+          if (!item.ok || !item.barcode) {
+            return;
+          }
+
+          var row = rows.find(function (candidate) {
+            return String(candidate.target_id) === String(item.target_id);
+          });
+
+          if (row) {
+            row.barcode = item.barcode;
+            row.generated_ean13 = item.barcode;
+            row.barcode_source = item.already_existing
+              ? row.barcode_source
+              : "generated";
+            row.barcode_sync_status = "synced";
+          }
+        });
+
+        if (Number(result.failed || 0) > 0) {
+          var firstFailure = (result.results || []).find(function (item) {
+            return !item.ok;
+          });
+          setStatus(
+            "Opprettet " + String(result.created || 0) +
+            ", men " + String(result.failed || 0) +
+            " feilet. Første feil: " +
+            String(firstFailure && firstFailure.error || "ukjent feil"),
+            "warning"
+          );
+        } else {
+          setStatus(
+            "Ferdig. " + String(result.created || 0) +
+            " nye strekkoder er lagret i Quickbutik og klare til utskrift.",
+            "success"
+          );
+        }
+
+        rebuildList();
+      })
+      .catch(function (error) {
+        setStatus(
+          "Kunne ikke opprette strekkoder: " +
+            skReadableError(error && error.message ? error.message : error),
+          "warning"
+        );
+      })
+      .then(function () {
+        generateButton.disabled = false;
+        generateButton.textContent = "Opprett manglende EAN-13";
+      });
+  };
+
+  rebuildList();
+}
 
 function renderPortal(sb, user, data) {
     var app = renderShell(
@@ -56835,6 +57679,37 @@ function renderPortal(sb, user, data) {
             parent,
             data,
             sb
+          );
+        }
+      },
+
+      barcodes: {
+        label: "Etiketter og strekkoder",
+        icon: "\ud83c\udff7\ufe0f",
+        group: "Varer og lager",
+        fullOnly: true,
+        description:
+          "Velg varer, opprett manglende EAN-13 og skriv etiketter p\u00e5 Brother QL-700.",
+        render: function (parent) {
+          renderLazyModule(
+            parent,
+            "barcodeLabels",
+            "etiketter og strekkoder",
+            function () {
+              return fetchAllRows(
+                sb,
+                "internal_barcode_labels_view",
+                "product_name",
+                true
+              );
+            },
+            function () {
+              renderBarcodeLabelsManager(
+                parent,
+                data,
+                sb
+              );
+            }
           );
         }
       },
