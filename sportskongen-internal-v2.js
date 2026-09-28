@@ -56995,7 +56995,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var info = el("div");
   info.className = "sk-note";
   info.textContent =
-    "Eksisterende GTIN fra Quickbutik beholdes. Nye koder opprettes bare for valgte varer som mangler kode, og lagres i Quickbutik før de kan skrives ut.";
+    "Eksisterende GTIN beholdes. Nye koder opprettes for valgte varer som mangler kode. Knappen synkroniserer deretter strekkoden til både Quickbutik og riktig Zettle-variant via varenummer/SKU.";
   parent.appendChild(info);
 
   var controls = el("div");
@@ -57033,6 +57033,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     ["all", "Alle"],
     ["ready", "Klar til utskrift"],
     ["missing", "Mangler strekkode"],
+    ["unsynced", "Ikke synket til Zettle"],
     ["invalid", "Ugyldig kode"]
   ].forEach(function (optionData) {
     var option = el("option", optionData[1]);
@@ -57069,7 +57070,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var selectVisibleButton = createButton("Velg alle synlige");
   var clearButton = createButton("Fjern valg");
   var stockQuantityButton = createButton("Antall = lager");
-  var generateButton = createPrimaryButton("Opprett manglende EAN-13");
+  var generateButton = createPrimaryButton("Opprett / synk strekkoder");
   var printButton = createPrimaryButton("Skriv ut etiketter");
   printButton.style.background = "#166534";
   printButton.style.borderColor = "#166534";
@@ -57224,6 +57225,17 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       return false;
     }
 
+    if (
+      filter.value === "unsynced" &&
+      (
+        !valid ||
+        row.barcode_source !== "generated" ||
+        row.barcode_sync_status === "synced"
+      )
+    ) {
+      return false;
+    }
+
     if (filter.value === "invalid" && (!digits || valid)) {
       return false;
     }
@@ -57308,7 +57320,15 @@ function renderBarcodeLabelsManager(parent, data, sb) {
         "div",
         "Lager " + String(Number(row.stock_quantity || 0)) +
           " · " +
-          (row.target_type === "variant" ? "Variant" : "Produkt")
+          (row.target_type === "variant" ? "Variant" : "Produkt") +
+          (normalized
+            ? " · Zettle " +
+              (row.barcode_sync_status === "synced"
+                ? "synket"
+                : (row.barcode_source === "generated"
+                  ? "ikke bekreftet"
+                  : "eksisterende kode"))
+            : "")
       );
       meta.style.fontSize = "10px";
       meta.style.color = "#64748b";
@@ -57394,7 +57414,13 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   generateButton.onclick = function () {
     var targets = rows.filter(function (row) {
       return Number(selected[row.target_id] || 0) > 0 &&
-        !skBarcodeDigits(row.barcode);
+        (
+          !skBarcodeDigits(row.barcode) ||
+          (
+            row.barcode_source === "generated" &&
+            row.barcode_sync_status !== "synced"
+          )
+        );
     }).map(function (row) {
       return {
         target_type: row.target_type,
@@ -57404,29 +57430,29 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
     if (!targets.length) {
       window.alert(
-        "Ingen valgte varer mangler strekkode. Du kan skrive ut de valgte direkte."
+        "Alle valgte strekkoder er allerede bekreftet i både Quickbutik og Zettle. Du kan skrive dem ut direkte."
       );
       return;
     }
 
     if (targets.length > 50) {
       window.alert(
-        "Velg maksimalt 50 varer uten strekkode om gangen."
+        "Velg maksimalt 50 varer om gangen."
       );
       return;
     }
 
     if (!window.confirm(
-      "Opprett " + String(targets.length) +
-      " nye EAN-13-koder og lagre dem i Quickbutik? Eksisterende koder blir ikke endret."
+      "Opprett eller synk strekkode for " + String(targets.length) +
+      " vare(r) til Quickbutik og Zettle? Eksisterende koder blir ikke byttet ut."
     )) {
       return;
     }
 
     generateButton.disabled = true;
-    generateButton.textContent = "Oppretter…";
+    generateButton.textContent = "Oppretter / synker…";
     setStatus(
-      "Oppretter og lagrer strekkoder i Quickbutik…",
+      "Oppretter manglende koder og synkroniserer med Quickbutik og Zettle…",
       "note"
     );
 
@@ -57473,7 +57499,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       })
       .then(function (result) {
         (result.results || []).forEach(function (item) {
-          if (!item.ok || !item.barcode) {
+          if (!item.barcode) {
             return;
           }
 
@@ -57487,7 +57513,12 @@ function renderBarcodeLabelsManager(parent, data, sb) {
             row.barcode_source = item.already_existing
               ? row.barcode_source
               : "generated";
-            row.barcode_sync_status = "synced";
+            row.barcode_sync_status = item.ok
+              ? "synced"
+              : "error";
+            row.barcode_error = item.ok
+              ? null
+              : item.error;
           }
         });
 
@@ -57497,7 +57528,8 @@ function renderBarcodeLabelsManager(parent, data, sb) {
           });
           setStatus(
             "Opprettet " + String(result.created || 0) +
-            ", men " + String(result.failed || 0) +
+            " og synket " + String(result.zettle_synced || 0) +
+            " til Zettle, men " + String(result.failed || 0) +
             " feilet. Første feil: " +
             String(firstFailure && firstFailure.error || "ukjent feil"),
             "warning"
@@ -57505,7 +57537,9 @@ function renderBarcodeLabelsManager(parent, data, sb) {
         } else {
           setStatus(
             "Ferdig. " + String(result.created || 0) +
-            " nye strekkoder er lagret i Quickbutik og klare til utskrift.",
+            " nye strekkoder ble opprettet, og " +
+            String(result.zettle_synced || 0) +
+            " er bekreftet i både Quickbutik og Zettle. De er klare til skanning og utskrift.",
             "success"
           );
         }
@@ -57521,7 +57555,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       })
       .then(function () {
         generateButton.disabled = false;
-        generateButton.textContent = "Opprett manglende EAN-13";
+        generateButton.textContent = "Opprett / synk strekkoder";
       });
   };
 
