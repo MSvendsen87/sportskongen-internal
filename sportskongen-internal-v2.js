@@ -1907,8 +1907,8 @@
         openInventoryAdjustments.length,
         "Uforklarte lagerendringer",
         openInventoryAdjustments.length
-          ? "Lagerendringer som må forklares og behandles."
-          : "Ingen uforklarte lagerendringer akkurat nå.",
+          ? "Lagerendringer som mÃ¥ forklares og behandles."
+          : "Ingen uforklarte lagerendringer akkurat nÃ¥.",
         openInventoryAdjustments.length ? "danger" : "ok",
         null
       );
@@ -2380,10 +2380,10 @@
     wrap.style.margin = "0 0 14px";
 
     [
-      ["📊 Lageranalyse", "inventoryAnalytics"],
-      ["🔒 Lagerjusteringer", "inventoryAdjustments"],
-      ["📦 Varetelling", "stock"],
-      ["🛡️ Kontrollsenter", "productControl"]
+      ["ðŸ“Š Lageranalyse", "inventoryAnalytics"],
+      ["ðŸ”’ Lagerjusteringer", "inventoryAdjustments"],
+      ["ðŸ“¦ Varetelling", "stock"],
+      ["ðŸ›¡ï¸ Kontrollsenter", "productControl"]
     ].forEach(function (item) {
       var button = createButton(item[0]);
       button.onclick = function () {
@@ -2554,7 +2554,7 @@
           tone: "ok"
         },
         {
-          label: "Må undersøkes",
+          label: "MÃ¥ undersÃ¸kes",
           value: String(needsReview.length),
           tone: needsReview.length ? "warning" : "ok"
         },
@@ -2564,12 +2564,12 @@
           tone: "ok"
         },
         {
-          label: "Venter på faktura",
+          label: "Venter pÃ¥ faktura",
           value: String(waitingForInvoice.length),
           tone: waitingForInvoice.length ? "warning" : "ok"
         },
         {
-          label: "Venter på kundeordre",
+          label: "Venter pÃ¥ kundeordre",
           value: String(waitingForCustomerOrder.length),
           tone: waitingForCustomerOrder.length ? "warning" : "ok"
         },
@@ -2583,7 +2583,7 @@
 
     var explanation = el(
       "div",
-      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Velg flere linjer og sett lagerreduksjoner på «Kundeordre venter på pakking» i 7 dager, eller lagerøkninger på «Faktura kommer senere» i opptil 30 dager. Hele utvalget lagres samlet, og siden oppdateres bare én gang."
+      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Betalte Quickbutik-ordre som venter pÃ¥ pakking gjenkjennes automatisk og forklarer lagerreduksjonen uten manuell behandling. Bruk Â«Kundeordre venter pÃ¥ pakkingÂ» bare dersom ordren ennÃ¥ ikke er kommet inn i salgsdataene. LagerÃ¸kninger kan settes pÃ¥ Â«Faktura kommer senereÂ» i opptil 30 dager."
     );
     explanation.className = "sk-note";
     explanation.style.margin = "14px 0";
@@ -2596,12 +2596,12 @@
       ) {
         return (
           formatAdminDateTime(row.observation_from_at) +
-          " – " +
+          " â€“ " +
           formatAdminDateTime(row.observation_to_at)
         );
       }
       if (row.observation_to_at) {
-        return "Først oppdaget " +
+        return "FÃ¸rst oppdaget " +
           formatAdminDateTime(row.observation_to_at);
       }
       return formatAdminDateTime(row.detected_at);
@@ -2626,40 +2626,40 @@
             row
           );
         var statusText = isReviewed
-          ? "🔵 Behandlet"
+          ? "ðŸ”µ Behandlet"
           : (
               deferralStatus === "resolved"
                 ? (
                     deferralReason === "customer_order"
-                      ? "✅ Kundeordre matchet"
-                      : "✅ Faktura registrert"
+                      ? "âœ… Kundeordre matchet"
+                      : "âœ… Faktura registrert"
                   )
                 : (
                     deferralStatus === "waiting"
                       ? (
                           deferralReason === "customer_order"
-                            ? "📦 Venter på kundeordre"
-                            : "🧾 Venter på faktura"
+                            ? "ðŸ“¦ Venter pÃ¥ kundeordre"
+                            : "ðŸ§¾ Venter pÃ¥ faktura"
                         )
                       : (
                           deferralStatus === "overdue"
                             ? (
                                 deferralReason === "customer_order"
-                                  ? "🔴 Kundeordre ikke funnet"
-                                  : "🔴 Faktura mangler"
+                                  ? "ðŸ”´ Kundeordre ikke funnet"
+                                  : "ðŸ”´ Faktura mangler"
                               )
                             : (
                                 reconciliationStatus === "explained"
-                                  ? "✅ Forklart"
+                                  ? "âœ… Forklart"
                                   : (
                                       reconciliationStatus ===
                                         "partly_explained"
-                                        ? "⚠️ Delvis forklart"
+                                        ? "âš ï¸ Delvis forklart"
                                         : (
                                             reconciliationStatus ===
                                               "unexplained"
-                                              ? "🔴 Uforklart"
-                                              : "⏳ Ny historikk"
+                                              ? "ðŸ”´ Uforklart"
+                                              : "â³ Ny historikk"
                                           )
                                     )
                               )
@@ -2713,7 +2713,7 @@
           row.reconciliation_text ||
           (
             detailParts.length
-              ? detailParts.join(" · ")
+              ? detailParts.join(" Â· ")
               : "Ingen automatisk forklaring tilgjengelig."
           );
 
@@ -2721,7 +2721,7 @@
           explanationText =
             deferralReason === "customer_order"
               ? (
-                  "Kundeordre venter på pakking. Skjult fra arbeidslisten til " +
+                  "Kundeordre venter pÃ¥ pakking. Skjult fra arbeidslisten til " +
                   formatAdminDateTime(
                     row.deferred_until
                   ) +
@@ -2740,7 +2740,7 @@
         if (deferralStatus === "resolved") {
           explanationText =
             deferralReason === "customer_order"
-              ? "Kundeordren er nå funnet i salgsdataene og lagerendringen er automatisk forklart."
+              ? "Kundeordren er nÃ¥ funnet i salgsdataene og lagerendringen er automatisk forklart."
               : (
                   "Faktura registrert senere med " +
                   String(
@@ -2761,12 +2761,12 @@
           explanationText =
             deferralReason === "customer_order"
               ? "Kundeordren er fortsatt ikke funnet etter 7 dager. Kontroller ordren eller skriv en forklaring."
-              : "Fakturaen er fortsatt ikke registrert etter 30 dager. Kontroller lagerøkningen og registrer fakturaen eller skriv en forklaring.";
+              : "Fakturaen er fortsatt ikke registrert etter 30 dager. Kontroller lagerÃ¸kningen og registrer fakturaen eller skriv en forklaring.";
         }
 
         if (isReviewed) {
           explanationText +=
-            " · Behandlet " +
+            " Â· Behandlet " +
             formatAdminDateTime(row.reviewed_at) +
             ": " +
             (row.review_note || "-");
@@ -2829,7 +2829,7 @@
         },
         {
           key: "previous_quantity",
-          label: "Før"
+          label: "FÃ¸r"
         },
         {
           key: "new_quantity",
@@ -2849,7 +2849,7 @@
         }
       ],
       displayRows,
-      "Ingen lagerendringer er registrert ennå. Første senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
+      "Ingen lagerendringer er registrert ennÃ¥. FÃ¸rste senere produktsynk som oppdager endret saldo vil starte den automatiske avstemmingen."
     );
 
     parent.appendChild(logDetails);
@@ -2860,14 +2860,14 @@
 
     var reviewTitle = el(
       "h3",
-      "Avvik som må undersøkes"
+      "Avvik som mÃ¥ undersÃ¸kes"
     );
     reviewTitle.style.marginTop = "24px";
     parent.appendChild(reviewTitle);
 
     var reviewIntro = el(
       "p",
-      "Forklaring er obligatorisk. Merk bare avvik som behandlet når dere faktisk har tatt stilling til hvorfor lageret endret seg."
+      "Forklaring er obligatorisk. Merk bare avvik som behandlet nÃ¥r dere faktisk har tatt stilling til hvorfor lageret endret seg."
     );
     reviewIntro.style.color = "#6b7280";
     parent.appendChild(reviewIntro);
@@ -2921,7 +2921,7 @@
 
     var customerOrderButton =
       createPrimaryButton(
-        "📦 Kundeordre venter på pakking · 7 dager"
+        "ðŸ“¦ Kundeordre venter pÃ¥ pakking Â· 7 dager"
       );
     customerOrderButton.disabled = true;
     bulkTop.appendChild(
@@ -2930,7 +2930,7 @@
 
     var supplierInvoiceButton =
       createButton(
-        "🧾 Faktura kommer senere · 30 dager"
+        "ðŸ§¾ Faktura kommer senere Â· 30 dager"
       );
     supplierInvoiceButton.disabled = true;
     bulkTop.appendChild(
@@ -3023,8 +3023,8 @@
       if (!eligible.length) {
         bulkResult.textContent =
           wantsCustomerOrder
-            ? "⚠️ Velg minst én lagerreduksjon."
-            : "⚠️ Velg minst én lagerøkning.";
+            ? "âš ï¸ Velg minst Ã©n lagerreduksjon."
+            : "âš ï¸ Velg minst Ã©n lagerÃ¸kning.";
         bulkResult.style.color = "#991b1b";
         return;
       }
@@ -3034,7 +3034,7 @@
       bulkResult.textContent =
         "Lagrer " +
         String(eligible.length) +
-        " linje(r) samlet…";
+        " linje(r) samletâ€¦";
       bulkResult.style.color = "#1e3a8a";
 
       sb.rpc(
@@ -3060,12 +3060,12 @@
         }
 
         bulkResult.textContent =
-          "✅ " +
+          "âœ… " +
           String(
             response.data ||
             eligible.length
           ) +
-          " linje(r) er satt på vent. Oppdaterer siden…";
+          " linje(r) er satt pÃ¥ vent. Oppdaterer sidenâ€¦";
         bulkResult.style.color = "#166534";
         setTimeout(function () {
           window.location.reload();
@@ -3109,7 +3109,7 @@
         document.createTextNode(
           (row.product_name || "Ukjent produkt") +
             (row.variant_name && row.variant_name !== "-"
-              ? " · " + row.variant_name
+              ? " Â· " + row.variant_name
               : "")
         )
       );
@@ -3133,12 +3133,12 @@
         "div",
         "Lager " +
           String(row.previous_quantity) +
-          " → " +
+          " â†’ " +
           String(row.new_quantity) +
           " (" +
           (change > 0 ? "+" : "") +
           String(change) +
-          ") · Ca. tidspunkt: " +
+          ") Â· Ca. tidspunkt: " +
           changeWindowText(row)
       );
       meta.style.marginBottom = "7px";
@@ -3167,7 +3167,7 @@
 
       var input = el("textarea");
       input.placeholder =
-        "Forklaring er påkrevd, f.eks. manuelt korrigert i Quickbutik, svinn, feil lager fra tidligere eller annen kjent årsak.";
+        "Forklaring er pÃ¥krevd, f.eks. manuelt korrigert i Quickbutik, svinn, feil lager fra tidligere eller annen kjent Ã¥rsak.";
       input.style.width = "100%";
       input.style.minHeight = "82px";
       input.style.padding = "10px";
@@ -3177,7 +3177,7 @@
       card.appendChild(input);
 
       var button = createPrimaryButton(
-        "Merk som undersøkt"
+        "Merk som undersÃ¸kt"
       );
       button.style.marginTop = "9px";
       card.appendChild(button);
@@ -3191,14 +3191,14 @@
         var note = String(input.value || "").trim();
         if (note.length < 3) {
           result.textContent =
-            "⚠️ Skriv en forklaring før avviket kan merkes som undersøkt.";
+            "âš ï¸ Skriv en forklaring fÃ¸r avviket kan merkes som undersÃ¸kt.";
           result.style.color = "#991b1b";
           input.focus();
           return;
         }
 
         button.disabled = true;
-        button.textContent = "Lagrer…";
+        button.textContent = "Lagrerâ€¦";
         result.textContent = "";
 
         sb.rpc(
@@ -3210,7 +3210,7 @@
         ).then(function (response) {
           if (response.error) {
             button.disabled = false;
-            button.textContent = "Merk som undersøkt";
+            button.textContent = "Merk som undersÃ¸kt";
             result.textContent =
               "Kunne ikke lagre: " +
               response.error.message;
@@ -3219,7 +3219,7 @@
           }
 
           result.textContent =
-            "✅ Avviket er merket som undersøkt.";
+            "âœ… Avviket er merket som undersÃ¸kt.";
           result.style.color = "#166534";
           setTimeout(function () {
             window.location.reload();
@@ -6443,7 +6443,8 @@ savePriceBtn.onclick = function () {
     parent,
     products,
     issues,
-    inventoryAnalytics
+    inventoryAnalytics,
+    sb
   ) {
     var initialSearch =
       localStorage.getItem(
@@ -6462,7 +6463,13 @@ savePriceBtn.onclick = function () {
       sortDir:
         "asc",
       filter:
-        "all"
+        "all",
+      historyProductId:
+        null,
+      historyRowsByProduct:
+        {},
+      historyLoadingByProduct:
+        {}
     };
 
     var issuesByProduct = {};
@@ -7163,6 +7170,424 @@ savePriceBtn.onclick = function () {
     }
 
 
+    function historyTone(row) {
+      if (
+        row.event_status ===
+          "cancelled"
+      ) {
+        return {
+          background: "#f8fafc",
+          color: "#64748b"
+        };
+      }
+
+      if (
+        row.event_status ===
+          "awaiting_packing"
+      ) {
+        return {
+          background: "#eff6ff",
+          color: "#1d4ed8"
+        };
+      }
+
+      if (
+        row.event_type ===
+          "stock_change"
+      ) {
+        return {
+          background: "#f0fdf4",
+          color: "#166534"
+        };
+      }
+
+      if (
+        row.event_type ===
+          "goods_receipt"
+      ) {
+        return {
+          background: "#fffbeb",
+          color: "#92400e"
+        };
+      }
+
+      return {
+        background: "#fff",
+        color: "#111827"
+      };
+    }
+
+
+    function renderHistoryRows(
+      host,
+      product,
+      rows
+    ) {
+      clear(host);
+
+      var actualChanges =
+        rows.filter(
+          function (row) {
+            return (
+              row
+                .is_actual_stock_change ===
+              true
+            );
+          }
+        );
+
+      var openOrderQty =
+        rows.reduce(
+          function (
+            total,
+            row
+          ) {
+            if (
+              row.event_status !==
+                "awaiting_packing"
+            ) {
+              return total;
+            }
+
+            return (
+              total +
+              Math.abs(
+                Number(
+                  row.quantity_change ||
+                  0
+                )
+              )
+            );
+          },
+          0
+        );
+
+      var note = el(
+        "div",
+        "Faktiske lagerendringer er grÃ¸nne. Salg, Ã¥pne kundeordre, varemottak og varetelling vises som forklaring og blir ikke lagt til en gang til."
+      );
+      note.className =
+        "sk-note";
+      note.style.marginBottom =
+        "10px";
+      host.appendChild(note);
+
+      var stats = el("div");
+      stats.style.display =
+        "flex";
+      stats.style.gap =
+        "8px";
+      stats.style.flexWrap =
+        "wrap";
+      stats.style.marginBottom =
+        "10px";
+
+      [
+        "NÃ¥vÃ¦rende lager: " +
+          String(
+            effectiveStock(
+              product
+            ) === null
+              ? "â€“"
+              : effectiveStock(
+                  product
+                )
+          ),
+        "Faktiske endringer: " +
+          String(
+            actualChanges.length
+          ),
+        "Reservert i Ã¥pne ordre: " +
+          String(openOrderQty)
+      ].forEach(
+        function (textValue) {
+          var chip = el(
+            "span",
+            textValue
+          );
+          chip.style.display =
+            "inline-flex";
+          chip.style.padding =
+            "6px 9px";
+          chip.style.borderRadius =
+            "999px";
+          chip.style.background =
+            "#e2e8f0";
+          chip.style.fontSize =
+            "12px";
+          chip.style.fontWeight =
+            "800";
+          stats.appendChild(chip);
+        }
+      );
+
+      host.appendChild(stats);
+
+      if (!rows.length) {
+        var empty = el(
+          "div",
+          "Ingen lagerhistorikk er registrert for dette produktet ennÃ¥."
+        );
+        empty.className =
+          "sk-note";
+        host.appendChild(empty);
+        return;
+      }
+
+      var historyWrap =
+        el("div");
+      historyWrap.style.overflowX =
+        "auto";
+      historyWrap.style.border =
+        "1px solid #e5e7eb";
+      historyWrap.style.borderRadius =
+        "12px";
+
+      var historyTable =
+        el("table");
+      historyTable.style.width =
+        "100%";
+      historyTable.style.borderCollapse =
+        "collapse";
+      historyTable.style.fontSize =
+        "13px";
+
+      var historyHead =
+        el("tr");
+
+      [
+        "Tidspunkt",
+        "Hendelse",
+        "Variant",
+        "Endring",
+        "Lager",
+        "Referanse",
+        "Forklaring"
+      ].forEach(
+        function (label) {
+          var th = el(
+            "th",
+            label
+          );
+          th.style.padding =
+            "9px";
+          th.style.textAlign =
+            "left";
+          th.style.whiteSpace =
+            "nowrap";
+          th.style.background =
+            "#f8fafc";
+          th.style.borderBottom =
+            "1px solid #e5e7eb";
+          historyHead.appendChild(th);
+        }
+      );
+
+      var historyThead =
+        el("thead");
+      historyThead.appendChild(
+        historyHead
+      );
+      historyTable.appendChild(
+        historyThead
+      );
+
+      var historyBody =
+        el("tbody");
+
+      rows.forEach(
+        function (row) {
+          var line = el("tr");
+          var tone =
+            historyTone(row);
+          line.style.background =
+            tone.background;
+          line.style.color =
+            tone.color;
+
+          var quantity = Number(
+            row.quantity_change ||
+            0
+          );
+
+          var stockText = "â€“";
+          if (
+            row.stock_before !==
+              null &&
+            row.stock_before !==
+              undefined &&
+            row.stock_after !==
+              null &&
+            row.stock_after !==
+              undefined
+          ) {
+            stockText =
+              String(
+                row.stock_before
+              ) +
+              " â†’ " +
+              String(
+                row.stock_after
+              );
+          }
+
+          [
+            formatAdminDateTime(
+              row.event_at
+            ),
+            row.event_label ||
+              "â€“",
+            row.variant_name ||
+              "â€“",
+            quantity > 0
+              ? "+" +
+                String(quantity)
+              : String(quantity),
+            stockText,
+            row.reference ||
+              "â€“",
+            row.details ||
+              "â€“"
+          ].forEach(
+            function (
+              value,
+              index
+            ) {
+              var td = el(
+                "td",
+                value
+              );
+              td.style.padding =
+                "9px";
+              td.style.borderBottom =
+                "1px solid #e5e7eb";
+              td.style.verticalAlign =
+                "top";
+              if (
+                index === 3
+              ) {
+                td.style.fontWeight =
+                  "900";
+                td.style.whiteSpace =
+                  "nowrap";
+              }
+              line.appendChild(td);
+            }
+          );
+
+          historyBody.appendChild(
+            line
+          );
+        }
+      );
+
+      historyTable.appendChild(
+        historyBody
+      );
+      historyWrap.appendChild(
+        historyTable
+      );
+      host.appendChild(
+        historyWrap
+      );
+    }
+
+
+    function loadProductHistory(
+      host,
+      product
+    ) {
+      var productId =
+        product.id;
+
+      if (
+        state
+          .historyRowsByProduct[
+            productId
+          ]
+      ) {
+        renderHistoryRows(
+          host,
+          product,
+          state
+            .historyRowsByProduct[
+              productId
+            ]
+        );
+        return;
+      }
+
+      host.textContent =
+        "Laster lagerhistorikkâ€¦";
+
+      if (
+        state
+          .historyLoadingByProduct[
+            productId
+          ]
+      ) {
+        return;
+      }
+
+      state
+        .historyLoadingByProduct[
+          productId
+        ] = true;
+
+      sb
+        .from(
+          "internal_product_inventory_ledger_view"
+        )
+        .select("*")
+        .eq(
+          "product_id",
+          productId
+        )
+        .order(
+          "event_at",
+          {
+            ascending: false
+          }
+        )
+        .order(
+          "sort_priority",
+          {
+            ascending: true
+          }
+        )
+        .limit(200)
+        .then(
+          function (result) {
+            state
+              .historyLoadingByProduct[
+                productId
+              ] = false;
+
+            if (result.error) {
+              host.textContent =
+                "Kunne ikke hente lagerhistorikken: " +
+                skReadableError(
+                  result.error.message
+                );
+              return;
+            }
+
+            state
+              .historyRowsByProduct[
+                productId
+              ] =
+              result.data || [];
+
+            renderHistoryRows(
+              host,
+              product,
+              result.data || []
+            );
+          }
+        );
+    }
+
+
     function render() {
       clear(
         tableHost
@@ -7625,6 +8050,30 @@ savePriceBtn.onclick = function () {
             );
           }
 
+          var historyButton =
+            createButton(
+              state
+                .historyProductId ===
+                product.id
+                ? "Skjul lagerhistorikk"
+                : "Vis lagerhistorikk"
+            );
+
+          historyButton.onclick =
+            function () {
+              state.historyProductId =
+                state
+                  .historyProductId ===
+                  product.id
+                  ? null
+                  : product.id;
+              render();
+            };
+
+          actions.appendChild(
+            historyButton
+          );
+
           tdNode(
             actions
           );
@@ -7632,6 +8081,42 @@ savePriceBtn.onclick = function () {
           tbody.appendChild(
             tr
           );
+
+          if (
+            state
+              .historyProductId ===
+            product.id
+          ) {
+            var historyTr =
+              el("tr");
+            var historyTd =
+              el("td");
+            historyTd.colSpan =
+              10;
+            historyTd.style.padding =
+              "12px";
+            historyTd.style.background =
+              "#f8fafc";
+            historyTd.style.borderBottom =
+              "1px solid #e5e7eb";
+
+            var historyHost =
+              el("div");
+            historyTd.appendChild(
+              historyHost
+            );
+            historyTr.appendChild(
+              historyTd
+            );
+            tbody.appendChild(
+              historyTr
+            );
+
+            loadProductHistory(
+              historyHost,
+              product
+            );
+          }
         }
       );
 
@@ -8243,7 +8728,8 @@ function renderDeleteManualProductSection(parent, data, sb) {
     products,
     issues,
     data.inventoryAnalytics ||
-      []
+      [],
+    sb
   );
 
   parent.appendChild(
@@ -12861,7 +13347,7 @@ createBtn.onclick = function () {
        *   Neutron
        *
        * PDF-en deler enkelte ord over flere tekstlinjer. Materialet etter
-       * "Plast" er stabilt og brukes sammen med produktnavnet i første
+       * "Plast" er stabilt og brukes sammen med produktnavnet i fÃ¸rste
        * kolonne. Pris, MVA og delsum er oppgitt eksklusiv MVA per varelinje.
        */
       if (
@@ -28969,12 +29455,12 @@ function renderProductControlDashboard(
     inventoryAlert.style.marginBottom = "14px";
     inventoryAlert.style.cursor = "pointer";
     inventoryAlert.innerHTML =
-      "<strong>🔴 " +
+      "<strong>ðŸ”´ " +
       String(unresolvedInventoryAdjustments.length) +
       " uforklart" +
       (unresolvedInventoryAdjustments.length === 1 ?
         " lagerendring" : " lagerendringer") +
-      "</strong><div style='margin-top:5px'>Åpne Lagerjusteringer for å undersøke og forklare avvikene.</div>";
+      "</strong><div style='margin-top:5px'>Ã…pne Lagerjusteringer for Ã¥ undersÃ¸ke og forklare avvikene.</div>";
     inventoryAlert.onclick = function () {
       if (skPortalNavigate) {
         skPortalNavigate("inventoryAdjustments");
@@ -55677,7 +56163,7 @@ function renderGlobalSyncControl(app, sb, user) {
   syncButton.style.fontWeight =
     "900";
   syncButton.title =
-    "Synk produkter, Quickbutik-salg og Zettle-salg i ett kjør.";
+    "Synk produkter, Quickbutik-salg og Zettle-salg i ett kjÃ¸r.";
 
   actions.insertBefore(
     syncButton,
@@ -55737,7 +56223,7 @@ function renderGlobalSyncControl(app, sb, user) {
           !session.access_token
         ) {
           throw new Error(
-            "Fant ingen aktiv innlogging. Last siden på nytt og logg inn igjen."
+            "Fant ingen aktiv innlogging. Last siden pÃ¥ nytt og logg inn igjen."
           );
         }
 
@@ -55793,9 +56279,9 @@ function renderGlobalSyncControl(app, sb, user) {
 
   function syncProducts(token) {
     /*
-     * Cloudflare Worker har en grense for hvor mange underkall én invokasjon
-     * kan gjøre. Produktsynken kan bruke flere underkall per produkt/variant.
-     * Start derfor med den stabile puljestørrelsen 10, og gå automatisk ned
+     * Cloudflare Worker har en grense for hvor mange underkall Ã©n invokasjon
+     * kan gjÃ¸re. Produktsynken kan bruke flere underkall per produkt/variant.
+     * Start derfor med den stabile puljestÃ¸rrelsen 10, og gÃ¥ automatisk ned
      * til 5 og 2 dersom en spesielt tung pulje fortsatt treffer grensen.
      */
     var limit = 10;
@@ -55827,12 +56313,12 @@ function renderGlobalSyncControl(app, sb, user) {
 
     function nextBatch() {
       setStatus(
-        "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutik…" +
+        "\u23f3 1/4 \u00b7 Synker produkter, priser og lager fra Quickbutikâ€¦" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 behandlet " +
           String(totals.processed) +
-          " \u00b7 puljestørrelse " +
+          " \u00b7 puljestÃ¸rrelse " +
           String(limit),
         "note"
       );
@@ -55901,9 +56387,9 @@ function renderGlobalSyncControl(app, sb, user) {
 
           setStatus(
             "\u26a0\ufe0f Quickbutik-puljen var for tung for Cloudflare." +
-              "\nPrøver samme sted på nytt med " +
+              "\nPrÃ¸ver samme sted pÃ¥ nytt med " +
               String(limit) +
-              " produkter per pulje…",
+              " produkter per puljeâ€¦",
             "warning"
           );
 
@@ -55938,7 +56424,7 @@ function renderGlobalSyncControl(app, sb, user) {
     function nextBatch() {
       setStatus(
         "\u2705 1/4 \u00b7 Produkter synket" +
-          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste 365 dager…" +
+          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste 365 dagerâ€¦" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 ordre " +
@@ -56004,8 +56490,8 @@ function renderGlobalSyncControl(app, sb, user) {
           "\n\u2705 2/4 \u00b7 Quickbutik-salg oppdatert" +
           "\n" +
           (dryRun
-            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle 365 dager…"
-            : "\u2705 3/4 \u00b7 Zettle-kontroll ferdig\n\u23f3 4/4 \u00b7 Importerer Zettle-salg…") +
+            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle 365 dagerâ€¦"
+            : "\u2705 3/4 \u00b7 Zettle-kontroll ferdig\n\u23f3 4/4 \u00b7 Importerer Zettle-salgâ€¦") +
           "\nPuljer " +
           String(totals.pages) +
           " \u00b7 kvitteringer " +
@@ -56070,7 +56556,7 @@ function renderGlobalSyncControl(app, sb, user) {
   syncButton.onclick = function () {
     if (
       !window.confirm(
-        "Oppdater alt nå?\n\nDette gjør i riktig rekkefølge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste 365 dager\n3. Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
+        "Oppdater alt nÃ¥?\n\nDette gjÃ¸r i riktig rekkefÃ¸lge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste 365 dager\n3. Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
       )
     ) {
       return;
@@ -56087,10 +56573,10 @@ function renderGlobalSyncControl(app, sb, user) {
 
     syncButton.disabled = true;
     syncButton.textContent =
-      "Oppdaterer…";
+      "Oppdatererâ€¦";
 
     setStatus(
-      "Starter samlet oppdatering…",
+      "Starter samlet oppdateringâ€¦",
       "note"
     );
 
@@ -56168,7 +56654,7 @@ function renderGlobalSyncControl(app, sb, user) {
               summary.zettleImport.unmatched || 0
             ) +
             " holdt utenfor" +
-            "\n\nLageranalyse og lageravstemming bruker nå de oppdaterte dataene. Siden lastes på nytt…",
+            "\n\nLageranalyse og lageravstemming bruker nÃ¥ de oppdaterte dataene. Siden lastes pÃ¥ nyttâ€¦",
           summary.products.failed > 0
             ? "warning"
             : "success"
@@ -56187,7 +56673,7 @@ function renderGlobalSyncControl(app, sb, user) {
         syncButton.textContent =
           originalText;
         setStatus(
-          "Oppdateringen stoppet. Ingen senere steg ble kjørt etter feilen.\n\nFeil: " +
+          "Oppdateringen stoppet. Ingen senere steg ble kjÃ¸rt etter feilen.\n\nFeil: " +
             (error && error.message
               ? error.message
               : String(error)),
