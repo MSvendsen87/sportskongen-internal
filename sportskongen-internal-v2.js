@@ -2405,19 +2405,58 @@
     );
   }
 
-  function inventoryAdjustmentNeedsReview(row) {
+  function inventoryDeferralStatus(row) {
+    if (
+      row &&
+      row.defer_followup_status
+    ) {
+      return String(
+        row.defer_followup_status
+      );
+    }
+
     var invoiceStatus =
-      inventoryInvoiceFollowupStatus(row);
+      inventoryInvoiceFollowupStatus(
+        row
+      );
+
+    if (invoiceStatus === "registered") {
+      return "resolved";
+    }
+
+    return invoiceStatus;
+  }
+
+  function inventoryDeferralReason(row) {
+    if (
+      row &&
+      row.defer_reason
+    ) {
+      return String(
+        row.defer_reason
+      );
+    }
+
+    return inventoryInvoiceFollowupStatus(
+      row
+    ) !== "not_pending"
+      ? "supplier_invoice"
+      : "";
+  }
+
+  function inventoryAdjustmentNeedsReview(row) {
+    var deferralStatus =
+      inventoryDeferralStatus(row);
 
     if (
       row.review_status === "reviewed" ||
-      invoiceStatus === "waiting" ||
-      invoiceStatus === "registered"
+      deferralStatus === "waiting" ||
+      deferralStatus === "resolved"
     ) {
       return false;
     }
 
-    if (invoiceStatus === "overdue") {
+    if (deferralStatus === "overdue") {
       return true;
     }
 
@@ -2471,9 +2510,25 @@
     var waitingForInvoice = rows.filter(
       function (row) {
         return (
-          inventoryInvoiceFollowupStatus(
+          inventoryDeferralStatus(
             row
-          ) === "waiting"
+          ) === "waiting" &&
+          inventoryDeferralReason(
+            row
+          ) === "supplier_invoice"
+        );
+      }
+    );
+
+    var waitingForCustomerOrder = rows.filter(
+      function (row) {
+        return (
+          inventoryDeferralStatus(
+            row
+          ) === "waiting" &&
+          inventoryDeferralReason(
+            row
+          ) === "customer_order"
         );
       }
     );
@@ -2514,6 +2569,11 @@
           tone: waitingForInvoice.length ? "warning" : "ok"
         },
         {
+          label: "Venter på kundeordre",
+          value: String(waitingForCustomerOrder.length),
+          tone: waitingForCustomerOrder.length ? "warning" : "ok"
+        },
+        {
           label: "Ny historikk",
           value: String(warmingUp.length),
           tone: warmingUp.length ? "warning" : "ok"
@@ -2523,7 +2583,7 @@
 
     var explanation = el(
       "div",
-      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. På positive lagerøkninger kan du velge «Faktura kommer senere». Linjen skjules da fra arbeidslisten fram til fakturaen registreres, eller til det har gått 30 dager. Uforklarlige avvik må ellers ha en skriftlig forklaring før de kan merkes som undersøkt."
+      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Velg flere linjer og sett lagerreduksjoner på «Kundeordre venter på pakking» i 7 dager, eller lagerøkninger på «Faktura kommer senere» i opptil 30 dager. Hele utvalget lagres samlet, og siden oppdateres bare én gang."
     );
     explanation.className = "sk-note";
     explanation.style.margin = "14px 0";
@@ -2557,21 +2617,37 @@
           "no_window";
         var isReviewed =
           row.review_status === "reviewed";
-        var invoiceStatus =
-          inventoryInvoiceFollowupStatus(
+        var deferralStatus =
+          inventoryDeferralStatus(
+            row
+          );
+        var deferralReason =
+          inventoryDeferralReason(
             row
           );
         var statusText = isReviewed
           ? "🔵 Behandlet"
           : (
-              invoiceStatus === "registered"
-                ? "✅ Faktura registrert"
+              deferralStatus === "resolved"
+                ? (
+                    deferralReason === "customer_order"
+                      ? "✅ Kundeordre matchet"
+                      : "✅ Faktura registrert"
+                  )
                 : (
-                    invoiceStatus === "waiting"
-                      ? "🧾 Venter på faktura"
+                    deferralStatus === "waiting"
+                      ? (
+                          deferralReason === "customer_order"
+                            ? "📦 Venter på kundeordre"
+                            : "🧾 Venter på faktura"
+                        )
                       : (
-                          invoiceStatus === "overdue"
-                            ? "🔴 Faktura mangler"
+                          deferralStatus === "overdue"
+                            ? (
+                                deferralReason === "customer_order"
+                                  ? "🔴 Kundeordre ikke funnet"
+                                  : "🔴 Faktura mangler"
+                              )
                             : (
                                 reconciliationStatus === "explained"
                                   ? "✅ Forklart"
@@ -2641,35 +2717,51 @@
               : "Ingen automatisk forklaring tilgjengelig."
           );
 
-        if (invoiceStatus === "waiting") {
+        if (deferralStatus === "waiting") {
           explanationText =
-            "Faktura registreres senere. Skjult fra arbeidslisten til " +
-            formatAdminDateTime(
-              row.invoice_due_at
-            ) +
-            ".";
+            deferralReason === "customer_order"
+              ? (
+                  "Kundeordre venter på pakking. Skjult fra arbeidslisten til " +
+                  formatAdminDateTime(
+                    row.deferred_until
+                  ) +
+                  "."
+                )
+              : (
+                  "Faktura registreres senere. Skjult fra arbeidslisten til " +
+                  formatAdminDateTime(
+                    row.deferred_until ||
+                    row.invoice_due_at
+                  ) +
+                  "."
+                );
         }
 
-        if (invoiceStatus === "registered") {
+        if (deferralStatus === "resolved") {
           explanationText =
-            "Faktura registrert senere med " +
-            String(
-              Number(
-                row.later_invoice_received_qty ||
-                0
-              )
-            ) +
-            " stk i varemottak " +
-            formatAdminDateTime(
-              row.later_invoice_registered_at
-            ) +
-            ".";
+            deferralReason === "customer_order"
+              ? "Kundeordren er nå funnet i salgsdataene og lagerendringen er automatisk forklart."
+              : (
+                  "Faktura registrert senere med " +
+                  String(
+                    Number(
+                      row.later_invoice_received_qty ||
+                      0
+                    )
+                  ) +
+                  " stk i varemottak " +
+                  formatAdminDateTime(
+                    row.later_invoice_registered_at
+                  ) +
+                  "."
+                );
         }
 
-        if (invoiceStatus === "overdue") {
+        if (deferralStatus === "overdue") {
           explanationText =
-            "Fakturaen er fortsatt ikke registrert etter 30 dager. " +
-            "Kontroller lagerøkningen og registrer fakturaen eller skriv en forklaring.";
+            deferralReason === "customer_order"
+              ? "Kundeordren er fortsatt ikke funnet etter 7 dager. Kontroller ordren eller skriv en forklaring."
+              : "Fakturaen er fortsatt ikke registrert etter 30 dager. Kontroller lagerøkningen og registrer fakturaen eller skriv en forklaring.";
         }
 
         if (isReviewed) {
@@ -2780,6 +2872,221 @@
     reviewIntro.style.color = "#6b7280";
     parent.appendChild(reviewIntro);
 
+    var selectedAdjustments = {};
+    var selectionInputs = [];
+
+    var bulkBox = el("div");
+    bulkBox.style.border = "1px solid #bfdbfe";
+    bulkBox.style.background = "#eff6ff";
+    bulkBox.style.borderRadius = "14px";
+    bulkBox.style.padding = "12px";
+    bulkBox.style.margin = "12px 0 16px";
+    bulkBox.style.position = "sticky";
+    bulkBox.style.top = "8px";
+    bulkBox.style.zIndex = "4";
+
+    var bulkTop = el("div");
+    bulkTop.style.display = "flex";
+    bulkTop.style.flexWrap = "wrap";
+    bulkTop.style.alignItems = "center";
+    bulkTop.style.gap = "10px";
+    bulkBox.appendChild(bulkTop);
+
+    var selectAllLabel = el("label");
+    selectAllLabel.style.display = "inline-flex";
+    selectAllLabel.style.alignItems = "center";
+    selectAllLabel.style.gap = "7px";
+    selectAllLabel.style.fontWeight = "800";
+
+    var selectAllInput =
+      document.createElement("input");
+    selectAllInput.type = "checkbox";
+    selectAllLabel.appendChild(
+      selectAllInput
+    );
+    selectAllLabel.appendChild(
+      document.createTextNode(
+        "Velg alle synlige"
+      )
+    );
+    bulkTop.appendChild(selectAllLabel);
+
+    var selectedText = el(
+      "span",
+      "0 valgt"
+    );
+    selectedText.style.fontWeight = "700";
+    selectedText.style.color = "#1e3a8a";
+    bulkTop.appendChild(selectedText);
+
+    var customerOrderButton =
+      createPrimaryButton(
+        "📦 Kundeordre venter på pakking · 7 dager"
+      );
+    customerOrderButton.disabled = true;
+    bulkTop.appendChild(
+      customerOrderButton
+    );
+
+    var supplierInvoiceButton =
+      createButton(
+        "🧾 Faktura kommer senere · 30 dager"
+      );
+    supplierInvoiceButton.disabled = true;
+    bulkTop.appendChild(
+      supplierInvoiceButton
+    );
+
+    var bulkResult = el("div");
+    bulkResult.style.marginTop = "8px";
+    bulkResult.style.fontSize = "13px";
+    bulkBox.appendChild(bulkResult);
+    parent.appendChild(bulkBox);
+
+    function selectedRows() {
+      return needsReview.filter(
+        function (row) {
+          return !!selectedAdjustments[
+            row.id
+          ];
+        }
+      );
+    }
+
+    function updateBulkSelection() {
+      var selected =
+        selectedRows();
+      var negativeCount =
+        selected.filter(
+          function (row) {
+            return Number(
+              row.quantity_change || 0
+            ) < 0;
+          }
+        ).length;
+      var positiveCount =
+        selected.filter(
+          function (row) {
+            return Number(
+              row.quantity_change || 0
+            ) > 0;
+          }
+        ).length;
+
+      selectedText.textContent =
+        String(selected.length) +
+        " valgt";
+      customerOrderButton.disabled =
+        negativeCount === 0;
+      supplierInvoiceButton.disabled =
+        positiveCount === 0;
+      selectAllInput.checked =
+        selectionInputs.length > 0 &&
+        selected.length ===
+          selectionInputs.length;
+      selectAllInput.indeterminate =
+        selected.length > 0 &&
+        selected.length <
+          selectionInputs.length;
+    }
+
+    selectAllInput.onchange = function () {
+      selectionInputs.forEach(
+        function (entry) {
+          entry.input.checked =
+            selectAllInput.checked;
+          selectedAdjustments[
+            entry.row.id
+          ] = selectAllInput.checked;
+        }
+      );
+      updateBulkSelection();
+    };
+
+    function deferSelected(
+      reason
+    ) {
+      var wantsCustomerOrder =
+        reason === "customer_order";
+      var eligible =
+        selectedRows().filter(
+          function (row) {
+            var change = Number(
+              row.quantity_change || 0
+            );
+            return wantsCustomerOrder
+              ? change < 0
+              : change > 0;
+          }
+        );
+
+      if (!eligible.length) {
+        bulkResult.textContent =
+          wantsCustomerOrder
+            ? "⚠️ Velg minst én lagerreduksjon."
+            : "⚠️ Velg minst én lagerøkning.";
+        bulkResult.style.color = "#991b1b";
+        return;
+      }
+
+      customerOrderButton.disabled = true;
+      supplierInvoiceButton.disabled = true;
+      bulkResult.textContent =
+        "Lagrer " +
+        String(eligible.length) +
+        " linje(r) samlet…";
+      bulkResult.style.color = "#1e3a8a";
+
+      sb.rpc(
+        "internal_defer_inventory_adjustments",
+        {
+          p_adjustment_ids:
+            eligible.map(
+              function (row) {
+                return row.id;
+              }
+            ),
+          p_reason:
+            reason
+        }
+      ).then(function (response) {
+        if (response.error) {
+          bulkResult.textContent =
+            "Kunne ikke lagre: " +
+            response.error.message;
+          bulkResult.style.color = "#991b1b";
+          updateBulkSelection();
+          return;
+        }
+
+        bulkResult.textContent =
+          "✅ " +
+          String(
+            response.data ||
+            eligible.length
+          ) +
+          " linje(r) er satt på vent. Oppdaterer siden…";
+        bulkResult.style.color = "#166534";
+        setTimeout(function () {
+          window.location.reload();
+        }, 700);
+      });
+    }
+
+    customerOrderButton.onclick =
+      function () {
+        deferSelected(
+          "customer_order"
+        );
+      };
+
+    supplierInvoiceButton.onclick =
+      function () {
+        deferSelected(
+          "supplier_invoice"
+        );
+      };
+
     needsReview.forEach(function (row) {
       var card = el("div");
       card.style.border = "1px solid #fecaca";
@@ -2788,16 +3095,38 @@
       card.style.padding = "14px";
       card.style.margin = "12px 0";
 
-      var title = el(
-        "div",
-        (row.product_name || "Ukjent produkt") +
-          (row.variant_name && row.variant_name !== "-"
-            ? " · " + row.variant_name
-            : "")
+      var title = el("label");
+      title.style.display = "flex";
+      title.style.alignItems = "center";
+      title.style.gap = "8px";
+
+      var selectInput =
+        document.createElement("input");
+      selectInput.type = "checkbox";
+      selectInput.style.flex = "0 0 auto";
+      title.appendChild(selectInput);
+      title.appendChild(
+        document.createTextNode(
+          (row.product_name || "Ukjent produkt") +
+            (row.variant_name && row.variant_name !== "-"
+              ? " · " + row.variant_name
+              : "")
+        )
       );
       title.style.fontWeight = "800";
       title.style.marginBottom = "6px";
       card.appendChild(title);
+
+      selectionInputs.push({
+        row: row,
+        input: selectInput
+      });
+
+      selectInput.onchange = function () {
+        selectedAdjustments[row.id] =
+          selectInput.checked;
+        updateBulkSelection();
+      };
 
       var change = Number(row.quantity_change || 0);
       var meta = el(
@@ -2817,10 +3146,16 @@
 
       var autoText = el(
         "div",
-        inventoryInvoiceFollowupStatus(
+        inventoryDeferralStatus(
           row
         ) === "overdue"
-          ? "Fakturaen er fortsatt ikke registrert etter 30 dager."
+          ? (
+              inventoryDeferralReason(
+                row
+              ) === "customer_order"
+                ? "Kundeordren er fortsatt ikke funnet etter 7 dager."
+                : "Fakturaen er fortsatt ikke registrert etter 30 dager."
+            )
           : (
               row.reconciliation_text ||
               "Ingen automatisk forklaring tilgjengelig."
@@ -2846,21 +3181,6 @@
       );
       button.style.marginTop = "9px";
       card.appendChild(button);
-
-      var invoiceButton = null;
-      if (
-        change > 0 &&
-        inventoryInvoiceFollowupStatus(
-          row
-        ) !== "overdue"
-      ) {
-        invoiceButton = createButton(
-          "🧾 Faktura kommer senere"
-        );
-        invoiceButton.style.marginTop = "9px";
-        invoiceButton.style.marginLeft = "8px";
-        card.appendChild(invoiceButton);
-      }
 
       var result = el("div");
       result.style.marginTop = "8px";
@@ -2907,42 +3227,10 @@
         });
       };
 
-      if (invoiceButton) {
-        invoiceButton.onclick = function () {
-          invoiceButton.disabled = true;
-          invoiceButton.textContent =
-            "Lagrer…";
-          result.textContent = "";
-
-          sb.rpc(
-            "internal_defer_inventory_adjustment_invoice",
-            {
-              p_adjustment_id: row.id
-            }
-          ).then(function (response) {
-            if (response.error) {
-              invoiceButton.disabled = false;
-              invoiceButton.textContent =
-                "🧾 Faktura kommer senere";
-              result.textContent =
-                "Kunne ikke lagre: " +
-                response.error.message;
-              result.style.color = "#991b1b";
-              return;
-            }
-
-            result.textContent =
-              "✅ Skjult fram til fakturaen registreres eller 30-dagersfristen utløper.";
-            result.style.color = "#166534";
-            setTimeout(function () {
-              window.location.reload();
-            }, 700);
-          });
-        };
-      }
-
       parent.appendChild(card);
     });
+
+    updateBulkSelection();
   }
 
   function renderZettleIntegration(
@@ -56103,7 +56391,7 @@ function renderPortal(sb, user, data) {
             function () {
               return sb
                 .from(
-                  "internal_inventory_adjustment_view"
+                  "internal_inventory_adjustment_admin_view"
                 )
                 .select("*")
                 .order(
@@ -56660,7 +56948,7 @@ function renderPortal(sb, user, data) {
     ),
 
     sb
-      .from("internal_inventory_adjustment_view")
+      .from("internal_inventory_adjustment_admin_view")
       .select("*")
       .order("detected_at", { ascending: false })
       .limit(500),
