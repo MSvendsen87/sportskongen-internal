@@ -1,4 +1,4 @@
-// Admin version: barcodes-50-filter-price-v3
+// Admin version: barcodes-deferred-list-v4
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56890,11 +56890,29 @@ function skBuildLabelHtml(row, includePrice) {
   );
 }
 
+function skBarcodeReadyForPrint(row) {
+  if (!skNormalizeEan13(row && row.barcode)) {
+    return false;
+  }
+
+  return !(
+    row.barcode_source === "generated" &&
+    row.barcode_sync_status !== "synced"
+  );
+}
+
 function skPrintBarcodeLabels(rows, selected, includePrice) {
   var labels = [];
+  var blocked = 0;
 
   (rows || []).forEach(function (row) {
     var quantity = Number(selected[row.target_id] || 0);
+
+    if (quantity > 0 && !skBarcodeReadyForPrint(row)) {
+      blocked += 1;
+      return;
+    }
+
     var html = skBuildLabelHtml(row, includePrice);
 
     if (!html || quantity < 1) {
@@ -56907,6 +56925,14 @@ function skPrintBarcodeLabels(rows, selected, includePrice) {
       labels.push(html);
     }
   });
+
+  if (blocked > 0) {
+    window.alert(
+      String(blocked) +
+      " valgt(e) vare(r) er lagt i «Må avgjøres senere» og kan ikke skrives ut ennå. Fjern valget eller ferdigstill koblingen til Zettle først."
+    );
+    return;
+  }
 
   if (!labels.length) {
     window.alert(
@@ -56975,13 +57001,21 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     {
       label: "Klar til utskrift",
       value: String(rows.filter(function (row) {
-        return !!skNormalizeEan13(row.barcode);
+        return skBarcodeReadyForPrint(row);
       }).length)
     },
     {
       label: "Mangler strekkode",
       value: String(rows.filter(function (row) {
         return !skBarcodeDigits(row.barcode);
+      }).length),
+      tone: "warning"
+    },
+    {
+      label: "Må avgjøres senere",
+      value: String(rows.filter(function (row) {
+        return row.barcode_source === "generated" &&
+          row.barcode_sync_status === "error";
       }).length),
       tone: "warning"
     },
@@ -56997,7 +57031,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var info = el("div");
   info.className = "sk-note";
   info.textContent =
-    "Eksisterende GTIN beholdes. Nye koder opprettes for valgte varer som mangler kode. Knappen synkroniserer deretter strekkoden til både Quickbutik og riktig Zettle-variant via varenummer/SKU.";
+    "Eksisterende GTIN beholdes. Entydige varer får variantkode i Quickbutik og Zettle. Konflikter hoppes over og samles under «Må avgjøres senere», slik at resten av butikken kan behandles først.";
   parent.appendChild(info);
 
   var controls = el("div");
@@ -57035,7 +57069,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     ["all", "Alle"],
     ["ready", "Klar til utskrift"],
     ["missing", "Mangler strekkode"],
-    ["unsynced", "Ikke synket til Zettle"],
+    ["unsynced", "Må avgjøres senere"],
     ["invalid", "Ugyldig kode"]
   ].forEach(function (optionData) {
     var option = el("option", optionData[1]);
@@ -57148,7 +57182,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
     var first = rows.find(function (row) {
       return Number(selected[row.target_id] || 0) > 0 &&
-        !!skNormalizeEan13(row.barcode);
+        skBarcodeReadyForPrint(row);
     });
 
     if (!first) {
@@ -57234,7 +57268,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       return false;
     }
 
-    if (filter.value === "ready" && !valid) {
+    if (filter.value === "ready" && !skBarcodeReadyForPrint(row)) {
       return false;
     }
 
@@ -57352,6 +57386,16 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       meta.style.marginTop = "3px";
       codeBox.appendChild(codeTitle);
       codeBox.appendChild(meta);
+
+      if (row.barcode_sync_status === "error" && row.barcode_error) {
+        var errorMeta = el("div", "Må avgjøres senere");
+        errorMeta.style.fontSize = "10px";
+        errorMeta.style.fontWeight = "800";
+        errorMeta.style.color = "#92400e";
+        errorMeta.style.marginTop = "3px";
+        errorMeta.title = String(row.barcode_error);
+        codeBox.appendChild(errorMeta);
+      }
 
       var quantity = el("input");
       quantity.type = "number";
@@ -57536,19 +57580,19 @@ function renderBarcodeLabelsManager(parent, data, sb) {
             row.barcode_error = item.ok
               ? null
               : item.error;
+
+            if (!item.ok) {
+              delete selected[row.target_id];
+            }
           }
         });
 
         if (Number(result.failed || 0) > 0) {
-          var firstFailure = (result.results || []).find(function (item) {
-            return !item.ok;
-          });
           setStatus(
-            "Opprettet " + String(result.created || 0) +
-            " og synket " + String(result.zettle_synced || 0) +
-            " til Zettle, men " + String(result.failed || 0) +
-            " feilet. Første feil: " +
-            String(firstFailure && firstFailure.error || "ukjent feil"),
+            String(result.zettle_synced || 0) +
+            " vare(r) ble synket til Zettle. " +
+            String(result.failed || 0) +
+            " konflikt(er) ble hoppet over og lagt i «Må avgjøres senere». Du kan fortsette med neste varer.",
             "warning"
           );
         } else {
