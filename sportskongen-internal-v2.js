@@ -1,3 +1,4 @@
+// Admin version: barcodes-50-filter-price-v3
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56928,12 +56929,13 @@ function skPrintBarcodeLabels(rows, selected, includePrice) {
     "<title>GolfKongen etiketter</title><style>" +
     "@page{size:62mm 29mm;margin:0;}" +
     "*{box-sizing:border-box;}html,body{margin:0;padding:0;background:#fff;}" +
-    ".sk-label{width:62mm;height:29mm;padding:1.4mm 2.2mm 1mm;" +
+    ".sk-label{width:62mm;height:29mm;padding:1.4mm 2.2mm 1mm;position:relative;" +
       "overflow:hidden;page-break-after:always;break-after:page;" +
       "font-family:Arial,sans-serif;color:#000;display:flex;flex-direction:column;}" +
     ".sk-label:last-child{page-break-after:auto;break-after:auto;}" +
-    ".sk-label-brand{height:3.5mm;font-size:9pt;font-weight:900;line-height:3.5mm;}" +
-    ".sk-label-price{float:right;font-size:8pt;}" +
+    ".sk-label-brand{height:3.5mm;padding-right:18mm;font-size:9pt;font-weight:900;line-height:3.5mm;}" +
+    ".sk-label-price{position:absolute;top:1.4mm;right:2.2mm;font-size:8pt;font-weight:800;" +
+      "line-height:3.5mm;background:#fff;padding-left:1.5mm;}" +
     ".sk-label-product{font-size:8.7pt;font-weight:800;line-height:3.4mm;" +
       "height:3.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
     ".sk-label-variant{font-size:7.2pt;line-height:3mm;height:3mm;" +
@@ -57040,6 +57042,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     option.value = optionData[0];
     filter.appendChild(option);
   });
+  filter.value = "missing";
   filterWrap.appendChild(filter);
 
   var stockWrap = el("label");
@@ -57166,6 +57169,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     var brandLine = preview.querySelector(".sk-label-brand");
     var productLine = preview.querySelector(".sk-label-product");
     var variantLine = preview.querySelector(".sk-label-variant");
+    var priceLine = preview.querySelector(".sk-label-price");
 
     if (label) {
       label.style.width = "62mm";
@@ -57174,6 +57178,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       label.style.fontFamily = "Arial, sans-serif";
       label.style.display = "flex";
       label.style.flexDirection = "column";
+      label.style.position = "relative";
     }
 
     if (svg) {
@@ -57188,6 +57193,18 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       brandLine.style.fontSize = "9pt";
       brandLine.style.fontWeight = "900";
       brandLine.style.lineHeight = "3.5mm";
+      brandLine.style.paddingRight = "18mm";
+    }
+
+    if (priceLine) {
+      priceLine.style.position = "absolute";
+      priceLine.style.top = "1.4mm";
+      priceLine.style.right = "2.2mm";
+      priceLine.style.fontSize = "8pt";
+      priceLine.style.fontWeight = "800";
+      priceLine.style.lineHeight = "3.5mm";
+      priceLine.style.background = "#fff";
+      priceLine.style.paddingLeft = "1.5mm";
     }
 
     if (productLine) {
@@ -57221,7 +57238,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       return false;
     }
 
-    if (filter.value === "missing" && digits) {
+    if (filter.value === "missing" && digits && !query) {
       return false;
     }
 
@@ -57261,12 +57278,12 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   function rebuildList() {
     clear(list);
     visibleRows = rows.filter(rowMatches);
-    var limited = visibleRows.slice(0, 250);
+    var limited = visibleRows.slice(0, 50);
 
     listInfo.textContent =
       String(visibleRows.length) + " treff" +
       (visibleRows.length > limited.length
-        ? " · viser de første 250, bruk søk for å avgrense"
+        ? " · viser de første 50, bruk søk for å avgrense"
         : "");
 
     if (!limited.length) {
@@ -57384,7 +57401,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   includePrice.onchange = updateSelectionSummary;
 
   selectVisibleButton.onclick = function () {
-    visibleRows.slice(0, 250).forEach(function (row) {
+    visibleRows.slice(0, 50).forEach(function (row) {
       selected[row.target_id] = Math.max(1, Number(selected[row.target_id] || 1));
     });
     rebuildList();
