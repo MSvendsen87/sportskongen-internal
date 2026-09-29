@@ -1,4 +1,4 @@
-// Admin version: barcodes-batched-sync-v6
+// Admin version: barcodes-visible-errors-v7
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -57164,6 +57164,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
   var status = el("div");
   status.style.display = "none";
+  status.style.whiteSpace = "pre-wrap";
   parent.appendChild(status);
 
   var preview = el("div");
@@ -57513,11 +57514,16 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       codeBox.appendChild(meta);
 
       if (row.barcode_sync_status === "error" && row.barcode_error) {
-        var errorMeta = el("div", "Må avgjøres senere");
+        var errorMeta = el(
+          "div",
+          "Må avgjøres senere: " + skReadableError(row.barcode_error)
+        );
         errorMeta.style.fontSize = "10px";
         errorMeta.style.fontWeight = "800";
         errorMeta.style.color = "#92400e";
         errorMeta.style.marginTop = "3px";
+        errorMeta.style.whiteSpace = "normal";
+        errorMeta.style.lineHeight = "1.35";
         errorMeta.title = String(row.barcode_error);
         codeBox.appendChild(errorMeta);
       }
@@ -57693,6 +57699,25 @@ function renderBarcodeLabelsManager(parent, data, sb) {
           aggregate.results = aggregate.results.concat(result.results || []);
           aggregate.worker_version = result.worker_version || aggregate.worker_version;
 
+          if (
+            completed === 0 &&
+            Number(result.failed || 0) === batch.length &&
+            batch.length > 0
+          ) {
+            var firstBatchError = (result.results || []).find(function (item) {
+              return item && !item.ok && item.error;
+            });
+
+            throw new Error(
+              "Alle varene i første pulje feilet. Synken er stoppet før resten ble behandlet. Første feil: " +
+                skReadableError(
+                  firstBatchError && firstBatchError.error
+                    ? firstBatchError.error
+                    : "Ukjent feil fra Worker."
+                )
+            );
+          }
+
           completed += batch.length;
           pending.splice(0, batch.length);
 
@@ -57830,11 +57855,22 @@ function renderBarcodeLabelsManager(parent, data, sb) {
             "warning"
           );
         } else if (Number(result.failed || 0) > 0) {
+          var failedItems = (result.results || []).filter(function (item) {
+            return item && !item.ok;
+          });
+          var errorExamples = failedItems.slice(0, 3).map(function (item, index) {
+            return String(index + 1) + ". " +
+              skReadableError(item.error || "Ukjent feil");
+          });
+
           setStatus(
             String(result.zettle_synced || 0) +
             " vare(r) ble synket til Zettle. " +
             String(result.failed || 0) +
-            " konflikt(er) ble hoppet over og lagt i «Må avgjøres senere». Du kan fortsette med neste varer.",
+            " feil ble lagt i «Må avgjøres senere»." +
+            (errorExamples.length
+              ? "\n\nEksempel på feil:\n" + errorExamples.join("\n")
+              : ""),
             "warning"
           );
         } else {
