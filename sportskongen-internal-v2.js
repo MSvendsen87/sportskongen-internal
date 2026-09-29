@@ -1,4 +1,4 @@
-// Admin version: quickbutik-adaptive-product-sync-v11
+// Admin version: barcode-ignore-and-continue-v12
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -57024,6 +57024,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var rows = (data.barcodeLabels || []).filter(function (row) {
     return row &&
       row.is_active !== false &&
+      row.barcode_ignored !== true &&
       !skBarcodeExcludedProduct(row);
   });
   var selected = {};
@@ -57161,6 +57162,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
   var selectVisibleButton = createButton("Velg alle synlige");
   var clearButton = createButton("Fjern valg");
+  var ignoreButton = createButton("Ignorer valgte");
   var stockQuantityButton = createButton("Antall = lager");
   var generateButton = createPrimaryButton("Opprett / synk strekkoder");
   var printButton = createPrimaryButton("Skriv ut etiketter");
@@ -57183,6 +57185,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
   actionCard.appendChild(selectVisibleButton);
   actionCard.appendChild(clearButton);
+  actionCard.appendChild(ignoreButton);
   actionCard.appendChild(stockQuantityButton);
   actionCard.appendChild(generateButton);
   actionCard.appendChild(printButton);
@@ -57620,6 +57623,98 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     rebuildList();
   };
 
+  ignoreButton.onclick = function () {
+    var ignoredRows = rows.filter(function (row) {
+      return Number(selected[row.target_id] || 0) > 0;
+    });
+
+    if (!ignoredRows.length) {
+      window.alert("Velg minst én vare som skal ignoreres.");
+      return;
+    }
+
+    if (!window.confirm(
+      "Ignorere " + String(ignoredRows.length) +
+      " vare(r) permanent på strekkodesiden? De kommer ikke tilbake etter produktsynk."
+    )) {
+      return;
+    }
+
+    var productIds = ignoredRows.filter(function (row) {
+      return row.target_type !== "variant";
+    }).map(function (row) {
+      return row.target_id;
+    });
+    var variantIds = ignoredRows.filter(function (row) {
+      return row.target_type === "variant";
+    }).map(function (row) {
+      return row.target_id;
+    });
+    var updates = [];
+    var ignoredAt = new Date().toISOString();
+
+    ignoreButton.disabled = true;
+    ignoreButton.textContent = "Ignorerer…";
+
+    if (productIds.length) {
+      updates.push(
+        sb.from("internal_products")
+          .update({
+            barcode_ignored: true,
+            barcode_ignored_at: ignoredAt
+          })
+          .in("id", productIds)
+      );
+    }
+
+    if (variantIds.length) {
+      updates.push(
+        sb.from("internal_product_variants")
+          .update({
+            barcode_ignored: true,
+            barcode_ignored_at: ignoredAt
+          })
+          .in("id", variantIds)
+      );
+    }
+
+    Promise.all(updates)
+      .then(function (results) {
+        var failed = (results || []).find(function (result) {
+          return result && result.error;
+        });
+
+        if (failed) {
+          throw failed.error;
+        }
+
+        ignoredRows.forEach(function (row) {
+          row.barcode_ignored = true;
+          delete selected[row.target_id];
+        });
+        rows = rows.filter(function (row) {
+          return row.barcode_ignored !== true;
+        });
+        setStatus(
+          String(ignoredRows.length) +
+          " vare(r) er ignorert og fjernet fra strekkodelistene.",
+          "success"
+        );
+        rebuildList();
+      })
+      .catch(function (error) {
+        setStatus(
+          "Kunne ikke ignorere valgte varer: " +
+          skReadableError(error && error.message ? error.message : error),
+          "warning"
+        );
+      })
+      .then(function () {
+        ignoreButton.disabled = false;
+        ignoreButton.textContent = "Ignorer valgte";
+      });
+  };
+
   stockQuantityButton.onclick = function () {
     rows.forEach(function (row) {
       if (Number(selected[row.target_id] || 0) > 0) {
@@ -57726,25 +57821,6 @@ function renderBarcodeLabelsManager(parent, data, sb) {
           aggregate.failed += Number(result.failed || 0);
           aggregate.results = aggregate.results.concat(result.results || []);
           aggregate.worker_version = result.worker_version || aggregate.worker_version;
-
-          if (
-            completed === 0 &&
-            Number(result.failed || 0) === batch.length &&
-            batch.length > 0
-          ) {
-            var firstBatchError = (result.results || []).find(function (item) {
-              return item && !item.ok && item.error;
-            });
-
-            throw new Error(
-              "Alle varene i første pulje feilet. Synken er stoppet før resten ble behandlet. Første feil: " +
-                skReadableError(
-                  firstBatchError && firstBatchError.error
-                    ? firstBatchError.error
-                    : "Ukjent feil fra Worker."
-                )
-            );
-          }
 
           completed += batch.length;
           pending.splice(0, batch.length);
