@@ -1,4 +1,4 @@
-// Admin version: barcodes-pagination-and-filter-v5
+// Admin version: barcodes-batched-sync-v6
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -57602,6 +57602,129 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     skPrintBarcodeLabels(rows, selected, includePrice.checked);
   };
 
+  function syncBarcodeTargetsInBatches(token, targets) {
+    var pending = targets.slice();
+    var total = pending.length;
+    var completed = 0;
+    var batchSize = 5;
+    var aggregate = {
+      ok: true,
+      requested: total,
+      created: 0,
+      zettle_synced: 0,
+      already_existing: 0,
+      failed: 0,
+      results: []
+    };
+
+    function isSubrequestLimitError(error) {
+      var message = String(
+        error && error.message ? error.message : error || ""
+      ).toLowerCase();
+
+      return (
+        message.indexOf("too many subrequests") >= 0 ||
+        (
+          message.indexOf("subrequest") >= 0 &&
+          message.indexOf("limit") >= 0
+        )
+      );
+    }
+
+    function runNextBatch() {
+      if (!pending.length) {
+        aggregate.ok = aggregate.failed === 0;
+        return Promise.resolve(aggregate);
+      }
+
+      var batch = pending.slice(0, batchSize);
+
+      setStatus(
+        "Oppretter og synkroniserer strekkoder… " +
+          String(completed) + " av " + String(total) +
+          " behandlet · puljestørrelse " + String(batch.length),
+        "note"
+      );
+
+      return fetch(
+        "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/assign-barcodes",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ targets: batch })
+        }
+      ).then(function (response) {
+        return response.text().then(function (text) {
+          var result = null;
+
+          try {
+            result = text ? JSON.parse(text) : null;
+          } catch (error) {
+            result = {
+              ok: false,
+              error: text || "Ukjent svar fra Worker."
+            };
+          }
+
+          if (!response.ok) {
+            throw new Error(
+              result && result.error
+                ? skReadableError(result.error)
+                : "HTTP " + String(response.status) +
+                  (text ? ": " + text : "")
+            );
+          }
+
+          if (!result || !Array.isArray(result.results)) {
+            throw new Error(
+              result && result.error
+                ? skReadableError(result.error)
+                : "Workeren returnerte ikke et gyldig resultat."
+            );
+          }
+
+          aggregate.created += Number(result.created || 0);
+          aggregate.zettle_synced += Number(result.zettle_synced || 0);
+          aggregate.already_existing += Number(result.already_existing || 0);
+          aggregate.failed += Number(result.failed || 0);
+          aggregate.results = aggregate.results.concat(result.results || []);
+          aggregate.worker_version = result.worker_version || aggregate.worker_version;
+
+          completed += batch.length;
+          pending.splice(0, batch.length);
+
+          if (!pending.length) {
+            return aggregate;
+          }
+
+          return new Promise(function (resolve) {
+            setTimeout(resolve, 180);
+          }).then(runNextBatch);
+        });
+      }).catch(function (error) {
+        if (isSubrequestLimitError(error) && batchSize > 1) {
+          batchSize = Math.max(1, Math.floor(batchSize / 2));
+          setStatus(
+            "Cloudflare-grensen ble nådd. Fortsetter automatisk med mindre puljer på " +
+              String(batchSize) + " vare(r)…",
+            "note"
+          );
+
+          return new Promise(function (resolve) {
+            setTimeout(resolve, 350);
+          }).then(runNextBatch);
+        }
+
+        throw error;
+      });
+    }
+
+    return runNextBatch();
+  }
+
   generateButton.onclick = function () {
     var targets = rows.filter(function (row) {
       return Number(selected[row.target_id] || 0) > 0 &&
@@ -57659,39 +57782,10 @@ function renderBarcodeLabelsManager(parent, data, sb) {
           );
         }
 
-        return fetch(
-          "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/assign-barcodes",
-          {
-            method: "POST",
-            headers: {
-              "Authorization": "Bearer " + session.access_token,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ targets: targets })
-          }
+        return syncBarcodeTargetsInBatches(
+          session.access_token,
+          targets
         );
-      })
-      .then(function (response) {
-        return response.text().then(function (text) {
-          var result = null;
-
-          try {
-            result = text ? JSON.parse(text) : null;
-          } catch (error) {
-            result = { ok: false, error: text || "Ukjent svar fra Worker." };
-          }
-
-          if (!response.ok) {
-            throw new Error(
-              result && result.error
-                ? skReadableError(result.error)
-                : "HTTP " + String(response.status) +
-                  (text ? ": " + text : "")
-            );
-          }
-
-          return result;
-        });
       })
       .then(function (result) {
         if (!result || !Array.isArray(result.results)) {
