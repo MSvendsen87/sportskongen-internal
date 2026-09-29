@@ -1,4 +1,4 @@
-// Admin version: barcodes-invalid-sync-selection-v9
+// Admin version: quickbutik-adaptive-product-sync-v11
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56283,11 +56283,14 @@ function renderGlobalSyncControl(app, sb, user) {
      * Cloudflare Worker har en grense for hvor mange underkall én invokasjon
      * kan gjøre. Produktsynken kan bruke flere underkall per produkt/variant.
      * Start derfor med den stabile puljestørrelsen 10, og gå automatisk ned
-     * til 5 og 2 dersom en spesielt tung pulje fortsatt treffer grensen.
+     * til 5 og 2 dersom en spesielt tung pulje treffer grensen. Etter tre
+     * vellykkede reduserte puljer økes størrelsen gradvis tilbake mot 10.
      */
+    var stableLimit = 10;
     var limit = 10;
     var offset = 0;
     var subrequestRetries = 0;
+    var successfulReducedBatches = 0;
     var totals = {
       batches: 0,
       processed: 0,
@@ -56352,6 +56355,20 @@ function renderGlobalSyncControl(app, sb, user) {
           data.failed || 0
         );
 
+        if (limit < stableLimit) {
+          successfulReducedBatches += 1;
+
+          if (successfulReducedBatches >= 3) {
+            limit = Math.min(
+              stableLimit,
+              limit * 2
+            );
+            successfulReducedBatches = 0;
+          }
+        } else {
+          successfulReducedBatches = 0;
+        }
+
         if (data.is_final_page === true) {
           return totals;
         }
@@ -56370,7 +56387,7 @@ function renderGlobalSyncControl(app, sb, user) {
               function () {
                 resolve(nextBatch());
               },
-              350
+              120
             );
           }
         );
@@ -56385,6 +56402,7 @@ function renderGlobalSyncControl(app, sb, user) {
             Math.floor(limit / 2)
           );
           subrequestRetries += 1;
+          successfulReducedBatches = 0;
 
           setStatus(
             "\u26a0\ufe0f Quickbutik-puljen var for tung for Cloudflare." +
@@ -56400,7 +56418,7 @@ function renderGlobalSyncControl(app, sb, user) {
                 function () {
                   resolve(nextBatch());
                 },
-                700
+                400
               );
             }
           );
