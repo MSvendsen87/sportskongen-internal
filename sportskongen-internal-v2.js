@@ -1,4 +1,4 @@
-// Admin version: barcode-print-wide-ean-v14
+// Admin version: barcode-print-top-safe-v15
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56995,13 +56995,13 @@ function skPrintBarcodeLabels(rows, selected, includePrice) {
     "<title>GolfKongen etiketter</title><style>" +
     "@page{size:62mm 29mm;margin:0;}" +
     "*{box-sizing:border-box;}html,body{margin:0;padding:0;background:#fff;}" +
-    ".sk-label{width:62mm;height:29mm;padding:2.2mm 3mm 2mm;position:relative;" +
+    ".sk-label{width:62mm;height:29mm;padding:2.6mm 3mm 1.6mm;position:relative;" +
       "overflow:hidden;page-break-after:always;break-after:page;" +
       "font-family:Arial,sans-serif;color:#000;display:flex;flex-direction:column;}" +
     ".sk-label:last-child{page-break-after:auto;break-after:auto;}" +
-    ".sk-label-brand{height:3mm;padding-right:18mm;font-size:8.2pt;font-weight:900;line-height:3mm;}" +
-    ".sk-label-price{position:absolute;top:2.2mm;right:3mm;font-size:7.6pt;font-weight:800;" +
-      "line-height:3mm;background:#fff;padding-left:1.5mm;}" +
+    ".sk-label-brand{height:3.2mm;padding-right:18mm;font-size:8.2pt;font-weight:900;line-height:3.2mm;}" +
+    ".sk-label-price{position:absolute;top:2.6mm;right:3mm;font-size:7.6pt;font-weight:800;" +
+      "line-height:3.2mm;background:#fff;padding-left:1.5mm;}" +
     ".sk-label-product{font-size:8pt;font-weight:800;line-height:3mm;" +
       "height:3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
     ".sk-label-variant{font-size:6.8pt;line-height:2.6mm;height:2.6mm;" +
