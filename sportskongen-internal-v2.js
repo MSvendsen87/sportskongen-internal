@@ -1,4 +1,4 @@
-// Admin version: barcode-ignore-and-continue-v12
+// Admin version: barcode-print-safe-area-v13
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56995,18 +56995,18 @@ function skPrintBarcodeLabels(rows, selected, includePrice) {
     "<title>GolfKongen etiketter</title><style>" +
     "@page{size:62mm 29mm;margin:0;}" +
     "*{box-sizing:border-box;}html,body{margin:0;padding:0;background:#fff;}" +
-    ".sk-label{width:62mm;height:29mm;padding:1.4mm 2.2mm 1mm;position:relative;" +
+    ".sk-label{width:62mm;height:29mm;padding:2.2mm 3mm 2mm;position:relative;" +
       "overflow:hidden;page-break-after:always;break-after:page;" +
       "font-family:Arial,sans-serif;color:#000;display:flex;flex-direction:column;}" +
     ".sk-label:last-child{page-break-after:auto;break-after:auto;}" +
-    ".sk-label-brand{height:3.5mm;padding-right:18mm;font-size:9pt;font-weight:900;line-height:3.5mm;}" +
-    ".sk-label-price{position:absolute;top:1.4mm;right:2.2mm;font-size:8pt;font-weight:800;" +
-      "line-height:3.5mm;background:#fff;padding-left:1.5mm;}" +
-    ".sk-label-product{font-size:8.7pt;font-weight:800;line-height:3.4mm;" +
-      "height:3.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-    ".sk-label-variant{font-size:7.2pt;line-height:3mm;height:3mm;" +
+    ".sk-label-brand{height:3mm;padding-right:18mm;font-size:8.2pt;font-weight:900;line-height:3mm;}" +
+    ".sk-label-price{position:absolute;top:2.2mm;right:3mm;font-size:7.6pt;font-weight:800;" +
+      "line-height:3mm;background:#fff;padding-left:1.5mm;}" +
+    ".sk-label-product{font-size:8pt;font-weight:800;line-height:3mm;" +
+      "height:3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
+    ".sk-label-variant{font-size:6.8pt;line-height:2.6mm;height:2.6mm;" +
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-    ".sk-label-barcode{display:block;width:55mm;height:17.5mm;margin:-0.2mm auto 0;}" +
+    ".sk-label-barcode{display:block;width:52mm;height:14.8mm;margin:0.2mm auto 0;flex:none;}" +
     "</style></head><body>" +
     labels.join("") +
     "<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},180);});<\/script>" +
