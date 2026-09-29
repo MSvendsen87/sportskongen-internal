@@ -1,4 +1,4 @@
-// Admin version: barcodes-visible-errors-v7
+// Admin version: barcodes-stock-aware-counts-v8
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -57012,6 +57012,13 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var pageSize = 50;
   var currentPage = 1;
   var currentPageRows = [];
+  var missingBarcodeRows = rows.filter(function (row) {
+    return !skBarcodeDigits(row.barcode);
+  });
+  var missingBarcodeInStock = missingBarcodeRows.filter(function (row) {
+    return Number(row.stock_quantity || 0) > 0;
+  }).length;
+  var missingBarcodeWithoutStock = missingBarcodeRows.length - missingBarcodeInStock;
 
   createPageHeader(
     parent,
@@ -57032,11 +57039,14 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       }).length)
     },
     {
-      label: "Mangler strekkode",
-      value: String(rows.filter(function (row) {
-        return !skBarcodeDigits(row.barcode);
-      }).length),
-      tone: "warning"
+      label: "Mangler – på lager",
+      value: String(missingBarcodeInStock),
+      tone: missingBarcodeInStock > 0 ? "warning" : "success"
+    },
+    {
+      label: "Mangler – uten lager",
+      value: String(missingBarcodeWithoutStock),
+      tone: missingBarcodeWithoutStock > 0 ? "warning" : "success"
     },
     {
       label: "Må avgjøres senere",
@@ -57058,7 +57068,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var info = el("div");
   info.className = "sk-note";
   info.textContent =
-    "Eksisterende GTIN beholdes. Entydige varer får variantkode i Quickbutik og Zettle. Konflikter hoppes over og samles under «Må avgjøres senere», slik at resten av butikken kan behandles først.";
+    "Eksisterende GTIN beholdes. Entydige varer får variantkode i Quickbutik og Zettle. Feil hoppes over og samles under «Må avgjøres senere». Varer uten lager skjules når «Bare varer på lager» er valgt; fjern haken for å se og behandle dem.";
   parent.appendChild(info);
 
   var controls = el("div");
