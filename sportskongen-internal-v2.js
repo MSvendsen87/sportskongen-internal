@@ -1,4 +1,4 @@
-// Admin version: barcode-print-safe-area-v13
+// Admin version: barcode-print-wide-ean-v14
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56828,7 +56828,7 @@ function skEan13Svg(value) {
 
   return (
     "<svg class='sk-label-barcode' xmlns='http://www.w3.org/2000/svg' " +
-    "viewBox='0 0 117 44' role='img' aria-label='EAN-13 " +
+    "viewBox='0 0 117 44' preserveAspectRatio='none' role='img' aria-label='EAN-13 " +
     skBarcodeEscape(ean13) +
     "'>" +
     "<g fill='#000' shape-rendering='crispEdges'>" +
@@ -57006,7 +57006,7 @@ function skPrintBarcodeLabels(rows, selected, includePrice) {
       "height:3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
     ".sk-label-variant{font-size:6.8pt;line-height:2.6mm;height:2.6mm;" +
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-    ".sk-label-barcode{display:block;width:52mm;height:14.8mm;margin:0.2mm auto 0;flex:none;}" +
+    ".sk-label-barcode{display:block;width:55mm;height:14.8mm;margin:0.2mm auto 0;flex:none;}" +
     "</style></head><body>" +
     labels.join("") +
     "<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},180);});<\/script>" +
