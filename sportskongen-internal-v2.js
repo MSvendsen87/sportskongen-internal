@@ -1,4 +1,4 @@
-// Admin version: barcodes-deferred-list-v4
+// Admin version: barcodes-pagination-and-filter-v5
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -56901,6 +56901,28 @@ function skBarcodeReadyForPrint(row) {
   );
 }
 
+function skBarcodeExcludedProduct(row) {
+  var text = [
+    row && row.product_name,
+    row && row.category,
+    row && row.variant_name,
+    row && row.variant_sku
+  ].join(" ").toLowerCase();
+
+  return (
+    text.indexOf("booking") >= 0 ||
+    text.indexOf("disc simulator") >= 0 ||
+    text.indexOf("simulator") >= 0 ||
+    text.indexOf("dart booking") >= 0 ||
+    text.indexOf("leie hele lokalet") >= 0 ||
+    text.indexOf("gavekort") >= 0 ||
+    text.indexOf("gift card") >= 0 ||
+    text.indexOf("medlemskap") >= 0 ||
+    text.indexOf("ldk tilgang") >= 0 ||
+    text.indexOf("klubbkveld") >= 0
+  );
+}
+
 function skPrintBarcodeLabels(rows, selected, includePrice) {
   var labels = [];
   var blocked = 0;
@@ -56982,9 +57004,14 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   clear(parent);
 
   var rows = (data.barcodeLabels || []).filter(function (row) {
-    return row && row.is_active !== false;
+    return row &&
+      row.is_active !== false &&
+      !skBarcodeExcludedProduct(row);
   });
   var selected = {};
+  var pageSize = 50;
+  var currentPage = 1;
+  var currentPageRows = [];
 
   createPageHeader(
     parent,
@@ -57151,12 +57178,98 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   listInfo.style.margin = "10px 0";
   parent.appendChild(listInfo);
 
+  var pagination = el("div");
+  pagination.style.display = "flex";
+  pagination.style.flexWrap = "wrap";
+  pagination.style.alignItems = "center";
+  pagination.style.gap = "6px";
+  pagination.style.margin = "0 0 10px";
+  parent.appendChild(pagination);
+
   var list = el("div");
   list.style.display = "grid";
   list.style.gap = "7px";
   parent.appendChild(list);
 
   var visibleRows = [];
+
+  function renderPagination(totalPages) {
+    clear(pagination);
+
+    if (totalPages <= 1) {
+      pagination.style.display = "none";
+      return;
+    }
+
+    pagination.style.display = "flex";
+
+    function addPageButton(label, page, disabled, active) {
+      var button = createButton(label);
+      button.disabled = !!disabled;
+      button.style.minWidth = "38px";
+
+      if (active) {
+        button.style.background = "#14532d";
+        button.style.borderColor = "#14532d";
+        button.style.color = "#fff";
+      }
+
+      button.onclick = function () {
+        if (disabled || page === currentPage) {
+          return;
+        }
+
+        currentPage = page;
+        rebuildList();
+        listInfo.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+
+      pagination.appendChild(button);
+    }
+
+    addPageButton("Forrige", currentPage - 1, currentPage <= 1, false);
+
+    var pages = [];
+    var start = Math.max(1, currentPage - 2);
+    var end = Math.min(totalPages, currentPage + 2);
+
+    if (start > 1) {
+      pages.push(1);
+      if (start > 2) {
+        pages.push("…");
+      }
+    }
+
+    for (var page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+
+    if (end < totalPages) {
+      if (end < totalPages - 1) {
+        pages.push("…");
+      }
+      pages.push(totalPages);
+    }
+
+    pages.forEach(function (page) {
+      if (page === "…") {
+        var dots = el("span", "…");
+        dots.style.padding = "0 3px";
+        dots.style.color = "#64748b";
+        pagination.appendChild(dots);
+        return;
+      }
+
+      addPageButton(
+        String(page),
+        page,
+        false,
+        page === currentPage
+      );
+    });
+
+    addPageButton("Neste", currentPage + 1, currentPage >= totalPages, false);
+  }
 
   function setStatus(message, tone) {
     status.style.display = "block";
@@ -57312,15 +57425,27 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   function rebuildList() {
     clear(list);
     visibleRows = rows.filter(rowMatches);
-    var limited = visibleRows.slice(0, 50);
+    var totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+
+    if (currentPage > totalPages) {
+      currentPage = totalPages;
+    }
+
+    var startIndex = (currentPage - 1) * pageSize;
+    currentPageRows = visibleRows.slice(startIndex, startIndex + pageSize);
+    var firstShown = visibleRows.length ? startIndex + 1 : 0;
+    var lastShown = startIndex + currentPageRows.length;
 
     listInfo.textContent =
       String(visibleRows.length) + " treff" +
-      (visibleRows.length > limited.length
-        ? " · viser de første 50, bruk søk for å avgrense"
+      (visibleRows.length
+        ? " · viser " + String(firstShown) + "–" + String(lastShown) +
+          " · side " + String(currentPage) + " av " + String(totalPages)
         : "");
 
-    if (!limited.length) {
+    renderPagination(totalPages);
+
+    if (!currentPageRows.length) {
       var empty = el("div", "Ingen varer passer filteret.");
       empty.className = "sk-note";
       list.appendChild(empty);
@@ -57328,7 +57453,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
       return;
     }
 
-    limited.forEach(function (row) {
+    currentPageRows.forEach(function (row) {
       var item = el("div");
       item.className = "sk-card";
       item.style.padding = "10px 12px";
@@ -57439,13 +57564,18 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     updateSelectionSummary();
   }
 
-  search.oninput = rebuildList;
-  filter.onchange = rebuildList;
-  inStockOnly.onchange = rebuildList;
+  function resetPageAndRebuild() {
+    currentPage = 1;
+    rebuildList();
+  }
+
+  search.oninput = resetPageAndRebuild;
+  filter.onchange = resetPageAndRebuild;
+  inStockOnly.onchange = resetPageAndRebuild;
   includePrice.onchange = updateSelectionSummary;
 
   selectVisibleButton.onclick = function () {
-    visibleRows.slice(0, 50).forEach(function (row) {
+    currentPageRows.forEach(function (row) {
       selected[row.target_id] = Math.max(1, Number(selected[row.target_id] || 1));
     });
     rebuildList();
@@ -57551,14 +57681,27 @@ function renderBarcodeLabelsManager(parent, data, sb) {
             result = { ok: false, error: text || "Ukjent svar fra Worker." };
           }
 
-          if (!response.ok && !result) {
-            throw new Error("HTTP " + String(response.status));
+          if (!response.ok) {
+            throw new Error(
+              result && result.error
+                ? skReadableError(result.error)
+                : "HTTP " + String(response.status) +
+                  (text ? ": " + text : "")
+            );
           }
 
           return result;
         });
       })
       .then(function (result) {
+        if (!result || !Array.isArray(result.results)) {
+          throw new Error(
+            result && result.error
+              ? skReadableError(result.error)
+              : "Workeren returnerte ikke et gyldig resultat."
+          );
+        }
+
         (result.results || []).forEach(function (item) {
           if (!item.barcode) {
             return;
@@ -57587,7 +57730,12 @@ function renderBarcodeLabelsManager(parent, data, sb) {
           }
         });
 
-        if (Number(result.failed || 0) > 0) {
+        if (!result.results.length) {
+          setStatus(
+            "Ingen varer ble behandlet. Kontroller valget og prøv igjen.",
+            "warning"
+          );
+        } else if (Number(result.failed || 0) > 0) {
           setStatus(
             String(result.zettle_synced || 0) +
             " vare(r) ble synket til Zettle. " +
@@ -57600,7 +57748,12 @@ function renderBarcodeLabelsManager(parent, data, sb) {
             "Ferdig. " + String(result.created || 0) +
             " nye strekkoder ble opprettet, og " +
             String(result.zettle_synced || 0) +
-            " er bekreftet i både Quickbutik og Zettle. De er klare til skanning og utskrift.",
+            " er bekreftet i både Quickbutik og Zettle." +
+            (Number(result.already_existing || 0) > 0
+              ? " " + String(result.already_existing) +
+                " hadde allerede strekkode i Quickbutik."
+              : "") +
+            " De er klare til skanning og utskrift.",
             "success"
           );
         }
