@@ -1,4 +1,4 @@
-// Admin version: barcodes-stock-aware-counts-v8
+// Admin version: barcodes-invalid-sync-selection-v9
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -57068,7 +57068,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
   var info = el("div");
   info.className = "sk-note";
   info.textContent =
-    "Eksisterende GTIN beholdes. Entydige varer får variantkode i Quickbutik og Zettle. Feil hoppes over og samles under «Må avgjøres senere». Varer uten lager skjules når «Bare varer på lager» er valgt; fjern haken for å se og behandle dem.";
+    "Gyldige eksisterende GTIN beholdes. Ugyldige koder repareres når det kan gjøres sikkert, ellers opprettes en ny intern kode. Entydige varer får variantkode i Quickbutik og Zettle. Feil hoppes over og samles under «Må avgjøres senere». Varer uten lager skjules når «Bare varer på lager» er valgt; fjern haken for å se og behandle dem.";
   parent.appendChild(info);
 
   var controls = el("div");
@@ -57764,11 +57764,8 @@ function renderBarcodeLabelsManager(parent, data, sb) {
     var targets = rows.filter(function (row) {
       return Number(selected[row.target_id] || 0) > 0 &&
         (
-          !skBarcodeDigits(row.barcode) ||
-          (
-            row.barcode_source === "generated" &&
-            row.barcode_sync_status !== "synced"
-          )
+          !skNormalizeEan13(row.barcode) ||
+          row.barcode_sync_status !== "synced"
         );
     }).map(function (row) {
       return {
@@ -57779,7 +57776,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
     if (!targets.length) {
       window.alert(
-        "Alle valgte strekkoder er allerede bekreftet i både Quickbutik og Zettle. Du kan skrive dem ut direkte."
+        "Alle valgte varer har gyldig strekkode og status «Zettle synket». Du kan skrive dem ut direkte."
       );
       return;
     }
@@ -57793,7 +57790,7 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
     if (!window.confirm(
       "Opprett eller synk strekkode for " + String(targets.length) +
-      " vare(r) til Quickbutik og Zettle? Eksisterende koder blir ikke byttet ut."
+      " vare(r) til Quickbutik og Zettle? Gyldige koder beholdes; ugyldige koder repareres eller erstattes."
     )) {
       return;
     }
