@@ -1,4 +1,4 @@
-// Admin version: barcode-print-top-safe-v15
+// Admin version: barcode-print-offset-sync8-receipts-v17
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -2477,7 +2477,7 @@
     createPageHeader(
       parent,
       "Lagerjusteringer og avstemming",
-      "Hver lagerendring som oppdages ved Quickbutik-synk avstemmes automatisk mot registrerte salg, varemottak og varetelling i samme tidsrom. Admin endrer aldri lageret.",
+      "Hver lagerendring som oppdages ved Quickbutik-synk avstemmes automatisk mot registrerte salg, varemottak og varetelling. Varemottak kan også forklare lagerøkninger som oppdages ved senere synk. Admin endrer aldri lageret.",
       "Kun full kontroll"
     );
 
@@ -2584,7 +2584,7 @@
 
     var explanation = el(
       "div",
-      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Betalte Quickbutik-ordre som venter på pakking gjenkjennes automatisk og forklarer lagerreduksjonen uten manuell behandling. Bruk «Kundeordre venter på pakking» bare dersom ordren ennå ikke er kommet inn i salgsdataene. Lagerøkninger kan settes på «Faktura kommer senere» i opptil 30 dager."
+      "Systemet sammenligner faktisk lagerendring med Quickbutik-salg, Zettle-salg, registrert varemottak og varetellingskorreksjoner mellom forrige og ny produktsynk. Betalte Quickbutik-ordre som venter på pakking gjenkjennes automatisk og forklarer lagerreduksjonen uten manuell behandling. Bruk «Kundeordre venter på pakking» bare dersom ordren ennå ikke er kommet inn i salgsdataene. Varemottak som er registrert før lagerøkningen oppdages, kan kobles til en senere lagerøkning innen 30 dager. Hvert mottak kobles til høyst én lagerendring for samme produkt og variant. Lagerøkninger kan settes på «Faktura kommer senere» i opptil 30 dager."
     );
     explanation.className = "sk-note";
     explanation.style.margin = "14px 0";
@@ -56282,15 +56282,12 @@ function renderGlobalSyncControl(app, sb, user) {
     /*
      * Cloudflare Worker har en grense for hvor mange underkall én invokasjon
      * kan gjøre. Produktsynken kan bruke flere underkall per produkt/variant.
-     * Start derfor med den stabile puljestørrelsen 10, og gå automatisk ned
-     * til 5 og 2 dersom en spesielt tung pulje treffer grensen. Etter tre
-     * vellykkede reduserte puljer økes størrelsen gradvis tilbake mot 10.
+     * Start med 8 produkter, og bruk 5 resten av kjøringen dersom en
+     * tung pulje treffer underkallgrensen. Prøv samme offset på nytt.
      */
-    var stableLimit = 10;
-    var limit = 10;
+    var limit = 8;
     var offset = 0;
     var subrequestRetries = 0;
-    var successfulReducedBatches = 0;
     var totals = {
       batches: 0,
       processed: 0,
@@ -56355,20 +56352,6 @@ function renderGlobalSyncControl(app, sb, user) {
           data.failed || 0
         );
 
-        if (limit < stableLimit) {
-          successfulReducedBatches += 1;
-
-          if (successfulReducedBatches >= 3) {
-            limit = Math.min(
-              stableLimit,
-              limit * 2
-            );
-            successfulReducedBatches = 0;
-          }
-        } else {
-          successfulReducedBatches = 0;
-        }
-
         if (data.is_final_page === true) {
           return totals;
         }
@@ -56394,15 +56377,11 @@ function renderGlobalSyncControl(app, sb, user) {
       }).catch(function (error) {
         if (
           isSubrequestLimitError(error) &&
-          limit > 2 &&
-          subrequestRetries < 3
+          limit > 5 &&
+          subrequestRetries < 1
         ) {
-          limit = Math.max(
-            2,
-            Math.floor(limit / 2)
-          );
+          limit = 5;
           subrequestRetries += 1;
-          successfulReducedBatches = 0;
 
           setStatus(
             "\u26a0\ufe0f Quickbutik-puljen var for tung for Cloudflare." +
@@ -56995,12 +56974,12 @@ function skPrintBarcodeLabels(rows, selected, includePrice) {
     "<title>GolfKongen etiketter</title><style>" +
     "@page{size:62mm 29mm;margin:0;}" +
     "*{box-sizing:border-box;}html,body{margin:0;padding:0;background:#fff;}" +
-    ".sk-label{width:62mm;height:29mm;padding:2.6mm 3mm 1.6mm;position:relative;" +
+    ".sk-label{width:62mm;height:29mm;padding:2.35mm 3mm 1.85mm;position:relative;" +
       "overflow:hidden;page-break-after:always;break-after:page;" +
       "font-family:Arial,sans-serif;color:#000;display:flex;flex-direction:column;}" +
     ".sk-label:last-child{page-break-after:auto;break-after:auto;}" +
     ".sk-label-brand{height:3.2mm;padding-right:18mm;font-size:8.2pt;font-weight:900;line-height:3.2mm;}" +
-    ".sk-label-price{position:absolute;top:2.6mm;right:3mm;font-size:7.6pt;font-weight:800;" +
+    ".sk-label-price{position:absolute;top:2.35mm;right:3mm;font-size:7.6pt;font-weight:800;" +
       "line-height:3.2mm;background:#fff;padding-left:1.5mm;}" +
     ".sk-label-product{font-size:8pt;font-weight:800;line-height:3mm;" +
       "height:3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
@@ -59100,3 +59079,4 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
+
