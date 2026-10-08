@@ -1,4 +1,4 @@
-// Admin version: barcode-print-offset-sync8-receipts-v17
+// Admin version: fast-sync-owner-bulk-approval-v18
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -2472,7 +2472,8 @@
   function renderInventoryAdjustmentControl(
     parent,
     data,
-    sb
+    sb,
+    user
   ) {
     createPageHeader(
       parent,
@@ -2938,6 +2939,18 @@
       supplierInvoiceButton
     );
 
+    // Owner-only shortcut. The server RPC still enforces normal write permissions.
+    // This is a display restriction, not a replacement for a server-side email policy.
+    var ownerApprovalButton = null;
+    var ownerEmail = String((user && user.email) || "").trim().toLowerCase();
+    if (ownerEmail === "kristoffer@golfkongen.no" && isFullControl(user)) {
+      ownerApprovalButton = createPrimaryButton("✅ Godkjenn valgte uten kommentar");
+      ownerApprovalButton.style.background = "#166534";
+      ownerApprovalButton.style.borderColor = "#166534";
+      ownerApprovalButton.disabled = true;
+      bulkTop.appendChild(ownerApprovalButton);
+    }
+
     var bulkResult = el("div");
     bulkResult.style.marginTop = "8px";
     bulkResult.style.fontSize = "13px";
@@ -2981,6 +2994,7 @@
         negativeCount === 0;
       supplierInvoiceButton.disabled =
         positiveCount === 0;
+      if (ownerApprovalButton) ownerApprovalButton.disabled = selected.length === 0;
       selectAllInput.checked =
         selectionInputs.length > 0 &&
         selected.length ===
@@ -2989,6 +3003,44 @@
         selected.length > 0 &&
         selected.length <
           selectionInputs.length;
+    }
+
+    if (ownerApprovalButton) {
+      ownerApprovalButton.onclick = function () {
+        var selected = selectedRows();
+        if (!selected.length) return;
+        if (!window.confirm("Godkjenne " + selected.length + " valgte lageravvik uten å skrive kommentar?\n\nAvvikene blir liggende i historikken, slik at senere fakturaer fortsatt kan matches.")) return;
+        ownerApprovalButton.disabled = true;
+        ownerApprovalButton.textContent = "Godkjenner…";
+        var failed = [];
+        // Existing review RPC retains adjustment records; only review_status changes.
+        // A fixed system note is used because the existing RPC expects a note.
+        var chain = Promise.resolve();
+        selected.forEach(function (row) {
+          chain = chain.then(function () {
+            return sb.rpc("internal_review_inventory_adjustment", {
+              p_adjustment_id: row.id,
+              p_note: "Godkjent uten manuell kommentar (eier)"
+            }).then(function (response) {
+              if (response.error) failed.push(String(row.id) + ": " + response.error.message);
+            }).catch(function (error) {
+              failed.push(String(row.id) + ": " + String(error));
+            });
+          });
+        });
+        chain.then(function () {
+          if (failed.length) {
+            bulkResult.textContent = "Godkjent " + (selected.length - failed.length) + " av " + selected.length + ". Feil: " + failed.join("; ");
+            bulkResult.style.color = "#991b1b";
+            ownerApprovalButton.textContent = "✅ Godkjenn valgte uten kommentar";
+            updateBulkSelection();
+          } else {
+            bulkResult.textContent = "✅ " + selected.length + " avvik godkjent. Laster listen på nytt…";
+            bulkResult.style.color = "#166534";
+            window.setTimeout(function () { window.location.reload(); }, 800);
+          }
+        });
+      };
     }
 
     selectAllInput.onchange = function () {
@@ -56171,6 +56223,11 @@ function renderGlobalSyncControl(app, sb, user) {
     actions.firstChild
   );
 
+  var fullSyncButton = createButton("Full kontroll (365 dager)");
+  fullSyncButton.title = "Full historisk kontroll av salg og kvitteringer.";
+  fullSyncButton.style.fontSize = "12px";
+  actions.insertBefore(fullSyncButton, syncButton.nextSibling);
+  var syncModeFull = false;
   var status = el("div");
   status.className = "sk-note";
   status.style.display = "none";
@@ -56410,7 +56467,7 @@ function renderGlobalSyncControl(app, sb, user) {
     return nextBatch();
   }
 
-  function syncQuickbutikSales(token) {
+  function syncQuickbutikSales(token, days) {
     var limit = 100;
     var offset = 0;
     var totals = {
@@ -56422,7 +56479,7 @@ function renderGlobalSyncControl(app, sb, user) {
     function nextBatch() {
       setStatus(
         "\u2705 1/4 \u00b7 Produkter synket" +
-          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste 365 dager…" +
+          "\n\u23f3 2/4 \u00b7 Henter Quickbutik-salg siste " + String(days) + " dager…" +
           "\nPulje " +
           String(totals.batches + 1) +
           " \u00b7 ordre " +
@@ -56432,7 +56489,7 @@ function renderGlobalSyncControl(app, sb, user) {
 
       var url =
         "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-sales" +
-        "?days=365&limit=" +
+        "?days=" + String(days) + "&limit=" +
         String(limit) +
         "&offset=" +
         String(offset) +
@@ -56470,7 +56527,8 @@ function renderGlobalSyncControl(app, sb, user) {
 
   function syncZettle(
     token,
-    dryRun
+    dryRun,
+    days
   ) {
     var lastHash = "";
     var totals = {
@@ -56488,7 +56546,7 @@ function renderGlobalSyncControl(app, sb, user) {
           "\n\u2705 2/4 \u00b7 Quickbutik-salg oppdatert" +
           "\n" +
           (dryRun
-            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle 365 dager…"
+            ? "\u23f3 3/4 \u00b7 Kontrollerer Zettle " + String(days) + " dager…"
             : "\u2705 3/4 \u00b7 Zettle-kontroll ferdig\n\u23f3 4/4 \u00b7 Importerer Zettle-salg…") +
           "\nPuljer " +
           String(totals.pages) +
@@ -56499,7 +56557,7 @@ function renderGlobalSyncControl(app, sb, user) {
 
       var url =
         "https://sportskongen-quickbutik-sync.post-cd6.workers.dev/sync-zettle-sales" +
-        "?days=365&limit=100&dryRun=" +
+        "?days=" + String(days) + "&limit=100&dryRun=" +
         (dryRun ? "true" : "false");
 
       if (lastHash) {
@@ -56551,10 +56609,13 @@ function renderGlobalSyncControl(app, sb, user) {
     return nextPage();
   }
 
-  syncButton.onclick = function () {
+  fullSyncButton.onclick = function () { syncModeFull = true; runGlobalSync(); };
+  syncButton.onclick = function () { syncModeFull = false; runGlobalSync(); };
+  function runGlobalSync() {
+    var days = syncModeFull ? 365 : 21;
     if (
       !window.confirm(
-        "Oppdater alt nå?\n\nDette gjør i riktig rekkefølge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste 365 dager\n3. Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
+        "Oppdater alt nå?\n\nDette gjør i riktig rekkefølge:\n1. Synker alle produkter, priser og lager fra Quickbutik\n2. Henter Quickbutik-salg siste " + String(days) + " dager\n3. " + (syncModeFull ? "Kontrollerer Zettle-salg siste 365 dager\n4. Importerer Zettle-salg" : "Importerer Zettle-salg siste 21 dager (uten dobbel forhåndskontroll)") + "\n\nSalgsimportene endrer ikke lageret. Lageranalyse og Lagerjusteringer bruker deretter de oppdaterte dataene."
       )
     ) {
       return;
@@ -56570,6 +56631,7 @@ function renderGlobalSyncControl(app, sb, user) {
     };
 
     syncButton.disabled = true;
+    fullSyncButton.disabled = true;
     syncButton.textContent =
       "Oppdaterer…";
 
@@ -56587,24 +56649,21 @@ function renderGlobalSyncControl(app, sb, user) {
         summary.products =
           productResult;
         return syncQuickbutikSales(
-          summary.token
+          summary.token,
+          days
         );
       })
       .then(function (salesResult) {
         summary.quickbutikSales =
           salesResult;
-        return syncZettle(
-          summary.token,
-          true
-        );
+        if (syncModeFull) {
+          return syncZettle(summary.token, true, days);
+        }
+        return null;
       })
       .then(function (previewResult) {
-        summary.zettlePreview =
-          previewResult;
-        return syncZettle(
-          summary.token,
-          false
-        );
+        summary.zettlePreview = previewResult;
+        return syncZettle(summary.token, false, days);
       })
       .then(function (importResult) {
         summary.zettleImport =
@@ -56668,6 +56727,7 @@ function renderGlobalSyncControl(app, sb, user) {
       .catch(function (error) {
         delete summary.token;
         syncButton.disabled = false;
+        fullSyncButton.disabled = false;
         syncButton.textContent =
           originalText;
         setStatus(
@@ -58223,7 +58283,8 @@ function renderPortal(sb, user, data) {
               renderInventoryAdjustmentControl(
                 parent,
                 data,
-                sb
+                sb,
+                user
               );
             }
           );
