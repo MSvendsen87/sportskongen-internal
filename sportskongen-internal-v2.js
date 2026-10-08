@@ -3012,33 +3012,18 @@
         if (!window.confirm("Godkjenne " + selected.length + " valgte lageravvik uten å skrive kommentar?\n\nAvvikene blir liggende i historikken, slik at senere fakturaer fortsatt kan matches.")) return;
         ownerApprovalButton.disabled = true;
         ownerApprovalButton.textContent = "Godkjenner…";
-        var failed = [];
-        // Existing review RPC retains adjustment records; only review_status changes.
-        // A fixed system note is used because the existing RPC expects a note.
-        var chain = Promise.resolve();
-        selected.forEach(function (row) {
-          chain = chain.then(function () {
-            return sb.rpc("internal_review_inventory_adjustment", {
-              p_adjustment_id: row.id,
-              p_note: "Godkjent uten manuell kommentar (eier)"
-            }).then(function (response) {
-              if (response.error) failed.push(String(row.id) + ": " + response.error.message);
-            }).catch(function (error) {
-              failed.push(String(row.id) + ": " + String(error));
-            });
-          });
-        });
-        chain.then(function () {
-          if (failed.length) {
-            bulkResult.textContent = "Godkjent " + (selected.length - failed.length) + " av " + selected.length + ". Feil: " + failed.join("; ");
-            bulkResult.style.color = "#991b1b";
-            ownerApprovalButton.textContent = "✅ Godkjenn valgte uten kommentar";
-            updateBulkSelection();
-          } else {
-            bulkResult.textContent = "✅ " + selected.length + " avvik godkjent. Laster listen på nytt…";
-            bulkResult.style.color = "#166534";
-            window.setTimeout(function () { window.location.reload(); }, 800);
-          }
+        sb.rpc("internal_owner_approve_inventory_adjustments", {
+          p_adjustment_ids: selected.map(function (row) { return row.id; })
+        }).then(function (response) {
+          if (response.error) throw response.error;
+          bulkResult.textContent = "✅ " + Number(response.data || 0) + " avvik godkjent. Laster listen på nytt…";
+          bulkResult.style.color = "#166534";
+          window.setTimeout(function () { window.location.reload(); }, 800);
+        }).catch(function (error) {
+          bulkResult.textContent = "Kunne ikke godkjenne: " + (error.message || String(error));
+          bulkResult.style.color = "#991b1b";
+          ownerApprovalButton.textContent = "✅ Godkjenn valgte uten kommentar";
+          updateBulkSelection();
         });
       };
     }
