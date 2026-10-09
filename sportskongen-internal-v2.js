@@ -1,4 +1,4 @@
-// Admin version: fast-sync-owner-bulk-approval-v18
+// Admin version: booking-economy-1473-v20.1 (based on exact GitHub V19)
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -1550,7 +1550,8 @@
   function renderOverviewDashboard(
     parent,
     data,
-    user
+    user,
+    sb
   ) {
     var hour =
       new Date().getHours();
@@ -1570,6 +1571,8 @@
       "Dette er arbeidsforsiden i Mission Control. Start med det som krever handling, og bruk hurtigvalgene for resten.",
       "Varetelling ny arbeidsflate"
     );
+
+    skBookingOverview(parent, sb, user);
 
     var products =
       data.products || [];
@@ -3851,8 +3854,180 @@
     loadUsers();
   }
 
+
+  // ==== GK BOOKING ECONOMY V20: owner-only, costs securely held in Supabase ====
+  function skBookingIsOwner(user) {
+    return String((user && user.email) || "").trim().toLowerCase() === "kristoffer@golfkongen.no" &&
+      String((user && user.role) || "").toLowerCase() === "owner";
+  }
+
+  function skBookingMoney(number) {
+    return (Number(number) || 0).toLocaleString("nb-NO", {minimumFractionDigits:0, maximumFractionDigits:2}) + " kr";
+  }
+
+  function skBookingDateToday() {
+    var n = new Date();
+    return n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2,"0") + "-" + String(n.getDate()).padStart(2,"0");
+  }
+
+  function skBookingField(labelText, input) {
+    var holder = el("label");
+    holder.style.display = "grid";
+    holder.style.gap = "5px";
+    holder.style.fontSize = "12px";
+    holder.style.fontWeight = "750";
+    holder.style.color = "#334155";
+    holder.appendChild(el("span", labelText));
+    input.style.padding = "10px";
+    input.style.border = "1px solid #cbd5e1";
+    input.style.borderRadius = "8px";
+    input.style.width = "100%";
+    input.style.boxSizing = "border-box";
+    holder.appendChild(input);
+    return holder;
+  }
+
+  function skBookingExpenseManager(parent, sb, user) {
+    if (!skBookingIsOwner(user)) return;
+    var section = createCollapsibleSection("🎯 Dart og simulator – utgifter (kun eier)",
+      "Investering, lisens, leie og andre kostnader. Beløp inkl. mva. Månedlige kostnader påløper én gang per kalendermåned fra startdato.", false);
+    var body = section.body;
+    var intro = el("div", "Disse kostnadene brukes bare i bookingøkonomien, og bokføres ikke automatisk i Fiken. Registrer også engangskjøp her om du vil se når investeringen er tjent inn.");
+    intro.className = "sk-note";
+    intro.style.marginBottom = "12px";
+    body.appendChild(intro);
+    var form = el("div");
+    form.style.display = "grid";
+    form.style.gridTemplateColumns = "repeat(auto-fit,minmax(180px,1fr))";
+    form.style.gap = "10px";
+    form.style.marginBottom = "12px";
+    var name = el("input"); name.placeholder = "F.eks. Simulator-lisens"; name.maxLength = 140;
+    var amount = el("input"); amount.type = "number"; amount.min = "0"; amount.max = "10000000"; amount.step = "0.01"; amount.placeholder = "Beløp i kr";
+    var area = el("select");
+    [["simulator","Simulator"],["dart","Dart"],["shared","Fellesutgifter"]].forEach(function(pair){ var o=el("option",pair[1]);o.value=pair[0];area.appendChild(o); });
+    var kind = el("select");
+    [["one_time","Engangskostnad"],["monthly","Månedlig kostnad"]].forEach(function(pair){var o=el("option",pair[1]);o.value=pair[0];kind.appendChild(o);});
+    var start = el("input"); start.type="date"; start.value=skBookingDateToday();
+    var end = el("input"); end.type="date";
+    var notes=el("input");notes.placeholder="Valgfritt: leverandør, faktura osv.";notes.maxLength=500;
+    [
+      ["Hva gjelder utgiften?",name],["Beløp inkl. mva (kr)",amount],
+      ["Gjelder",area],["Type utgift",kind],["Fra dato",start],
+      ["Til og med dato (valgfritt)",end],["Notat (valgfritt)",notes]
+    ].forEach(function(p){form.appendChild(skBookingField(p[0],p[1]));});
+    body.appendChild(form);
+    var buttons=el("div");buttons.style.display="flex";buttons.style.flexWrap="wrap";buttons.style.gap="8px";buttons.style.marginBottom="14px";
+    var save=createPrimaryButton("Lagre kostnad");
+    var reset=createButton("Nullstill felter");
+    buttons.appendChild(save);buttons.appendChild(reset);body.appendChild(buttons);
+    var msg=el("div");msg.className="sk-note";msg.style.marginBottom="10px";
+    body.appendChild(msg);
+    var list=el("div");body.appendChild(list);
+    var currentEdit=null;
+    function resetForm(){currentEdit=null;name.value="";amount.value="";area.value="simulator";kind.value="one_time";start.value=skBookingDateToday();end.value="";notes.value="";save.textContent="Lagre kostnad";}
+    reset.onclick=resetForm;
+    function readRows(){
+      msg.textContent="Henter registrerte kostnader…";
+      sb.rpc("internal_booking_economy_costs_list").then(function(res){
+        if(res.error){msg.textContent="Kunne ikke hente kostnader: "+res.error.message;return;}
+        var rows=Array.isArray(res.data)?res.data:[];
+        msg.textContent=rows.length?"Registrerte utgifter: "+rows.length:"Ingen utgifter registrert ennå.";
+        clear(list);
+        rows.forEach(function(r){
+          var row=el("div");row.style.border="1px solid #e2e8f0";row.style.borderRadius="10px";row.style.padding="10px";row.style.marginBottom="7px";
+          var line=el("div");line.style.display="flex";line.style.flexWrap="wrap";line.style.alignItems="center";line.style.justifyContent="space-between";line.style.gap="9px";
+          var textBox=el("div");textBox.style.flex="1 1 200px";
+          var areaName=r.area==="simulator"?"Simulator":r.area==="dart"?"Dart":"Felles";
+          textBox.appendChild(el("strong",r.title+" – "+skBookingMoney(r.amount_inc_vat)));
+          var extra=el("div",areaName+" · "+(r.kind==="monthly"?"Månedlig":"Engangs")+" · "+r.start_date+(r.end_date?" til "+r.end_date:"")+(r.notes?" · "+r.notes:""));
+          extra.style.fontSize="12px";extra.style.color="#475569";extra.style.marginTop="3px";textBox.appendChild(extra);
+          var edit=createButton("Endre"); edit.onclick=function(){
+            currentEdit=r.id; name.value=r.title; amount.value=r.amount_inc_vat;area.value=r.area;kind.value=r.kind;
+            start.value=r.start_date;end.value=r.end_date||"";notes.value=r.notes||"";save.textContent="Lagre endring";
+            section.wrap.scrollIntoView({behavior:"smooth",block:"start"});
+          };
+          var del=createButton("Arkiver");del.onclick=function(){
+            if(!window.confirm("Arkivere utgiften '"+r.title+"'? Den tas da ut av beregningen, men beholdes i databasen."))return;
+            del.disabled=true;
+            sb.rpc("internal_booking_economy_cost_archive",{p_id:r.id}).then(function(res2){
+              del.disabled=false;
+              if(res2.error){alert("Feil: "+res2.error.message);return;}
+              readRows();
+            });
+          };
+          line.appendChild(textBox);line.appendChild(edit);line.appendChild(del);row.appendChild(line);list.appendChild(row);
+        });
+      });
+    }
+    save.onclick=function(){
+      var v=Number(amount.value);
+      if(!name.value.trim()||!amount.value||!isFinite(v)||v<0||!start.value){alert("Fyll inn navn, gyldig beløp og dato.");return;}
+      if(end.value&&end.value<start.value){alert("Sluttdato kan ikke være før startdato.");return;}
+      var payload={p_title:name.value.trim(),p_area:area.value,p_kind:kind.value,p_amount_inc_vat:v,
+        p_start_date:start.value,p_end_date:end.value||null,p_notes:notes.value.trim(),p_id:currentEdit};
+      save.disabled=true;save.textContent="Lagrer…";
+      sb.rpc("internal_booking_economy_cost_save",payload).then(function(res){
+        save.disabled=false;
+        if(res.error){save.textContent=currentEdit?"Lagre endring":"Lagre kostnad";alert("Kunne ikke lagre: "+res.error.message);return;}
+        resetForm();msg.textContent="Kostnaden er lagret.";readRows();
+      });
+    };
+    parent.appendChild(section.wrap);
+    // Hent data først når eieren faktisk åpner utgiftsseksjonen.
+    var loaded=false;
+    section.wrap.querySelector("button").addEventListener("click",function(){if(!loaded){loaded=true;readRows();}});
+  }
+
+  function skBookingOverview(parent, sb, user) {
+    if(!skBookingIsOwner(user)) return;
+    var shell=el("div");shell.style.border="1px solid #d1d5db";shell.style.borderRadius="14px";
+    shell.style.padding="14px";shell.style.background="#fff";shell.style.margin="0 0 18px";
+    var heading=el("div");heading.style.display="flex";heading.style.justifyContent="space-between";heading.style.alignItems="center";heading.style.flexWrap="wrap";heading.style.gap="10px";
+    var title=el("strong","🎯 Dart og simulator – inntjening");title.style.fontSize="17px";heading.appendChild(title);
+    var refresh=createButton("Oppdater tall");heading.appendChild(refresh);shell.appendChild(heading);
+    var status=el("div","Henter betalte bookinger og registrerte kostnader…");status.style.fontSize="12px";status.style.color="#64748b";status.style.margin="8px 0";shell.appendChild(status);
+    var content=el("div");shell.appendChild(content);
+    parent.appendChild(shell);
+    function renderMetric(grid,label,value,color){
+      var card=el("div");card.style.padding="10px";card.style.border="1px solid #e2e8f0";card.style.borderRadius="9px";
+      var labelEl=el("div",label);labelEl.style.fontSize="12px";labelEl.style.color="#64748b";
+      var val=el("strong",value);val.style.fontSize="21px";val.style.display="block";val.style.marginTop="4px";val.style.color=color||"#0f172a";
+      card.appendChild(labelEl);card.appendChild(val);grid.appendChild(card);
+    }
+    function update(){
+      refresh.disabled=true;status.textContent="Henter siste regnskap fra registrerte betalinger…";
+      sb.rpc("internal_booking_economy_summary").then(function(res){
+        refresh.disabled=false;
+        if(res.error){status.textContent="Bookingøkonomi kunne ikke lastes: "+res.error.message;return;}
+        var v=res.data||{};var net=Number(v.net)||0;clear(content);
+        status.textContent="Per "+(v.as_of||"i dag")+" · opptjente betalte ordrelinjer fra Quickbutik og Zettle. Beløp inkl. mva.";
+        var grid=el("div");grid.style.display="grid";grid.style.gridTemplateColumns="repeat(auto-fit,minmax(160px,1fr))";grid.style.gap="9px";
+        renderMetric(grid,"Netto etter kostnader",(net>=0?"+":"−")+skBookingMoney(Math.abs(net)),net>=0?"#15803d":"#b91c1c");
+        renderMetric(grid,"Betalte bookinger",skBookingMoney(v.revenue),"#166534");
+        renderMetric(grid,"Engangs- og løpende kostnader",skBookingMoney(v.cost_total));
+        renderMetric(grid,"Inntekter denne måneden",skBookingMoney(v.revenue_this_month));
+        content.appendChild(grid);
+        var details=el("div","Dart: "+skBookingMoney(v.revenue_dart)+" · Simulator: "+skBookingMoney(v.revenue_simulator)+" · Engangskostnader: "+skBookingMoney(v.cost_one_time)+" · Påløpte månedlige kostnader: "+skBookingMoney(v.cost_monthly_accrued)+(Number(v.cost_shared)>0?" · Felleskostnader: "+skBookingMoney(v.cost_shared):""));
+        details.style.fontSize="12px";details.style.lineHeight="1.6";details.style.color="#475569";details.style.marginTop="10px";content.appendChild(details);
+        if(Number(v.cost_total)>0){
+          var pct=Math.min(100,Math.max(0,Number(v.coverage_pct)||0));
+          var track=el("div");track.style.height="9px";track.style.borderRadius="100px";track.style.background="#e2e8f0";track.style.overflow="hidden";track.style.marginTop="10px";
+          var fill=el("div");fill.style.width=pct+"%";fill.style.height="100%";fill.style.background=net>=0?"#16a34a":"#eab308";track.appendChild(fill);content.appendChild(track);
+          var caption=el("div",Number(v.coverage_pct).toLocaleString("nb-NO")+" % av påløpte kostnader dekket av betalte inntekter.");caption.style.fontSize="11px";caption.style.color="#64748b";caption.style.marginTop="4px";content.appendChild(caption);
+        }
+        var note=el("div","Dette er intern inntjeningsoversikt, ikke et fullstendig regnskapsresultat. Gebyrer og kostnader er bare med når de er registrert her. Kasseprodukt 1473 bruker variant-SKU: Dart-1t, Dart-15min, Disc-simulator-1t, Disc-simulator-15min og Leie-Dartpiler. Eksisterende nettbooking og salg kobles også med.");
+        note.style.fontSize="11px";note.style.color="#64748b";note.style.marginTop="10px";content.appendChild(note);
+      });
+    }
+    refresh.onclick=update;
+    update();
+  }
+  // ==== END GK BOOKING ECONOMY V20 ====
+
   function renderSettingsManager(parent, data, sb, user) {
     createPageHeader(parent, "Innstillinger", "Standardverdier som brukes i tilbud og kundedokumenter.", "Systemoppsett");
+
+    if (skBookingIsOwner(user)) { skBookingExpenseManager(parent, sb, user); }
 
     var settings = settingsMap(data.settings || []);
 
@@ -58155,7 +58330,8 @@ function renderPortal(sb, user, data) {
           renderOverviewDashboard(
             parent,
             data,
-            user
+            user,
+            sb
           );
         }
       },
