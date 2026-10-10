@@ -2384,6 +2384,7 @@
 
   function renderInventoryRelatedLinks(parent) {
     var wrap = el("div");
+    wrap.className="sk-focus-economy-donut";
     wrap.style.display = "flex";
     wrap.style.flexWrap = "wrap";
     wrap.style.gap = "8px";
@@ -3984,6 +3985,7 @@
       : "conic-gradient(#16a34a 0 " + progressPct + "%, #dc2626 " + progressPct + "% 100%)";
 
     var ring = el("div");
+    ring.className="sk-focus-economy-ring";
     ring.style.width = "280px";
     ring.style.height = "280px";
     ring.style.borderRadius = "50%";
@@ -3992,6 +3994,7 @@
     ring.style.boxShadow = "inset 0 0 0 1px rgba(15,23,42,.03)";
 
     var inner = el("div");
+    inner.className="sk-focus-economy-inner";
     inner.style.position = "absolute";
     inner.style.inset = "26px";
     inner.style.background = "#fff";
@@ -4003,6 +4006,7 @@
     inner.style.textAlign = "center";
 
     var value = el("div", percentLabel);
+    value.className="sk-focus-economy-percent";
     value.style.fontSize = "46px";
     value.style.fontWeight = "900";
     value.style.lineHeight = "1";
@@ -4234,10 +4238,10 @@
   }
 
   function skBookingOverview(parent, sb, user) {
-    var shell=el("div");shell.style.border="1px solid #d1d5db";shell.style.borderRadius="14px";
+    var shell=el("div");if(skBookingFocusModeActive())shell.className="sk-focus-economy-shell";shell.style.border="1px solid #d1d5db";shell.style.borderRadius="14px";
     shell.style.padding="14px";shell.style.background="#fff";shell.style.margin="0 0 18px";
     var heading=el("div");heading.style.display="flex";heading.style.justifyContent="space-between";heading.style.alignItems="center";heading.style.flexWrap="wrap";heading.style.gap="10px";
-    var title=el("strong", skBookingFocusModeActive() ? "🎯 Dart og simulator – live status" : "🎯 Dart og simulator – status");title.style.fontSize="17px";heading.appendChild(title);
+    var title=el("strong", skBookingFocusModeActive() ? "🎯 Dart og simulator – live status" : "🎯 Dart og simulator – status");title.className="sk-focus-economy-title";title.style.fontSize="17px";heading.appendChild(title);
     var actions=el("div");actions.style.display="flex";actions.style.gap="8px";actions.style.flexWrap="wrap";
     if (!skBookingFocusModeActive()) {
       var focusBtn=createButton("Åpne egen fane");
@@ -4246,13 +4250,13 @@
     }
     var refresh=createButton("Oppdater tall");actions.appendChild(refresh);heading.appendChild(actions);shell.appendChild(heading);
     var status=el("div","Henter status…");status.style.fontSize="12px";status.style.color="#64748b";status.style.margin="8px 0";shell.appendChild(status);
-    var content=el("div");shell.appendChild(content);
+    var content=el("div");content.className="sk-focus-economy-content";shell.appendChild(content);
     parent.appendChild(shell);
 
     function renderMetric(grid,label,value,color){
-      var card=el("div");card.style.padding="12px";card.style.border="1px solid #e2e8f0";card.style.borderRadius="12px";card.style.background="#fff";
-      var labelEl=el("div",label);labelEl.style.fontSize="12px";labelEl.style.color="#64748b";labelEl.style.fontWeight="800";
-      var val=el("strong",value);val.style.fontSize="24px";val.style.display="block";val.style.marginTop="6px";val.style.color=color||"#0f172a";
+      var card=el("div");card.className="sk-focus-economy-metric";card.style.padding="12px";card.style.border="1px solid #e2e8f0";card.style.borderRadius="12px";card.style.background="#fff";
+      var labelEl=el("div",label);labelEl.className="sk-focus-economy-label";labelEl.style.fontSize="12px";labelEl.style.color="#64748b";labelEl.style.fontWeight="800";
+      var val=el("strong",value);val.className="sk-focus-economy-value";val.style.fontSize="24px";val.style.display="block";val.style.marginTop="6px";val.style.color=color||"#0f172a";
       card.appendChild(labelEl);card.appendChild(val);grid.appendChild(card);
     }
 
@@ -4264,18 +4268,18 @@
         var view=skBookingDisplaySummary(res.data||{});clear(content);
         status.textContent=skBookingFocusModeActive()?"Live-visning · oppdateres hver time · rapportdato: "+view.asOf:"Sist oppdatert: "+view.asOf;
 
-        var top=el("div");top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
+        var top=el("div");top.className="sk-focus-economy-grid";top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
         top.appendChild(skBookingBuildDonut(view));
 
-        var side=el("div");side.style.display="grid";side.style.gap="10px";
-        var grid=el("div");grid.style.display="grid";grid.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";grid.style.gap="10px";
+        var side=el("div");side.className="sk-focus-economy-side";side.style.display="grid";side.style.gap="10px";
+        var grid=el("div");grid.className="sk-focus-economy-metrics";grid.style.display="grid";grid.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";grid.style.gap="10px";
         renderMetric(grid,"Totalt inn hittil",skBookingMoney(view.revenue),"#166534");
         renderMetric(grid,"Denne måneden",skBookingMoney(view.revenueThisMonth),"#0f172a");
         renderMetric(grid,"Kostnader hittil",skBookingMoney(view.cost),"#0f172a");
         renderMetric(grid,"Resultat hittil",skBookingMoney(view.net),view.net<0?"#b91c1c":"#166534");
         side.appendChild(grid);
 
-        var quick=el("div");quick.style.display="grid";quick.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";quick.style.gap="10px";
+        var quick=el("div");quick.className="sk-focus-economy-breakdown";quick.style.display="grid";quick.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";quick.style.gap="10px";
         quick.style.border="1px solid #e2e8f0";quick.style.borderRadius="12px";quick.style.padding="12px";quick.style.background="#fff";
         [
           ["Dart", skBookingMoney(view.dart)],
@@ -4284,8 +4288,8 @@
           ["Kaffe", skBookingMoney(view.coffee)]
         ].forEach(function(row){
           var box=el("div");
-          var small=el("div",row[0]);small.style.fontSize="12px";small.style.fontWeight="800";small.style.color="#64748b";
-          var big=el("div",row[1]);big.style.fontSize="18px";big.style.fontWeight="900";big.style.color="#0f172a";
+          var small=el("div",row[0]);small.className="sk-focus-economy-small";small.style.fontSize="12px";small.style.fontWeight="800";small.style.color="#64748b";
+          var big=el("div",row[1]);big.className="sk-focus-economy-big";big.style.fontSize="18px";big.style.fontWeight="900";big.style.color="#0f172a";
           box.appendChild(small);box.appendChild(big);quick.appendChild(box);
         });
         side.appendChild(quick);
@@ -58519,6 +58523,31 @@ function renderPortalFocusMode(sb, user) {
     root.style.maxWidth = "none";
     root.style.margin = "0";
     document.body.classList.add("sk-booking-focus-screen");
+    if (!document.getElementById("sk-booking-focus-large-style")) {
+      var style = document.createElement("style");
+      style.id="sk-booking-focus-large-style";
+      style.textContent = [
+        "html:has(body.sk-booking-focus-screen),body.sk-booking-focus-screen{margin:0!important;padding:0!important;min-height:100%!important;background:#f3f6fa!important;}",
+        "body.sk-booking-focus-screen #sk-internal-root{width:calc(100vw - 16px)!important;max-width:none!important;margin:0!important;padding:0!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-shell{box-sizing:border-box!important;display:flex!important;flex-direction:column!important;min-height:calc(100dvh - 16px)!important;margin:8px!important;padding:clamp(16px,2vw,32px)!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-title{font-size:clamp(23px,2.1vw,38px)!important;color:#0f172a!important;opacity:1!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-content{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-grid{flex:1!important;min-height:0!important;grid-template-columns:minmax(0,1.15fr) minmax(0,0.85fr)!important;gap:clamp(12px,1.3vw,25px)!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-donut{min-height:0!important;height:100%!important;padding:12px!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-ring{width:min(66vh,43vw,680px)!important;height:min(66vh,43vw,680px)!important;max-width:100%!important;aspect-ratio:1!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-inner{inset:9%!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-percent{font-size:clamp(50px,5vw,100px)!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-side{grid-template-rows:minmax(0,1.25fr) minmax(0,0.75fr)!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-metrics{height:100%!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-metric{display:flex!important;flex-direction:column!important;justify-content:center!important;padding:clamp(14px,1.6vw,26px)!important;min-width:0!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-label,body.sk-booking-focus-screen .sk-focus-economy-small{font-size:clamp(14px,1vw,21px)!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-value{font-size:clamp(25px,2.1vw,43px)!important;overflow-wrap:anywhere!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-big{font-size:clamp(22px,1.7vw,36px)!important;overflow-wrap:anywhere!important;}",
+        "body.sk-booking-focus-screen .sk-focus-economy-breakdown{align-content:space-around!important;padding:clamp(15px,1.5vw,28px)!important;}",
+        "@media(max-width:850px){body.sk-booking-focus-screen .sk-focus-economy-grid{grid-template-columns:minmax(0,1fr)!important;}body.sk-booking-focus-screen .sk-focus-economy-ring{width:min(58vw,45vh)!important;height:min(58vw,45vh)!important;}body.sk-booking-focus-screen .sk-focus-economy-donut{min-height:280px!important;}body.sk-booking-focus-screen .sk-focus-economy-side{grid-template-rows:auto auto!important;}}"
+      ].join("\n");
+      document.head.appendChild(style);
+    }
     skBookingOverview(host, sb, user);
   }
 
