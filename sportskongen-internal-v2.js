@@ -3855,7 +3855,7 @@
   }
 
 
-  // ==== GK BOOKING ECONOMY V20: owner-only, costs securely held in Supabase ====
+  // ==== GK BOOKING ECONOMY V20.7: simplified staff overview + owner settings ====
   function skBookingIsOwner(user) {
     return String((user && user.email) || "").trim().toLowerCase() === "kristoffer@golfkongen.no" &&
       String((user && user.role) || "").toLowerCase() === "owner";
@@ -3868,6 +3868,160 @@
   function skBookingDateToday() {
     var n = new Date();
     return n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2,"0") + "-" + String(n.getDate()).padStart(2,"0");
+  }
+
+  function skBookingNotifyOverviewChanged() {
+    try { window.dispatchEvent(new CustomEvent("sk-booking-economy-changed")); } catch (e) {}
+  }
+
+  function skBookingRatioColor(value) {
+    var ratio = Math.max(0, Number(value) || 0);
+    if (ratio >= 1) return "#16a34a";
+    if (ratio >= 0.75) return "#65a30d";
+    if (ratio >= 0.5) return "#ca8a04";
+    if (ratio >= 0.25) return "#ea580c";
+    return "#dc2626";
+  }
+
+  function skBookingDisplaySummary(v) {
+    v = v || {};
+    var rawRevenue = Number(v.revenue) || 0;
+    var rawDart = Number(v.revenue_dart) || 0;
+    var rawSimulator = Number(v.revenue_simulator) || 0;
+    var rawCoffee = Number(v.revenue_coffee) || 0;
+    var rawVipps = Number(v.revenue_vipps) || 0;
+    var rawMonth = Number(v.revenue_this_month) || 0;
+    var rawVippsDart = Number(v.revenue_vipps_dart) || 0;
+    var rawVippsSimulator = Number(v.revenue_vipps_simulator) || 0;
+    var rawVippsCoffee = Number(v.revenue_vipps_coffee) || 0;
+    var cost = Number(v.cost_total) || 0;
+    var zeroRatedRevenue = rawDart + rawSimulator;
+    var zeroShare = rawRevenue > 0 ? Math.max(0, Math.min(1, zeroRatedRevenue / rawRevenue)) : 1;
+    var correctedRevenue = rawRevenue + (zeroRatedRevenue * 0.25);
+    var correctedDart = rawDart * 1.25;
+    var correctedSimulator = rawSimulator * 1.25;
+    var correctedVipps = rawVipps + ((rawVippsDart + rawVippsSimulator) * 0.25);
+    var correctedMonth = rawMonth * (1 + (zeroShare * 0.25));
+    return {
+      asOf: v.as_of || "i dag",
+      revenue: correctedRevenue,
+      revenueThisMonth: correctedMonth,
+      coffee: rawCoffee,
+      vipps: correctedVipps,
+      cost: cost,
+      net: correctedRevenue - cost,
+      dart: correctedDart,
+      simulator: correctedSimulator,
+      vippsDart: rawVippsDart * 1.25,
+      vippsSimulator: rawVippsSimulator * 1.25,
+      vippsCoffee: rawVippsCoffee,
+      coverage: cost > 0 ? correctedRevenue / cost : 1,
+      oneTimeCost: Number(v.cost_one_time) || 0,
+      monthlyCost: Number(v.cost_monthly_accrued) || 0,
+      sharedCost: Number(v.cost_shared) || 0
+    };
+  }
+
+  function skBookingCreateMvaPill(text, tone) {
+    var pill = el("span", text);
+    pill.style.display = "inline-flex";
+    pill.style.alignItems = "center";
+    pill.style.padding = "6px 10px";
+    pill.style.borderRadius = "999px";
+    pill.style.fontSize = "12px";
+    pill.style.fontWeight = "800";
+    pill.style.border = "1px solid #dbe3ec";
+    if (tone === "zero") {
+      pill.style.background = "#ecfdf5";
+      pill.style.color = "#166534";
+      pill.style.borderColor = "#bbf7d0";
+    } else {
+      pill.style.background = "#eff6ff";
+      pill.style.color = "#1d4ed8";
+      pill.style.borderColor = "#bfdbfe";
+    }
+    return pill;
+  }
+
+  function skBookingBuildDonut(summary) {
+    var wrap = el("div");
+    wrap.style.display = "grid";
+    wrap.style.gridTemplateColumns = "150px minmax(0,1fr)";
+    wrap.style.gap = "16px";
+    wrap.style.alignItems = "center";
+    wrap.style.border = "1px solid #e2e8f0";
+    wrap.style.borderRadius = "14px";
+    wrap.style.padding = "14px";
+    wrap.style.background = "#fff";
+
+    var ratio = Math.max(0, Number(summary.coverage) || 0);
+    var progress = Math.max(0, Math.min(1, ratio));
+    var color = skBookingRatioColor(ratio);
+    var size = 120;
+    var stroke = 12;
+    var radius = (size / 2) - stroke;
+    var circumference = 2 * Math.PI * radius;
+    var offset = circumference * (1 - progress);
+
+    var left = el("div");
+    left.style.position = "relative";
+    left.style.width = size + "px";
+    left.style.height = size + "px";
+    left.innerHTML = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" aria-hidden="true">'
+      + '<circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+radius+'" fill="none" stroke="#e5e7eb" stroke-width="'+stroke+'"></circle>'
+      + '<circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+radius+'" fill="none" stroke="'+color+'" stroke-width="'+stroke+'" stroke-linecap="round" transform="rotate(-90 '+(size/2)+' '+(size/2)+')" stroke-dasharray="'+circumference+'" stroke-dashoffset="'+offset+'"></circle>'
+      + '</svg>';
+    var center = el("div", Math.round(ratio * 100) + "%");
+    center.style.position = "absolute";
+    center.style.inset = "0";
+    center.style.display = "flex";
+    center.style.alignItems = "center";
+    center.style.justifyContent = "center";
+    center.style.fontSize = "22px";
+    center.style.fontWeight = "900";
+    center.style.color = color;
+    left.appendChild(center);
+    wrap.appendChild(left);
+
+    var right = el("div");
+    var heading = el("strong", ratio >= 1 ? "Målet er dekket" : "På vei mot dekning");
+    heading.style.display = "block";
+    heading.style.fontSize = "18px";
+    heading.style.color = "#0f172a";
+    right.appendChild(heading);
+    var sub = el("div", ratio >= 1 ? "Inntektene har passert registrerte kostnader." : "Kaken blir grønnere etter hvert som inntektene dekker kostnadene.");
+    sub.style.marginTop = "5px";
+    sub.style.fontSize = "13px";
+    sub.style.color = "#64748b";
+    right.appendChild(sub);
+    var statRow = el("div");
+    statRow.style.display = "flex";
+    statRow.style.flexWrap = "wrap";
+    statRow.style.gap = "8px";
+    statRow.style.marginTop = "12px";
+    [
+      ["Inn", skBookingMoney(summary.revenue), "#ecfdf5", "#166534"],
+      ["Ut", skBookingMoney(summary.cost), "#fef2f2", "#b91c1c"],
+      ["Resultat", skBookingMoney(summary.net), summary.net >= 0 ? "#ecfdf5" : "#fef2f2", summary.net >= 0 ? "#166534" : "#b91c1c"]
+    ].forEach(function(row) {
+      var box = el("div");
+      box.style.padding = "8px 10px";
+      box.style.borderRadius = "10px";
+      box.style.background = row[2];
+      var t = el("div", row[0]);
+      t.style.fontSize = "11px";
+      t.style.fontWeight = "800";
+      t.style.color = "#64748b";
+      var v = el("div", row[1]);
+      v.style.fontSize = "15px";
+      v.style.fontWeight = "900";
+      v.style.color = row[3];
+      box.appendChild(t);
+      box.appendChild(v);
+      statRow.appendChild(box);
+    });
+    right.appendChild(statRow);
+    return wrap;
   }
 
   function skBookingField(labelText, input) {
@@ -3953,6 +4107,7 @@
               del.disabled=false;
               if(res2.error){alert("Feil: "+res2.error.message);return;}
               readRows();
+              skBookingNotifyOverviewChanged();
             });
           };
           line.appendChild(textBox);line.appendChild(edit);line.appendChild(del);row.appendChild(line);list.appendChild(row);
@@ -3970,6 +4125,7 @@
         save.disabled=false;
         if(res.error){save.textContent=currentEdit?"Lagre endring":"Lagre kostnad";alert("Kunne ikke lagre: "+res.error.message);return;}
         resetForm();msg.textContent="Kostnaden er lagret.";readRows();
+        skBookingNotifyOverviewChanged();
       });
     };
     parent.appendChild(section.wrap);
@@ -4011,7 +4167,7 @@
           var item=el("div");item.style.display="flex";item.style.gap="9px";item.style.alignItems="center";item.style.flexWrap="wrap";item.style.borderBottom="1px solid #e2e8f0";item.style.padding="8px 0";
           var label=el("div",(r.sale_date||"")+" · "+skBookingMoney(r.amount_inc_vat)+" inkl. mva"+(r.notes?" · "+r.notes:""));label.style.flex="1 1 230px";item.appendChild(label);
           var edit=createButton("Endre");edit.onclick=function(){editing=r.id;date.value=r.sale_date;amount.value=r.amount_inc_vat;notes.value=r.notes||"";save.textContent="Lagre endring";section.wrap.scrollIntoView({behavior:"smooth",block:"start"});};
-          var archive=createButton("Arkiver");archive.onclick=function(){if(!window.confirm("Arkivere dette kaffesalget?"))return;archive.disabled=true;sb.rpc("internal_booking_coffee_archive",{p_id:r.id}).then(function(res){archive.disabled=false;if(res.error){alert(res.error.message);return;}load();});};
+          var archive=createButton("Arkiver");archive.onclick=function(){if(!window.confirm("Arkivere dette kaffesalget?"))return;archive.disabled=true;sb.rpc("internal_booking_coffee_archive",{p_id:r.id}).then(function(res){archive.disabled=false;if(res.error){alert(res.error.message);return;}load();skBookingNotifyOverviewChanged();});};
           item.appendChild(edit);item.appendChild(archive);list.appendChild(item);
         });
       });
@@ -4024,6 +4180,7 @@
         save.disabled=false;
         if(res.error){alert("Kunne ikke lagre: "+res.error.message);return;}
         reset();load();
+        skBookingNotifyOverviewChanged();
       });
     };
     parent.appendChild(section.wrap);
@@ -4062,7 +4219,7 @@
         var a=r.area==="dart"?"Dart":r.area==="simulator"?"Simulator":"Kaffe";
         var label=el("div",r.sale_date+" · "+a+" · "+skBookingMoney(r.amount_inc_vat)+" inkl. mva"+(r.notes?" · "+r.notes:""));label.style.flex="1 1 260px";item.appendChild(label);
         var edit=createButton("Endre");edit.onclick=function(){editing=r.id;date.value=r.sale_date;area.value=r.area;amount.value=r.amount_inc_vat;notes.value=r.notes||"";save.textContent="Lagre endring";section.wrap.scrollIntoView({behavior:"smooth",block:"start"});};
-        var del=createButton("Arkiver");del.onclick=function(){if(!window.confirm("Arkivere denne Vipps-registreringen?"))return;del.disabled=true;sb.rpc("internal_booking_manual_vipps_archive",{p_id:r.id}).then(function(resp){del.disabled=false;if(resp.error){alert(resp.error.message);return;}load();});};
+        var del=createButton("Arkiver");del.onclick=function(){if(!window.confirm("Arkivere denne Vipps-registreringen?"))return;del.disabled=true;sb.rpc("internal_booking_manual_vipps_archive",{p_id:r.id}).then(function(resp){del.disabled=false;if(resp.error){alert(resp.error.message);return;}load();skBookingNotifyOverviewChanged();});};
         item.appendChild(edit);item.appendChild(del);list.appendChild(item);
       });
     });}
@@ -4073,43 +4230,69 @@
   }
 
   function skBookingOverview(parent, sb, user) {
-    if(!skBookingIsOwner(user)) return;
     var shell=el("div");shell.style.border="1px solid #d1d5db";shell.style.borderRadius="14px";
     shell.style.padding="14px";shell.style.background="#fff";shell.style.margin="0 0 18px";
     var heading=el("div");heading.style.display="flex";heading.style.justifyContent="space-between";heading.style.alignItems="center";heading.style.flexWrap="wrap";heading.style.gap="10px";
-    var title=el("strong","🎯 Dart og simulator – inntjening");title.style.fontSize="17px";heading.appendChild(title);
+    var title=el("strong","🎯 Dart og simulator – status");title.style.fontSize="17px";heading.appendChild(title);
     var refresh=createButton("Oppdater tall");heading.appendChild(refresh);shell.appendChild(heading);
-    var status=el("div","Henter betalte bookinger og registrerte kostnader…");status.style.fontSize="12px";status.style.color="#64748b";status.style.margin="8px 0";shell.appendChild(status);
+    var status=el("div","Henter status…");status.style.fontSize="12px";status.style.color="#64748b";status.style.margin="8px 0";shell.appendChild(status);
     var content=el("div");shell.appendChild(content);
     parent.appendChild(shell);
+
     function renderMetric(grid,label,value,color){
-      var card=el("div");card.style.padding="10px";card.style.border="1px solid #e2e8f0";card.style.borderRadius="9px";
-      var labelEl=el("div",label);labelEl.style.fontSize="12px";labelEl.style.color="#64748b";
-      var val=el("strong",value);val.style.fontSize="21px";val.style.display="block";val.style.marginTop="4px";val.style.color=color||"#0f172a";
+      var card=el("div");card.style.padding="12px";card.style.border="1px solid #e2e8f0";card.style.borderRadius="12px";card.style.background="#fff";
+      var labelEl=el("div",label);labelEl.style.fontSize="12px";labelEl.style.color="#64748b";labelEl.style.fontWeight="800";
+      var val=el("strong",value);val.style.fontSize="24px";val.style.display="block";val.style.marginTop="6px";val.style.color=color||"#0f172a";
       card.appendChild(labelEl);card.appendChild(val);grid.appendChild(card);
     }
+
     function update(){
-      refresh.disabled=true;status.textContent="Henter siste regnskap fra registrerte betalinger…";
+      refresh.disabled=true;status.textContent="Oppdaterer status…";
       sb.rpc("internal_booking_economy_summary").then(function(res){
         refresh.disabled=false;
-        if(res.error){status.textContent="Bookingøkonomi kunne ikke lastes: "+res.error.message;return;}
-        var v=res.data||{};clear(content);
-        status.textContent="Per "+(v.as_of||"i dag")+" · Quickbutik og Zettle: betalte bookingprodukter. Direkte Vipps: manuelt registrert. Beløp vises ekskl. mva.";
-        var grid=el("div");grid.style.display="grid";grid.style.gridTemplateColumns="repeat(auto-fit,minmax(160px,1fr))";grid.style.gap="9px";
-        renderMetric(grid,"Booking og manuell kaffe eks. mva",skBookingMoney(v.revenue),"#166534");
-        renderMetric(grid,"Inntekter denne måneden eks. mva",skBookingMoney(v.revenue_this_month));
-        renderMetric(grid,"Kaffe totalt eks. mva",skBookingMoney(v.revenue_coffee));
-        renderMetric(grid,"Manuell Vipps eks. mva",skBookingMoney(v.revenue_vipps));
-        renderMetric(grid,"Registrerte kostnader eks. mva",skBookingMoney(v.cost_total));
-        renderMetric(grid,"Resultat før skatt (foreløpig)",skBookingMoney(v.net),Number(v.net)<0?"#b91c1c":"#166534");
-        content.appendChild(grid);
-        var details=el("div","Dart eks. mva: "+skBookingMoney(v.revenue_dart)+" · Simulator eks. mva: "+skBookingMoney(v.revenue_simulator)+" · Derav manuell Vipps dart: "+skBookingMoney(v.revenue_vipps_dart)+" · Vipps simulator: "+skBookingMoney(v.revenue_vipps_simulator)+" · Vipps kaffe: "+skBookingMoney(v.revenue_vipps_coffee)+" · Engangskostnader (registrert): "+skBookingMoney(v.cost_one_time)+" · Påløpte månedskostnader (registrert): "+skBookingMoney(v.cost_monthly_accrued)+(Number(v.cost_shared)>0?" · Felleskostnader (registrert): "+skBookingMoney(v.cost_shared):""));
-        details.style.fontSize="12px";details.style.lineHeight="1.6";details.style.color="#475569";details.style.marginTop="10px";content.appendChild(details);
-        var note=el("div","Alle kostnader er oppgitt registrert ekskl. mva, og resultatet viser derfor inntekter ekskl. mva minus registrerte kostnader ekskl. mva. VIKTIG: Resultatet er foreløpig, ikke et avstemt regnskap. Ordrelinjer kan ha rabatter inkludert; ekstra generell rabatt ville gitt dobbelt fratrekk. Oppgjør, gavekort, refusjoner, medlemsbetalinger og eventuelle ikke-importerte inntekter må kontrolleres mot betalingskildene. Direkte Vipps og manuell kaffe må ikke være importert fra Quickbutik eller Zettle. Månedskostnader periodiseres fra startdato til eventuell sluttdato. Ingen automatisk Fiken-bokføring utføres.");
-        note.className="sk-warning";note.style.fontSize="12px";note.style.lineHeight="1.6";note.style.marginTop="12px";content.appendChild(note);
+        if(res.error){status.textContent="Kunne ikke hente status: "+res.error.message;return;}
+        var view=skBookingDisplaySummary(res.data||{});clear(content);
+        status.textContent="Sist oppdatert: "+view.asOf;
+
+        var top=el("div");top.style.display="grid";top.style.gridTemplateColumns="minmax(280px,1.1fr) minmax(240px,.9fr)";top.style.gap="12px";top.style.alignItems="stretch";
+        top.appendChild(skBookingBuildDonut(view));
+
+        var side=el("div");side.style.display="grid";side.style.gap="10px";
+        var grid=el("div");grid.style.display="grid";grid.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";grid.style.gap="10px";
+        renderMetric(grid,"Totalt inn hittil",skBookingMoney(view.revenue),"#166534");
+        renderMetric(grid,"Denne måneden",skBookingMoney(view.revenueThisMonth),"#0f172a");
+        renderMetric(grid,"Kostnader hittil",skBookingMoney(view.cost),"#0f172a");
+        renderMetric(grid,"Resultat hittil",skBookingMoney(view.net),view.net<0?"#b91c1c":"#166534");
+        side.appendChild(grid);
+
+        var quick=el("div");quick.style.display="grid";quick.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";quick.style.gap="10px";
+        quick.style.border="1px solid #e2e8f0";quick.style.borderRadius="12px";quick.style.padding="12px";quick.style.background="#fff";
+        [
+          ["Dart", skBookingMoney(view.dart)],
+          ["Simulator", skBookingMoney(view.simulator)],
+          ["Vipps direkte", skBookingMoney(view.vipps)],
+          ["Kaffe", skBookingMoney(view.coffee)]
+        ].forEach(function(row){
+          var box=el("div");
+          var small=el("div",row[0]);small.style.fontSize="12px";small.style.fontWeight="800";small.style.color="#64748b";
+          var big=el("div",row[1]);big.style.fontSize="18px";big.style.fontWeight="900";big.style.color="#0f172a";
+          box.appendChild(small);box.appendChild(big);quick.appendChild(box);
+        });
+        side.appendChild(quick);
+        top.appendChild(side);
+        content.appendChild(top);
+
+        var mva=el("div");mva.style.display="flex";mva.style.flexWrap="wrap";mva.style.gap="8px";mva.style.marginTop="12px";
+        mva.appendChild(skBookingCreateMvaPill("Dartbooking 0% mva","zero"));
+        mva.appendChild(skBookingCreateMvaPill("Disc simulator 0% mva","zero"));
+        mva.appendChild(skBookingCreateMvaPill("Leie dartpiler 25% mva","vat"));
+        mva.appendChild(skBookingCreateMvaPill("Hele lokalet 25% mva","vat"));
+        mva.appendChild(skBookingCreateMvaPill("Kaffe 25% mva","vat"));
+        content.appendChild(mva);
       });
     }
     refresh.onclick=update;
+    window.addEventListener("sk-booking-economy-changed", update);
     update();
   }
   // ==== END GK BOOKING ECONOMY V20 ====
