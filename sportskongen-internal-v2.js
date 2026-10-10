@@ -1,4 +1,4 @@
-// Admin version: booking-economy-1473-v20.1 (based on exact GitHub V19)
+// Admin version: booking-economy-1473-v20.5 (revenue and confirmed costs ex VAT)
 (function () {
   var allowedPath = "/sider/sportskongen-admin";
 
@@ -3890,9 +3890,9 @@
   function skBookingExpenseManager(parent, sb, user) {
     if (!skBookingIsOwner(user)) return;
     var section = createCollapsibleSection("🎯 Dart og simulator – utgifter (kun eier)",
-      "Investering, lisens, leie og andre kostnader. Beløp inkl. mva. Månedlige kostnader påløper én gang per kalendermåned fra startdato.", false);
+      "Investering, lisens, leie og andre kostnader. Alle kostnader registreres ekskl. mva. Månedlige kostnader påløper én gang per kalendermåned fra startdato.", false);
     var body = section.body;
-    var intro = el("div", "Disse kostnadene brukes bare i bookingøkonomien, og bokføres ikke automatisk i Fiken. Registrer også engangskjøp her om du vil se når investeringen er tjent inn.");
+    var intro = el("div", "Alle kostnader er bekreftet registrert ekskl. mva. Kostnadene bokføres ikke automatisk i Fiken.");
     intro.className = "sk-note";
     intro.style.marginBottom = "12px";
     body.appendChild(intro);
@@ -3911,7 +3911,7 @@
     var end = el("input"); end.type="date";
     var notes=el("input");notes.placeholder="Valgfritt: leverandør, faktura osv.";notes.maxLength=500;
     [
-      ["Hva gjelder utgiften?",name],["Beløp inkl. mva (kr)",amount],
+      ["Hva gjelder utgiften?",name],["Beløp ekskl. mva",amount],
       ["Gjelder",area],["Type utgift",kind],["Fra dato",start],
       ["Til og med dato (valgfritt)",end],["Notat (valgfritt)",notes]
     ].forEach(function(p){form.appendChild(skBookingField(p[0],p[1]));});
@@ -3978,6 +3978,100 @@
     section.wrap.querySelector("button").addEventListener("click",function(){if(!loaded){loaded=true;readRows();}});
   }
 
+  // V20.3: Egen registrering av kaffesalg knyttet til simulator/dart.
+  // Belop lagres inkl. mva og holdes separat fra automatiske bookingsalg.
+  function skBookingCoffeeManager(parent, sb, user) {
+    if (!skBookingIsOwner(user)) return;
+    var section=createCollapsibleSection("☕ Kaffesalg – dart og simulator (kun eier)",
+      "Registrer kun kaffesalg som ikke allerede finnes i automatisk import. Summene lagres inkl. mva og vises separat i oversikten.", false);
+    var body=section.body;
+    var warning=el("div","Ikke registrer samme Zettle-/Quickbutik-salg på nytt. Dette skjemaet gjelder manuell tilleggsinntekt, f.eks. Vipps-betalinger som ikke er importert. Beløp skrives inn inkl. mva.");
+    warning.className="sk-warning";warning.style.marginBottom="10px";body.appendChild(warning);
+    var fields=el("div");fields.style.display="grid";fields.style.gridTemplateColumns="repeat(auto-fit,minmax(180px,1fr))";fields.style.gap="10px";
+    var date=el("input");date.type="date";date.value=skBookingDateToday();
+    var amount=el("input");amount.type="number";amount.min="0.01";amount.step="0.01";amount.placeholder="Beløp inkl. mva";
+    var notes=el("input");notes.placeholder="Betalingsmåte / beskrivelse";notes.maxLength=500;
+    [["Salgsdato",date],["Beløp inkl. mva",amount],["Notat (valgfritt)",notes]].forEach(function(x){fields.appendChild(skBookingField(x[0],x[1]));});
+    body.appendChild(fields);
+    var buttons=el("div");buttons.style.display="flex";buttons.style.gap="8px";buttons.style.margin="12px 0";
+    var save=createPrimaryButton("Lagre kaffesalg");var cancel=createButton("Nullstill");buttons.appendChild(save);buttons.appendChild(cancel);body.appendChild(buttons);
+    var info=el("div");info.className="sk-note";body.appendChild(info);
+    var list=el("div");list.style.marginTop="10px";body.appendChild(list);
+    var editing=null;
+    function reset(){editing=null;date.value=skBookingDateToday();amount.value="";notes.value="";save.textContent="Lagre kaffesalg";}
+    cancel.onclick=reset;
+    function load(){
+      info.textContent="Henter kaffesalg…";
+      sb.rpc("internal_booking_coffee_list").then(function(result){
+        if(result.error){info.textContent="Kunne ikke hente kaffesalg: "+result.error.message;return;}
+        var rows=Array.isArray(result.data)?result.data:[];
+        info.textContent=rows.length?"Registrerte kaffesalg: "+rows.length:"Ingen kaffesalg registrert.";
+        clear(list);
+        rows.forEach(function(r){
+          var item=el("div");item.style.display="flex";item.style.gap="9px";item.style.alignItems="center";item.style.flexWrap="wrap";item.style.borderBottom="1px solid #e2e8f0";item.style.padding="8px 0";
+          var label=el("div",(r.sale_date||"")+" · "+skBookingMoney(r.amount_inc_vat)+" inkl. mva"+(r.notes?" · "+r.notes:""));label.style.flex="1 1 230px";item.appendChild(label);
+          var edit=createButton("Endre");edit.onclick=function(){editing=r.id;date.value=r.sale_date;amount.value=r.amount_inc_vat;notes.value=r.notes||"";save.textContent="Lagre endring";section.wrap.scrollIntoView({behavior:"smooth",block:"start"});};
+          var archive=createButton("Arkiver");archive.onclick=function(){if(!window.confirm("Arkivere dette kaffesalget?"))return;archive.disabled=true;sb.rpc("internal_booking_coffee_archive",{p_id:r.id}).then(function(res){archive.disabled=false;if(res.error){alert(res.error.message);return;}load();});};
+          item.appendChild(edit);item.appendChild(archive);list.appendChild(item);
+        });
+      });
+    }
+    save.onclick=function(){
+      var value=Number(amount.value);
+      if(!date.value||!Number.isFinite(value)||value<=0){alert("Angi dato og et gyldig beløp over 0.");return;}
+      save.disabled=true;
+      sb.rpc("internal_booking_coffee_save",{p_sale_date:date.value,p_amount_inc_vat:value,p_notes:notes.value.trim(),p_id:editing}).then(function(res){
+        save.disabled=false;
+        if(res.error){alert("Kunne ikke lagre: "+res.error.message);return;}
+        reset();load();
+      });
+    };
+    parent.appendChild(section.wrap);
+    var loaded=false;section.wrap.querySelector("button").addEventListener("click",function(){if(!loaded){loaded=true;load();}});
+  }
+
+
+  // V20.6: Manuelle Vipps-betalinger som IKKE finnes i Zettle/Quickbutik.
+  function skBookingVippsManager(parent, sb, user) {
+    if (!skBookingIsOwner(user)) return;
+    var section=createCollapsibleSection("Vipps – manuelle betalinger (kun eier)",
+      "Kun Vipps-inntekter som ikke er importert fra Quickbutik eller Zettle. Beløp registreres inkl. mva, og inntektsoversikten viser beløp ekskl. mva.", false);
+    var body=section.body;
+    var warning=el("div","Unngå dobbeltføring: Vipps-betalinger gjennom Quickbutik skal IKKE registreres her. Registrer kun Vipps som du har mottatt direkte utenom kassen.");
+    warning.className="sk-warning";warning.style.marginBottom="10px";body.appendChild(warning);
+    var fields=el("div");fields.style.display="grid";fields.style.gridTemplateColumns="repeat(auto-fit,minmax(180px,1fr))";fields.style.gap="10px";
+    var date=el("input");date.type="date";date.value=skBookingDateToday();
+    var area=el("select");[["dart","Dart / pilsett"],["simulator","Disc simulator"],["coffee","Kaffe / servering"]].forEach(function(a){var option=el("option",a[1]);option.value=a[0];area.appendChild(option);});
+    var amount=el("input");amount.type="number";amount.min="0.01";amount.step="0.01";amount.placeholder="Innbetalt beløp inkl. mva";
+    var notes=el("input");notes.placeholder="Vipps-referanse / beskrivelse";notes.maxLength=500;
+    [["Dato",date],["Gjelder",area],["Faktisk Vipps-beløp inkl. mva",amount],["Notat (valgfritt)",notes]].forEach(function(x){fields.appendChild(skBookingField(x[0],x[1]));});
+    body.appendChild(fields);
+    var controls=el("div");controls.style.display="flex";controls.style.flexWrap="wrap";controls.style.gap="8px";controls.style.margin="12px 0";
+    var save=createPrimaryButton("Registrer Vipps-betaling");var cancel=createButton("Nullstill");controls.appendChild(save);controls.appendChild(cancel);body.appendChild(controls);
+    var status=el("div");status.className="sk-note";body.appendChild(status);
+    var list=el("div");list.style.marginTop="10px";body.appendChild(list);
+    var editing=null;
+    function reset(){editing=null;date.value=skBookingDateToday();area.value="dart";amount.value="";notes.value="";save.textContent="Registrer Vipps-betaling";}
+    cancel.onclick=reset;
+    function load(){status.textContent="Henter Vipps-registreringer…";sb.rpc("internal_booking_manual_vipps_list").then(function(res){
+      if(res.error){status.textContent="Kunne ikke hente Vipps: "+res.error.message;return;}
+      var rows=Array.isArray(res.data)?res.data:[];var active=rows.filter(function(r){return r.is_active;});
+      status.textContent="Aktive manuelle Vipps-registreringer: "+active.length;
+      clear(list);active.forEach(function(r){
+        var item=el("div");item.style.display="flex";item.style.flexWrap="wrap";item.style.alignItems="center";item.style.gap="8px";item.style.borderBottom="1px solid #e2e8f0";item.style.padding="9px 0";
+        var a=r.area==="dart"?"Dart":r.area==="simulator"?"Simulator":"Kaffe";
+        var label=el("div",r.sale_date+" · "+a+" · "+skBookingMoney(r.amount_inc_vat)+" inkl. mva"+(r.notes?" · "+r.notes:""));label.style.flex="1 1 260px";item.appendChild(label);
+        var edit=createButton("Endre");edit.onclick=function(){editing=r.id;date.value=r.sale_date;area.value=r.area;amount.value=r.amount_inc_vat;notes.value=r.notes||"";save.textContent="Lagre endring";section.wrap.scrollIntoView({behavior:"smooth",block:"start"});};
+        var del=createButton("Arkiver");del.onclick=function(){if(!window.confirm("Arkivere denne Vipps-registreringen?"))return;del.disabled=true;sb.rpc("internal_booking_manual_vipps_archive",{p_id:r.id}).then(function(resp){del.disabled=false;if(resp.error){alert(resp.error.message);return;}load();});};
+        item.appendChild(edit);item.appendChild(del);list.appendChild(item);
+      });
+    });}
+    save.onclick=function(){var v=Number(amount.value);if(!date.value||date.value>skBookingDateToday()||!Number.isFinite(v)||v<=0){alert("Fyll inn gyldig dato og faktisk betalt beløp.");return;}
+      save.disabled=true;sb.rpc("internal_booking_manual_vipps_save",{p_sale_date:date.value,p_area:area.value,p_amount_inc_vat:v,p_notes:notes.value.trim(),p_id:editing}).then(function(resp){save.disabled=false;if(resp.error){alert("Kunne ikke lagre Vipps: "+resp.error.message);return;}reset();status.textContent="Vipps-betalingen er lagret. Trykk Oppdater tall i oversikten.";load();});
+    };
+    parent.appendChild(section.wrap);var loaded=false;section.wrap.querySelector("button").addEventListener("click",function(){if(!loaded){loaded=true;load();}});
+  }
+
   function skBookingOverview(parent, sb, user) {
     if(!skBookingIsOwner(user)) return;
     var shell=el("div");shell.style.border="1px solid #d1d5db";shell.style.borderRadius="14px";
@@ -3999,24 +4093,20 @@
       sb.rpc("internal_booking_economy_summary").then(function(res){
         refresh.disabled=false;
         if(res.error){status.textContent="Bookingøkonomi kunne ikke lastes: "+res.error.message;return;}
-        var v=res.data||{};var net=Number(v.net)||0;clear(content);
-        status.textContent="Per "+(v.as_of||"i dag")+" · opptjente betalte ordrelinjer fra Quickbutik og Zettle. Beløp inkl. mva.";
+        var v=res.data||{};clear(content);
+        status.textContent="Per "+(v.as_of||"i dag")+" · Quickbutik og Zettle: betalte bookingprodukter. Direkte Vipps: manuelt registrert. Beløp vises ekskl. mva.";
         var grid=el("div");grid.style.display="grid";grid.style.gridTemplateColumns="repeat(auto-fit,minmax(160px,1fr))";grid.style.gap="9px";
-        renderMetric(grid,"Netto etter kostnader",(net>=0?"+":"−")+skBookingMoney(Math.abs(net)),net>=0?"#15803d":"#b91c1c");
-        renderMetric(grid,"Betalte bookinger",skBookingMoney(v.revenue),"#166534");
-        renderMetric(grid,"Engangs- og løpende kostnader",skBookingMoney(v.cost_total));
-        renderMetric(grid,"Inntekter denne måneden",skBookingMoney(v.revenue_this_month));
+        renderMetric(grid,"Booking og manuell kaffe eks. mva",skBookingMoney(v.revenue),"#166534");
+        renderMetric(grid,"Inntekter denne måneden eks. mva",skBookingMoney(v.revenue_this_month));
+        renderMetric(grid,"Kaffe totalt eks. mva",skBookingMoney(v.revenue_coffee));
+        renderMetric(grid,"Manuell Vipps eks. mva",skBookingMoney(v.revenue_vipps));
+        renderMetric(grid,"Registrerte kostnader eks. mva",skBookingMoney(v.cost_total));
+        renderMetric(grid,"Resultat før skatt (foreløpig)",skBookingMoney(v.net),Number(v.net)<0?"#b91c1c":"#166534");
         content.appendChild(grid);
-        var details=el("div","Dart: "+skBookingMoney(v.revenue_dart)+" · Simulator: "+skBookingMoney(v.revenue_simulator)+" · Engangskostnader: "+skBookingMoney(v.cost_one_time)+" · Påløpte månedlige kostnader: "+skBookingMoney(v.cost_monthly_accrued)+(Number(v.cost_shared)>0?" · Felleskostnader: "+skBookingMoney(v.cost_shared):""));
+        var details=el("div","Dart eks. mva: "+skBookingMoney(v.revenue_dart)+" · Simulator eks. mva: "+skBookingMoney(v.revenue_simulator)+" · Derav manuell Vipps dart: "+skBookingMoney(v.revenue_vipps_dart)+" · Vipps simulator: "+skBookingMoney(v.revenue_vipps_simulator)+" · Vipps kaffe: "+skBookingMoney(v.revenue_vipps_coffee)+" · Engangskostnader (registrert): "+skBookingMoney(v.cost_one_time)+" · Påløpte månedskostnader (registrert): "+skBookingMoney(v.cost_monthly_accrued)+(Number(v.cost_shared)>0?" · Felleskostnader (registrert): "+skBookingMoney(v.cost_shared):""));
         details.style.fontSize="12px";details.style.lineHeight="1.6";details.style.color="#475569";details.style.marginTop="10px";content.appendChild(details);
-        if(Number(v.cost_total)>0){
-          var pct=Math.min(100,Math.max(0,Number(v.coverage_pct)||0));
-          var track=el("div");track.style.height="9px";track.style.borderRadius="100px";track.style.background="#e2e8f0";track.style.overflow="hidden";track.style.marginTop="10px";
-          var fill=el("div");fill.style.width=pct+"%";fill.style.height="100%";fill.style.background=net>=0?"#16a34a":"#eab308";track.appendChild(fill);content.appendChild(track);
-          var caption=el("div",Number(v.coverage_pct).toLocaleString("nb-NO")+" % av påløpte kostnader dekket av betalte inntekter.");caption.style.fontSize="11px";caption.style.color="#64748b";caption.style.marginTop="4px";content.appendChild(caption);
-        }
-        var note=el("div","Dette er intern inntjeningsoversikt, ikke et fullstendig regnskapsresultat. Gebyrer og kostnader er bare med når de er registrert her. Kasseprodukt 1473 bruker variant-SKU: Dart-1t, Dart-15min, Disc-simulator-1t, Disc-simulator-15min og Leie-Dartpiler. Eksisterende nettbooking og salg kobles også med.");
-        note.style.fontSize="11px";note.style.color="#64748b";note.style.marginTop="10px";content.appendChild(note);
+        var note=el("div","Alle kostnader er oppgitt registrert ekskl. mva, og resultatet viser derfor inntekter ekskl. mva minus registrerte kostnader ekskl. mva. VIKTIG: Resultatet er foreløpig, ikke et avstemt regnskap. Ordrelinjer kan ha rabatter inkludert; ekstra generell rabatt ville gitt dobbelt fratrekk. Oppgjør, gavekort, refusjoner, medlemsbetalinger og eventuelle ikke-importerte inntekter må kontrolleres mot betalingskildene. Direkte Vipps og manuell kaffe må ikke være importert fra Quickbutik eller Zettle. Månedskostnader periodiseres fra startdato til eventuell sluttdato. Ingen automatisk Fiken-bokføring utføres.");
+        note.className="sk-warning";note.style.fontSize="12px";note.style.lineHeight="1.6";note.style.marginTop="12px";content.appendChild(note);
       });
     }
     refresh.onclick=update;
@@ -4027,7 +4117,7 @@
   function renderSettingsManager(parent, data, sb, user) {
     createPageHeader(parent, "Innstillinger", "Standardverdier som brukes i tilbud og kundedokumenter.", "Systemoppsett");
 
-    if (skBookingIsOwner(user)) { skBookingExpenseManager(parent, sb, user); }
+    if (skBookingIsOwner(user)) { skBookingExpenseManager(parent, sb, user); skBookingCoffeeManager(parent, sb, user); skBookingVippsManager(parent, sb, user); }
 
     var settings = settingsMap(data.settings || []);
 
