@@ -4262,7 +4262,7 @@
         refresh.disabled=false;
         if(res.error){status.textContent="Kunne ikke hente status: "+res.error.message;return;}
         var view=skBookingDisplaySummary(res.data||{});clear(content);
-        status.textContent=skBookingFocusModeActive()?"Live-visning · sist oppdatert: "+view.asOf:"Sist oppdatert: "+view.asOf;
+        status.textContent=skBookingFocusModeActive()?"Live-visning · oppdateres hver time · rapportdato: "+view.asOf:"Sist oppdatert: "+view.asOf;
 
         var top=el("div");top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
         top.appendChild(skBookingBuildDonut(view));
@@ -4294,7 +4294,20 @@
       });
     }
     refresh.onclick=update;
-    window.addEventListener("sk-booking-economy-changed", update);
+    function handleBookingChanged(){
+      if (shell.isConnected) update();
+    }
+    window.addEventListener("sk-booking-economy-changed", handleBookingChanged);
+    // Hold visningen oppdatert så lenge fanen står åpen.
+    // Henter eksisterende synkroniserte salg fra Supabase; starter ikke ny Quickbutik/Zettle-synk.
+    var hourlyRefresh = window.setInterval(function(){
+      if (!shell.isConnected) {
+        window.clearInterval(hourlyRefresh);
+        window.removeEventListener("sk-booking-economy-changed", handleBookingChanged);
+        return;
+      }
+      update();
+    }, 60 * 60 * 1000);
     update();
   }
   // ==== END GK BOOKING ECONOMY V20 ====
@@ -58480,6 +58493,29 @@ function renderBarcodeLabelsManager(parent, data, sb) {
 
   rebuildList();
 }
+
+function renderPortalFocusMode(sb, user) {
+    clear(root);
+
+    var focusShell = el("div");
+    focusShell.style.width = "100%";
+    focusShell.style.maxWidth = "none";
+    focusShell.style.margin = "0";
+    focusShell.style.padding = "0";
+    focusShell.style.background = "transparent";
+    focusShell.style.border = "0";
+    focusShell.style.boxShadow = "none";
+
+    var host = el("div");
+    host.style.padding = "0";
+    host.style.minHeight = "100vh";
+    host.style.boxSizing = "border-box";
+
+    focusShell.appendChild(host);
+    root.appendChild(focusShell);
+
+    skBookingOverview(host, sb, user);
+  }
 
 function renderPortal(sb, user, data) {
     var app = renderShell(
