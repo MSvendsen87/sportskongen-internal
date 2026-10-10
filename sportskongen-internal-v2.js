@@ -58514,10 +58514,20 @@ function renderPortalFocusMode(sb, user) {
     focusShell.appendChild(host);
     root.appendChild(focusShell);
 
+    // Dedicated screen: no portal shell, navigation, user toolbar or global sync UI.
+    root.style.width = "calc(100vw - 24px)";
+    root.style.maxWidth = "none";
+    root.style.margin = "0";
+    document.body.classList.add("sk-booking-focus-screen");
     skBookingOverview(host, sb, user);
   }
 
 function renderPortal(sb, user, data) {
+    if (skBookingFocusModeActive()) {
+      renderPortalFocusMode(sb, user);
+      return;
+    }
+
     var app = renderShell(
       "Mission Control",
       "GolfKongen / Sportskongen \u2013 drift, varer, lager, salg, pris og innkj\u00f8p p\u00e5 ett sted."
