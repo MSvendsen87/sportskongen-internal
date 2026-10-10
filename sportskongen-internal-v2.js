@@ -3892,6 +3892,16 @@
     } catch (e) {}
   }
 
+  function skBookingDateTimeText(value) {
+    if (!value) return "Ikke registrert";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return "Ikke registrert";
+    return new Intl.DateTimeFormat("nb-NO", {
+      timeZone: "Europe/Oslo", day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+    }).format(date);
+  }
+
   function skBookingNotifyOverviewChanged() {
     try { window.dispatchEvent(new CustomEvent("sk-booking-economy-changed")); } catch (e) {}
   }
@@ -4266,7 +4276,10 @@
         refresh.disabled=false;
         if(res.error){status.textContent="Kunne ikke hente status: "+res.error.message;return;}
         var view=skBookingDisplaySummary(res.data||{});clear(content);
-        status.textContent=skBookingFocusModeActive()?"Live-visning · oppdateres hver time · rapportdato: "+view.asOf:"Sist oppdatert: "+view.asOf;
+        var fetchedAt = skBookingDateTimeText(new Date());
+        status.textContent=skBookingFocusModeActive()
+          ? "Live-visning · oppdateres hver time · sist hentet: " + fetchedAt
+          : "Sist oppdatert: " + fetchedAt;
 
         var top=el("div");top.className="sk-focus-economy-grid";top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
         top.appendChild(skBookingBuildDonut(view));
@@ -56675,6 +56688,30 @@ function renderGlobalSyncControl(app, sb, user) {
     actions.firstChild
   );
 
+  var syncStamp = el("span", "Siste salgssynk: henter…");
+  syncStamp.style.color = "#cbd5e1";
+  syncStamp.style.fontSize = "11px";
+  syncStamp.style.fontWeight = "700";
+  syncStamp.style.whiteSpace = "nowrap";
+  syncStamp.style.alignSelf = "center";
+  syncStamp.title = "Siste registrerte vellykkede Quickbutik- og Zettle-salgssynk i Supabase";
+  actions.insertBefore(syncStamp, syncButton.nextSibling);
+
+  function updateSyncStamp() {
+    sb.rpc("internal_booking_last_sales_sync").then(function(result) {
+      if (result.error) {
+        syncStamp.textContent = "Siste salgssynk: ikke tilgjengelig";
+        return;
+      }
+      var d = result.data || {};
+      var newest = d.latest_sync_at;
+      syncStamp.textContent = "Siste salgssynk: " + skBookingDateTimeText(newest);
+      syncStamp.title = "Quickbutik: " + skBookingDateTimeText(d.quickbutik_at)
+        + " · Zettle: " + skBookingDateTimeText(d.zettle_at);
+    }).catch(function() { syncStamp.textContent = "Siste salgssynk: ikke tilgjengelig"; });
+  }
+  updateSyncStamp();
+
   var fullSyncButton = createButton("Full kontroll (365 dager)");
   fullSyncButton.title = "Full historisk kontroll av salg og kvitteringer.";
   fullSyncButton.style.fontSize = "12px";
@@ -57121,6 +57158,8 @@ function renderGlobalSyncControl(app, sb, user) {
         summary.zettleImport =
           importResult;
         delete summary.token;
+        updateSyncStamp();
+        window.dispatchEvent(new CustomEvent("sk-booking-economy-changed"));
 
         setStatus(
           "\u2705 Alt er oppdatert." +
