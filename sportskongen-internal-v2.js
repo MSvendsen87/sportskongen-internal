@@ -1553,6 +1553,12 @@
     user,
     sb
   ) {
+    if (skBookingFocusModeActive()) {
+      clear(parent);
+      skBookingOverview(parent, sb, user);
+      return;
+    }
+
     var hour =
       new Date().getHours();
 
@@ -3870,6 +3876,21 @@
     return n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2,"0") + "-" + String(n.getDate()).padStart(2,"0");
   }
 
+  function skBookingFocusModeActive() {
+    try {
+      return new URLSearchParams(window.location.search).get("bookingstatus") === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function skBookingOpenFocusMode() {
+    try {
+      var url = window.location.origin + allowedPath + "?bookingstatus=1";
+      window.open(url, "_blank");
+    } catch (e) {}
+  }
+
   function skBookingNotifyOverviewChanged() {
     try { window.dispatchEvent(new CustomEvent("sk-booking-economy-changed")); } catch (e) {}
   }
@@ -3945,82 +3966,65 @@
 
   function skBookingBuildDonut(summary) {
     var wrap = el("div");
-    wrap.style.display = "grid";
-    wrap.style.gridTemplateColumns = "150px minmax(0,1fr)";
-    wrap.style.gap = "16px";
+    wrap.style.display = "flex";
     wrap.style.alignItems = "center";
+    wrap.style.justifyContent = "center";
+    wrap.style.minHeight = "340px";
     wrap.style.border = "1px solid #e2e8f0";
     wrap.style.borderRadius = "14px";
-    wrap.style.padding = "14px";
+    wrap.style.padding = "18px";
     wrap.style.background = "#fff";
 
     var ratio = Math.max(0, Number(summary.coverage) || 0);
-    var progress = Math.max(0, Math.min(1, ratio));
-    var color = skBookingRatioColor(ratio);
-    var size = 120;
-    var stroke = 12;
-    var radius = (size / 2) - stroke;
-    var circumference = 2 * Math.PI * radius;
-    var offset = circumference * (1 - progress);
+    var progressPct = Math.max(0, Math.min(100, ratio * 100));
+    var percentLabel = Math.round(ratio * 100) + "%";
+    var remainLabel = ratio >= 1 ? "+" + Math.max(0, Math.round((ratio - 1) * 100)) + "% over" : Math.max(0, 100 - Math.round(progressPct)) + "% igjen";
+    var gradient = ratio >= 1
+      ? "conic-gradient(#16a34a 0 100%)"
+      : "conic-gradient(#16a34a 0 " + progressPct + "%, #dc2626 " + progressPct + "% 100%)";
 
-    var left = el("div");
-    left.style.position = "relative";
-    left.style.width = size + "px";
-    left.style.height = size + "px";
-    left.innerHTML = '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" aria-hidden="true">'
-      + '<circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+radius+'" fill="none" stroke="#e5e7eb" stroke-width="'+stroke+'"></circle>'
-      + '<circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+radius+'" fill="none" stroke="'+color+'" stroke-width="'+stroke+'" stroke-linecap="round" transform="rotate(-90 '+(size/2)+' '+(size/2)+')" stroke-dasharray="'+circumference+'" stroke-dashoffset="'+offset+'"></circle>'
-      + '</svg>';
-    var center = el("div", Math.round(ratio * 100) + "%");
-    center.style.position = "absolute";
-    center.style.inset = "0";
-    center.style.display = "flex";
-    center.style.alignItems = "center";
-    center.style.justifyContent = "center";
-    center.style.fontSize = "22px";
-    center.style.fontWeight = "900";
-    center.style.color = color;
-    left.appendChild(center);
-    wrap.appendChild(left);
+    var ring = el("div");
+    ring.style.width = "280px";
+    ring.style.height = "280px";
+    ring.style.borderRadius = "50%";
+    ring.style.position = "relative";
+    ring.style.background = gradient;
+    ring.style.boxShadow = "inset 0 0 0 1px rgba(15,23,42,.03)";
 
-    var right = el("div");
-    var heading = el("strong", ratio >= 1 ? "Målet er dekket" : "På vei mot dekning");
-    heading.style.display = "block";
-    heading.style.fontSize = "18px";
-    heading.style.color = "#0f172a";
-    right.appendChild(heading);
-    var sub = el("div", ratio >= 1 ? "Inntektene har passert registrerte kostnader." : "Kaken blir grønnere etter hvert som inntektene dekker kostnadene.");
-    sub.style.marginTop = "5px";
-    sub.style.fontSize = "13px";
-    sub.style.color = "#64748b";
-    right.appendChild(sub);
-    var statRow = el("div");
-    statRow.style.display = "flex";
-    statRow.style.flexWrap = "wrap";
-    statRow.style.gap = "8px";
-    statRow.style.marginTop = "12px";
-    [
-      ["Inn", skBookingMoney(summary.revenue), "#ecfdf5", "#166534"],
-      ["Ut", skBookingMoney(summary.cost), "#fef2f2", "#b91c1c"],
-      ["Resultat", skBookingMoney(summary.net), summary.net >= 0 ? "#ecfdf5" : "#fef2f2", summary.net >= 0 ? "#166534" : "#b91c1c"]
-    ].forEach(function(row) {
-      var box = el("div");
-      box.style.padding = "8px 10px";
-      box.style.borderRadius = "10px";
-      box.style.background = row[2];
-      var t = el("div", row[0]);
-      t.style.fontSize = "11px";
-      t.style.fontWeight = "800";
-      t.style.color = "#64748b";
-      var v = el("div", row[1]);
-      v.style.fontSize = "15px";
-      v.style.fontWeight = "900";
-      v.style.color = row[3];
-      box.appendChild(t);
-      box.appendChild(v);
-      statRow.appendChild(box);
-    });
-    right.appendChild(statRow);
+    var inner = el("div");
+    inner.style.position = "absolute";
+    inner.style.inset = "26px";
+    inner.style.background = "#fff";
+    inner.style.borderRadius = "50%";
+    inner.style.display = "flex";
+    inner.style.flexDirection = "column";
+    inner.style.alignItems = "center";
+    inner.style.justifyContent = "center";
+    inner.style.textAlign = "center";
+
+    var value = el("div", percentLabel);
+    value.style.fontSize = "46px";
+    value.style.fontWeight = "900";
+    value.style.lineHeight = "1";
+    value.style.color = ratio >= 1 ? "#166534" : "#dc2626";
+    inner.appendChild(value);
+
+    var small = el("div", ratio >= 1 ? "Dekket" : "Dekket så langt");
+    small.style.marginTop = "10px";
+    small.style.fontSize = "14px";
+    small.style.fontWeight = "800";
+    small.style.color = "#475569";
+    inner.appendChild(small);
+
+    var remain = el("div", remainLabel);
+    remain.style.marginTop = "6px";
+    remain.style.fontSize = "13px";
+    remain.style.fontWeight = "800";
+    remain.style.color = ratio >= 1 ? "#166534" : "#b91c1c";
+    inner.appendChild(remain);
+
+    ring.appendChild(inner);
+    wrap.appendChild(ring);
     return wrap;
   }
 
@@ -4233,8 +4237,14 @@
     var shell=el("div");shell.style.border="1px solid #d1d5db";shell.style.borderRadius="14px";
     shell.style.padding="14px";shell.style.background="#fff";shell.style.margin="0 0 18px";
     var heading=el("div");heading.style.display="flex";heading.style.justifyContent="space-between";heading.style.alignItems="center";heading.style.flexWrap="wrap";heading.style.gap="10px";
-    var title=el("strong","🎯 Dart og simulator – status");title.style.fontSize="17px";heading.appendChild(title);
-    var refresh=createButton("Oppdater tall");heading.appendChild(refresh);shell.appendChild(heading);
+    var title=el("strong", skBookingFocusModeActive() ? "🎯 Dart og simulator – live status" : "🎯 Dart og simulator – status");title.style.fontSize="17px";heading.appendChild(title);
+    var actions=el("div");actions.style.display="flex";actions.style.gap="8px";actions.style.flexWrap="wrap";
+    if (!skBookingFocusModeActive()) {
+      var focusBtn=createButton("Åpne egen fane");
+      focusBtn.onclick=skBookingOpenFocusMode;
+      actions.appendChild(focusBtn);
+    }
+    var refresh=createButton("Oppdater tall");actions.appendChild(refresh);heading.appendChild(actions);shell.appendChild(heading);
     var status=el("div","Henter status…");status.style.fontSize="12px";status.style.color="#64748b";status.style.margin="8px 0";shell.appendChild(status);
     var content=el("div");shell.appendChild(content);
     parent.appendChild(shell);
@@ -4252,9 +4262,9 @@
         refresh.disabled=false;
         if(res.error){status.textContent="Kunne ikke hente status: "+res.error.message;return;}
         var view=skBookingDisplaySummary(res.data||{});clear(content);
-        status.textContent="Sist oppdatert: "+view.asOf;
+        status.textContent=skBookingFocusModeActive()?"Live-visning · sist oppdatert: "+view.asOf:"Sist oppdatert: "+view.asOf;
 
-        var top=el("div");top.style.display="grid";top.style.gridTemplateColumns="minmax(280px,1.1fr) minmax(240px,.9fr)";top.style.gap="12px";top.style.alignItems="stretch";
+        var top=el("div");top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
         top.appendChild(skBookingBuildDonut(view));
 
         var side=el("div");side.style.display="grid";side.style.gap="10px";
@@ -4281,14 +4291,6 @@
         side.appendChild(quick);
         top.appendChild(side);
         content.appendChild(top);
-
-        var mva=el("div");mva.style.display="flex";mva.style.flexWrap="wrap";mva.style.gap="8px";mva.style.marginTop="12px";
-        mva.appendChild(skBookingCreateMvaPill("Dartbooking 0% mva","zero"));
-        mva.appendChild(skBookingCreateMvaPill("Disc simulator 0% mva","zero"));
-        mva.appendChild(skBookingCreateMvaPill("Leie dartpiler 25% mva","vat"));
-        mva.appendChild(skBookingCreateMvaPill("Hele lokalet 25% mva","vat"));
-        mva.appendChild(skBookingCreateMvaPill("Kaffe 25% mva","vat"));
-        content.appendChild(mva);
       });
     }
     refresh.onclick=update;
