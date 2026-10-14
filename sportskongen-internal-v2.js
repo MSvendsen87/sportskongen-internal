@@ -58597,6 +58597,11 @@ function renderPortalFocusMode(sb, user) {
 
   function renderSharedInsights(sb, user) {
     clear(root);
+    if(!document.getElementById("sk-shared-compact-css")){
+      var cs=el("style");cs.id="sk-shared-compact-css";
+      cs.textContent="@media(max-width:900px){#sk-shared-economy{grid-template-columns:minmax(0,1fr)!important}}@media(max-width:560px){#sk-shared-financial{grid-template-columns:repeat(2,minmax(0,1fr))!important}}";
+      document.head.appendChild(cs);
+    }
     var page=el("section");
     page.style.cssText="box-sizing:border-box;max-width:1600px;width:100%;margin:auto;padding:clamp(16px,3vw,38px);font-family:Arial,sans-serif;color:#0f172a;";
     var heading=el("div");heading.style.cssText="display:flex;justify-content:space-between;gap:15px;align-items:center;flex-wrap:wrap;";
@@ -58626,11 +58631,14 @@ function renderPortalFocusMode(sb, user) {
         metric(cards,"Omsetning totalt inkl. mva",skBookingMoney(a.sales_total_inc_vat),"#166534");
         metric(cards,"Denne måneden inkl. mva",skBookingMoney(a.sales_this_month_inc_vat));
         metric(cards,"Betalte ordre og kvitteringer",String(a.paid_orders||0));
-        cards=group("Dart og simulator · økonomi eks. mva");
-        metric(cards,"Inntekter",skBookingMoney(b.revenue),"#166534");metric(cards,"Kostnader",skBookingMoney(b.cost));
-        metric(cards,"Resultat",skBookingMoney(b.net),b.net>=0?"#166534":"#b91c1c");
-        metric(cards,"Dart",skBookingMoney(b.dart));metric(cards,"Simulator",skBookingMoney(b.simulator));metric(cards,"Kaffe",skBookingMoney(b.coffee));
-        content.appendChild(skBookingBuildDonut(b));
+        var econTitle=el("h2","Dart og simulator · økonomi eks. mva");econTitle.style.cssText="font-size:20px;margin:25px 0 12px;";content.appendChild(econTitle);
+        var econ=el("div");econ.id="sk-shared-economy";econ.style.cssText="display:grid;grid-template-columns:minmax(260px,.78fr) minmax(0,1.22fr);gap:12px;align-items:stretch;";content.appendChild(econ);
+        var donut=skBookingBuildDonut(b);donut.style.cssText="min-height:0;max-height:325px;padding:10px;";
+        var circle=donut.querySelector("div[style*='border-radius: 50%']");if(circle){circle.style.width="min(240px,100%)";circle.style.height="240px";circle.style.maxWidth="240px";}
+        econ.appendChild(donut);
+        var financial=el("div");financial.id="sk-shared-financial";financial.style.cssText="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;align-content:center;";econ.appendChild(financial);
+        metric(financial,"Inntekter",skBookingMoney(b.revenue),"#166534");metric(financial,"Kostnader",skBookingMoney(b.cost));metric(financial,"Resultat",skBookingMoney(b.net),b.net>=0?"#166534":"#b91c1c");
+        metric(financial,"Dart",skBookingMoney(b.dart));metric(financial,"Simulator",skBookingMoney(b.simulator));metric(financial,"Kaffe",skBookingMoney(b.coffee));
         cards=group("Produkter og lager");metric(cards,"Aktive produkter",String(a.active_products||0));metric(cards,"Utsolgte produkter",String(a.products_out_of_stock||0));
         var searchTitle=el("h2","Søk i produkter og fortjeneste");searchTitle.style.cssText="font-size:20px;margin:26px 0 10px;";content.appendChild(searchTitle);
         var search=el("input");search.placeholder="Skriv minst to tegn i produktnavn eller SKU";search.type="search";search.style.cssText="width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;";content.appendChild(search);
@@ -58638,12 +58646,13 @@ function renderPortalFocusMode(sb, user) {
         var seq=0;search.oninput=function(){var q=search.value.trim(),ticket=++seq;clear(searchResults);if(q.length<2)return;
           getReadOnly("internal_shared_product_search",{q:q,max_rows:30}).then(function(rows){if(ticket!==seq)return;clear(searchResults);
             if(!rows.length){listRow(searchResults,["Ingen produkter funnet"]);return;}
-            rows.forEach(function(r){listRow(searchResults,[r.name+(r.sku?" · "+r.sku:""),"Lager: "+Number(r.stock_quantity||0),"Salgspris eks. mva: "+skBookingMoney(r.sales_price_ex_vat),"Fortjeneste/stk: "+skBookingMoney(r.margin_kr)+" ("+(r.margin_pct==null?"–":r.margin_pct+"%")+")"]);});
+            rows.forEach(function(r){listRow(searchResults,[r.name+(r.sku?" · "+r.sku:""),"Lager: "+Number(r.stock_quantity||0),"Salgspris eks. mva: "+skBookingMoney(r.sales_price_ex_vat),"Innkjøp eks. mva: "+skBookingMoney(r.purchase_price_ex_vat),"Fortjeneste/stk: "+skBookingMoney(r.margin_kr)+" ("+(r.margin_pct==null?"–":r.margin_pct+"%")+")"]);});
           }).catch(function(e){if(ticket===seq)searchResults.textContent="Kunne ikke søke: "+e.message;});};
         var alertsTitle=el("h2","Må fikses · lager og varsler");alertsTitle.style.cssText="font-size:20px;margin:25px 0 10px;";content.appendChild(alertsTitle);
         var alerts=el("div");alerts.style.cssText="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;";content.appendChild(alerts);
-        getReadOnly("internal_shared_stock_alerts",{max_rows:50}).then(function(rows){clear(alerts);if(!rows.length){listRow(alerts,["Ingen negativ beholdning i produktoversikten"]);return;}
-          rows.forEach(function(r){listRow(alerts,[r.label,r.kind,"Antall: "+Number(r.quantity||0)]);});
+        getReadOnly("internal_shared_action_alerts",{p_limit:75}).then(function(rows){clear(alerts);if(!rows.length){listRow(alerts,["Ingen åpne kontrollsaker"]);return;}
+          var summary=el("div",rows.length+" siste varsler · kun visning");summary.style.cssText="padding:10px 13px;font-weight:800;color:#9a3412;background:#fff7ed;";alerts.appendChild(summary);
+          rows.forEach(function(r){listRow(alerts,[r.label,r.kind,r.detail||""]);});
         }).catch(function(e){alerts.textContent="Varsler kunne ikke lastes: "+e.message;});
         status.textContent="Sist hentet: "+skBookingDateTimeText(new Date())+(a.last_sales_sync?" · Siste salgssynk: "+skBookingDateTimeText(a.last_sales_sync):"");
       }).catch(function(err){status.textContent="Kunne ikke hente innsikt: "+String(err.message||err);}).finally(function(){refresh.disabled=false;});
