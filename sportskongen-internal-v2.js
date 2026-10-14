@@ -58590,7 +58590,7 @@ function renderPortalFocusMode(sb, user) {
     skBookingOverview(host, sb, user);
   }
 
-  // Shared account: aggregate-only insights. No generic portal modules are rendered.
+  // V21.5: Isolated read-only shared view. GET-only PostgREST functions.
   function skIsSharedInsightsUser(user) {
     return String((user && user.email) || "").trim().toLowerCase() === "post@golfkongen.no";
   }
@@ -58598,56 +58598,58 @@ function renderPortalFocusMode(sb, user) {
   function renderSharedInsights(sb, user) {
     clear(root);
     var page=el("section");
-    page.style.cssText="box-sizing:border-box;max-width:1500px;width:100%;margin:0 auto;padding:clamp(14px,2.6vw,34px);font-family:Arial,sans-serif;color:#0f172a;";
-    var head=el("div");head.style.cssText="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 24px;";
-    var titles=el("div");
-    var h=el("h1","GolfKongen · Innsikt");h.style.cssText="font-size:clamp(23px,3vw,36px);margin:0 0 5px;color:#0f172a;";
-    titles.appendChild(h);
-    var subtitle=el("div","Felles lesetilgang · nøkkeltall");subtitle.style.color="#64748b";titles.appendChild(subtitle);
-    head.appendChild(titles);
-    var buttons=el("div");buttons.style.cssText="display:flex;flex-wrap:wrap;gap:8px;";
-    var refresh=createPrimaryButton("Oppdater visning");buttons.appendChild(refresh);
-    var logout=createButton("Logg ut");logout.onclick=function(){sb.auth.signOut().then(function(){window.location.reload();});};buttons.appendChild(logout);
-    head.appendChild(buttons);page.appendChild(head);
-    var status=el("div","Henter innsikt…");status.style.cssText="margin:0 0 14px;color:#64748b;font-size:13px;";page.appendChild(status);
-    var box=el("div");page.appendChild(box);root.appendChild(page);
-    function moneyText(n){return skBookingMoney(Number(n)||0);}
-    function metric(parent,label,value,color){
-      var card=el("div");card.style.cssText="background:#fff;border:1px solid #dde5ef;border-radius:16px;padding:18px;min-width:0;";
-      var t=el("div",label);t.style.cssText="font-size:13px;color:#64748b;font-weight:700;";card.appendChild(t);
-      var v=el("strong",value);v.style.cssText="display:block;margin-top:9px;font-size:clamp(22px,2.6vw,33px);overflow-wrap:anywhere;color:"+(color||"#0f172a")+";";card.appendChild(v);
-      parent.appendChild(card);
-    }
-    function sectionTitle(text){var t=el("h2",text);t.style.cssText="font-size:19px;margin:23px 0 12px;color:#0f172a;";box.appendChild(t);}
-    function grid(){var g=el("div");g.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px;";box.appendChild(g);return g;}
-    function update(){
-      refresh.disabled=true;status.textContent="Oppdaterer tall…";
-      Promise.all([sb.rpc("internal_shared_insights"),sb.rpc("internal_shared_booking_summary")]).then(function(res){
-        refresh.disabled=false;
-        if(res[0].error || res[1].error){status.textContent="Kunne ikke hente innsikt: "+((res[0].error||res[1].error).message||"Ukjent feil");return;}
-        var a=res[0].data||{};var b=skBookingDisplaySummary(res[1].data||{});
-        clear(box);
-        status.textContent="Oppdatert: "+skBookingDateTimeText(new Date())+" · Data fra siste fullførte synk";
-        sectionTitle("Salg og ordre");
-        var g=grid();
-        metric(g,"Registrert salg totalt inkl. mva",moneyText(a.sales_total_inc_vat),"#166534");
-        metric(g,"Salg denne måneden inkl. mva",moneyText(a.sales_this_month_inc_vat));
-        metric(g,"Betalte ordre og kvitteringer",String(a.paid_orders||0));
-        sectionTitle("Dart og simulator · økonomi eks. mva");
-        g=grid();
-        metric(g,"Inntekter",moneyText(b.revenue),"#166534");
-        metric(g,"Kostnader",moneyText(b.cost));
-        metric(g,"Resultat",moneyText(b.net),b.net>=0?"#166534":"#b91c1c");
-        metric(g,"Dart",moneyText(b.dart));
-        metric(g,"Simulator",moneyText(b.simulator));
-        metric(g,"Kaffe",moneyText(b.coffee));
-        sectionTitle("Produkter og lager");
-        g=grid();metric(g,"Aktive produkter",String(a.active_products||0));metric(g,"Utsolgte produkter",String(a.products_out_of_stock||0),Number(a.products_out_of_stock)>0?"#b45309":null);
-        var footer=el("div",a.last_sales_sync?"Siste registrerte salgssynk: "+skBookingDateTimeText(a.last_sales_sync):"Ingen registrert salgssynk");footer.style.cssText="margin:22px 0;color:#64748b;font-size:13px;";box.appendChild(footer);
-      }).catch(function(err){refresh.disabled=false;status.textContent="Kunne ikke hente innsikt: "+String(err.message||err);});
+    page.style.cssText="box-sizing:border-box;max-width:1600px;width:100%;margin:auto;padding:clamp(16px,3vw,38px);font-family:Arial,sans-serif;color:#0f172a;";
+    var heading=el("div");heading.style.cssText="display:flex;justify-content:space-between;gap:15px;align-items:center;flex-wrap:wrap;";
+    var names=el("div");var h1=el("h1","GolfKongen · Innsikt");h1.style.cssText="font-size:clamp(25px,3vw,38px);margin:0 0 6px;";
+    names.appendChild(h1);var sub=el("div","Felles oversikt · kun lesetilgang");sub.style.color="#64748b";names.appendChild(sub);heading.appendChild(names);
+    var actions=el("div");actions.style.cssText="display:flex;gap:8px;";
+    var refresh=createPrimaryButton("Oppdater");actions.appendChild(refresh);
+    var logout=createButton("Logg ut");logout.onclick=function(){sb.auth.signOut().then(function(){window.location.reload();});};actions.appendChild(logout);
+    heading.appendChild(actions);page.appendChild(heading);
+    var status=el("div","Laster nøkkeltall…");status.style.cssText="color:#64748b;font-size:12px;margin:15px 0;";page.appendChild(status);
+    var content=el("div");page.appendChild(content);root.appendChild(page);
+    function metric(host,label,value,shade){var card=el("div");card.style.cssText="padding:17px;border-radius:14px;border:1px solid #dbe3ee;background:white;";
+      var lab=el("div",label);lab.style.cssText="font-size:13px;color:#64748b;font-weight:750;";
+      var val=el("div",value);val.style.cssText="font-size:clamp(20px,2.4vw,30px);font-weight:900;margin-top:7px;color:"+(shade||"#0f172a");card.appendChild(lab);card.appendChild(val);host.appendChild(card);}
+    function group(label){var title=el("h2",label);title.style.cssText="font-size:20px;margin:25px 0 12px;";content.appendChild(title);
+      var cards=el("div");cards.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:11px;";content.appendChild(cards);return cards;}
+    function listRow(host,parts){var row=el("div");row.style.cssText="padding:11px 13px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;";
+      parts.forEach(function(x,i){var span=el("span",x);if(i===0){span.style.fontWeight="750";span.style.flex="1 1 250px";}row.appendChild(span);});host.appendChild(row);}
+    function getReadOnly(name,params){return sb.auth.getSession().then(function(auth){var token=auth.data&&auth.data.session&&auth.data.session.access_token;
+      if(!token)throw new Error("Innloggingen har utløpt");
+      var base=SUPABASE_URL+"/rest/v1/rpc/"+name;var q=new URLSearchParams(params||{}).toString();
+      return fetch(base+(q?"?"+q:""),{method:"GET",headers:{"apikey":SUPABASE_KEY,"Authorization":"Bearer "+token}});
+    }).then(function(res){return res.json().then(function(payload){if(!res.ok)throw new Error(payload.message||"HTTP "+res.status);return payload;});});}
+    function update(){refresh.disabled=true;status.textContent="Oppdaterer innsikten…";
+      Promise.all([getReadOnly("internal_shared_insights"),getReadOnly("internal_shared_booking_summary")]).then(function(values){
+        clear(content);var a=values[0]||{},b=skBookingDisplaySummary(values[1]||{});var cards=group("Salg");
+        metric(cards,"Omsetning totalt inkl. mva",skBookingMoney(a.sales_total_inc_vat),"#166534");
+        metric(cards,"Denne måneden inkl. mva",skBookingMoney(a.sales_this_month_inc_vat));
+        metric(cards,"Betalte ordre og kvitteringer",String(a.paid_orders||0));
+        cards=group("Dart og simulator · økonomi eks. mva");
+        metric(cards,"Inntekter",skBookingMoney(b.revenue),"#166534");metric(cards,"Kostnader",skBookingMoney(b.cost));
+        metric(cards,"Resultat",skBookingMoney(b.net),b.net>=0?"#166534":"#b91c1c");
+        metric(cards,"Dart",skBookingMoney(b.dart));metric(cards,"Simulator",skBookingMoney(b.simulator));metric(cards,"Kaffe",skBookingMoney(b.coffee));
+        content.appendChild(skBookingBuildDonut(b));
+        cards=group("Produkter og lager");metric(cards,"Aktive produkter",String(a.active_products||0));metric(cards,"Utsolgte produkter",String(a.products_out_of_stock||0));
+        var searchTitle=el("h2","Søk i produkter og fortjeneste");searchTitle.style.cssText="font-size:20px;margin:26px 0 10px;";content.appendChild(searchTitle);
+        var search=el("input");search.placeholder="Skriv minst to tegn i produktnavn eller SKU";search.type="search";search.style.cssText="width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;";content.appendChild(search);
+        var searchResults=el("div");searchResults.style.cssText="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin:10px 0;";content.appendChild(searchResults);
+        var seq=0;search.oninput=function(){var q=search.value.trim(),ticket=++seq;clear(searchResults);if(q.length<2)return;
+          getReadOnly("internal_shared_product_search",{q:q,max_rows:30}).then(function(rows){if(ticket!==seq)return;clear(searchResults);
+            if(!rows.length){listRow(searchResults,["Ingen produkter funnet"]);return;}
+            rows.forEach(function(r){listRow(searchResults,[r.name+(r.sku?" · "+r.sku:""),"Lager: "+Number(r.stock_quantity||0),"Salgspris eks. mva: "+skBookingMoney(r.sales_price_ex_vat),"Fortjeneste/stk: "+skBookingMoney(r.margin_kr)+" ("+(r.margin_pct==null?"–":r.margin_pct+"%")+")"]);});
+          }).catch(function(e){if(ticket===seq)searchResults.textContent="Kunne ikke søke: "+e.message;});};
+        var alertsTitle=el("h2","Må fikses · lager og varsler");alertsTitle.style.cssText="font-size:20px;margin:25px 0 10px;";content.appendChild(alertsTitle);
+        var alerts=el("div");alerts.style.cssText="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;";content.appendChild(alerts);
+        getReadOnly("internal_shared_stock_alerts",{max_rows:50}).then(function(rows){clear(alerts);if(!rows.length){listRow(alerts,["Ingen negativ beholdning i produktoversikten"]);return;}
+          rows.forEach(function(r){listRow(alerts,[r.label,r.kind,"Antall: "+Number(r.quantity||0)]);});
+        }).catch(function(e){alerts.textContent="Varsler kunne ikke lastes: "+e.message;});
+        status.textContent="Sist hentet: "+skBookingDateTimeText(new Date())+(a.last_sales_sync?" · Siste salgssynk: "+skBookingDateTimeText(a.last_sales_sync):"");
+      }).catch(function(err){status.textContent="Kunne ikke hente innsikt: "+String(err.message||err);}).finally(function(){refresh.disabled=false;});
     }
     refresh.onclick=update;update();
-    var timer=window.setInterval(function(){if(!page.isConnected){window.clearInterval(timer);return;}update();},60*60*1000);
+    var timer=window.setInterval(function(){if(!page.isConnected){clearInterval(timer);return;}update();},3600000);
   }
 
 function renderPortal(sb, user, data) {
