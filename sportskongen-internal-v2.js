@@ -58646,12 +58646,12 @@ function renderPortalFocusMode(sb, user) {
         var seq=0;search.oninput=function(){var q=search.value.trim(),ticket=++seq;clear(searchResults);if(q.length<2)return;
           getReadOnly("internal_shared_product_search",{q:q,max_rows:30}).then(function(rows){if(ticket!==seq)return;clear(searchResults);
             if(!rows.length){listRow(searchResults,["Ingen produkter funnet"]);return;}
-            rows.forEach(function(r){listRow(searchResults,[r.name+(r.sku?" · "+r.sku:""),"Lager: "+Number(r.stock_quantity||0),"Salgspris eks. mva: "+skBookingMoney(r.sales_price_ex_vat),"Innkjøp eks. mva: "+skBookingMoney(r.purchase_price_ex_vat),"Fortjeneste/stk: "+skBookingMoney(r.margin_kr)+" ("+(r.margin_pct==null?"–":r.margin_pct+"%")+")"]);});
+            rows.forEach(function(r){listRow(searchResults,[r.name+(r.sku?" · "+r.sku:""),"Lager: "+Number(r.stock_quantity||0),"Utsalgspris inkl. mva: "+skBookingMoney(r.sales_price_inc_vat),"Salgspris eks. mva: "+skBookingMoney(r.sales_price_ex_vat),"Innkjøp eks. mva: "+skBookingMoney(r.purchase_price_ex_vat),"Fortjeneste/stk: "+(r.margin_kr==null?"Mangler innkjøpspris":skBookingMoney(r.margin_kr))+" · margin "+(r.margin_pct==null?"–":r.margin_pct+"%"),"Maks rabatt før 0: "+(r.max_discount_pct==null?"–":Number(r.max_discount_pct).toLocaleString("nb-NO",{maximumFractionDigits:1})+"%")]);});
           }).catch(function(e){if(ticket===seq)searchResults.textContent="Kunne ikke søke: "+e.message;});};
         var alertsTitle=el("h2","Må fikses · lager og varsler");alertsTitle.style.cssText="font-size:20px;margin:25px 0 10px;";content.appendChild(alertsTitle);
         var alerts=el("div");alerts.style.cssText="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;";content.appendChild(alerts);
         getReadOnly("internal_shared_action_alerts",{p_limit:75}).then(function(rows){clear(alerts);if(!rows.length){listRow(alerts,["Ingen åpne kontrollsaker"]);return;}
-          var summary=el("div",rows.length+" siste varsler · kun visning");summary.style.cssText="padding:10px 13px;font-weight:800;color:#9a3412;background:#fff7ed;";alerts.appendChild(summary);
+          var summary=el("div",rows.length+" aktive varsler vist · godkjente saker er skjult");summary.style.cssText="padding:10px 13px;font-weight:800;color:#9a3412;background:#fff7ed;";alerts.appendChild(summary);
           rows.forEach(function(r){listRow(alerts,[r.label,r.kind,r.detail||""]);});
         }).catch(function(e){alerts.textContent="Varsler kunne ikke lastes: "+e.message;});
         status.textContent="Sist hentet: "+skBookingDateTimeText(new Date())+(a.last_sales_sync?" · Siste salgssynk: "+skBookingDateTimeText(a.last_sales_sync):"");
