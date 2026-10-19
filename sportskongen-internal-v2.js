@@ -34992,9 +34992,9 @@ function renderProductControlDashboard(
               if (!response.ok) {
                 var httpError =
                   new Error(
-                    responseData.error ||
-                    "Prissjekken svarte HTTP " +
-                      response.status
+                    (typeof responseData.error === "string" ? responseData.error :
+                    (responseData.message || JSON.stringify(responseData.error || responseData))) +
+                    " (HTTP " + response.status + ")"
                   );
 
                 httpError.retryable =
@@ -35259,9 +35259,11 @@ function renderProductControlDashboard(
             "Alle priskilder feilet ogs\u00e5 i kildevis fallback."
           );
 
-        noResultError.sourceFailures =
-          sourceFailures;
-
+        noResultError.sourceFailures = sourceFailures;
+        var rootMessage = originalError && (originalError.message || String(originalError)) || "Ukjent feil";
+        var grouped = sourceFailures.map(function(f) { return f.label + ": " + f.error; });
+        noResultError.message = "Prissjekk feilet. Hovedkall: " + rootMessage +
+          (grouped.length ? " | Priskilder: " + grouped.join(" | ") : "");
         throw noResultError;
       }
 
@@ -35355,6 +35357,12 @@ function renderProductControlDashboard(
 
         if (productCount !== 1) {
           throw originalError;
+        }
+        // Auth-/tilgangsfeil er felles Worker-feil, ikke feil ved hver priskilde.
+        // Spar tid og returner den faktiske årsaken umiddelbart.
+        var mainError = String(originalError && (originalError.message || originalError) || "");
+        if (/\b(401|403)\b|unauthori[sz]ed|forbidden|jwt|token|ingen tilgang|not authorized|mangler tilgang/i.test(mainError)) {
+          throw new Error("Pris-Worker tilgangsfeil: " + mainError);
         }
 
         var sourceRuns = [];
