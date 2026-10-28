@@ -29883,7 +29883,7 @@ addTable(addonsSection.body, [
     createPageHeader(
       parent,
       "Booking",
-      "Booking styres fortsatt i den eksisterende bookingadministrasjonen. Herfra kommer du dit med ett klikk.",
+      "Booking 2.0 har en egen, sikker adminside for reservasjoner, sperringer, åpningstider og priser. Herfra åpner du kontrollsenteret.",
       "Drift"
     );
 
@@ -29899,7 +29899,7 @@ addTable(addonsSection.body, [
     var title =
       el(
         "h3",
-        "Bookingadministrasjon"
+        "Booking 2.0 – kontrollsenter"
       );
 
     title.style.marginTop =
@@ -29908,7 +29908,7 @@ addTable(addonsSection.body, [
     var text =
       el(
         "p",
-        "Bruk booking-admin for bookinger, blokkeringer, regler og tidsluker. Den \u00e5pnes separat slik at den etablerte bookingl\u00f8sningen beholdes stabil."
+        "Administrer Booking 2.0 i det nye kontrollsenteret. Logg inn med godkjent administratorkonto. Gamle bookinger og betalinger beholdes uendret."
       );
 
     text.style.color =
@@ -29918,13 +29918,13 @@ addTable(addonsSection.body, [
 
     var button =
       createPrimaryButton(
-        "\ud83d\udcc5 \u00c5pne Booking-admin"
+        "\ud83d\udcc5 \u00c5pne Booking 2.0"
       );
 
     button.onclick =
       function () {
         window.open(
-          "https://golfkongen.no/sider/booking-admin",
+          "https://msvendsen87.github.io/golfkongen-booking/booking/admin/",
           "_blank",
           "noopener"
         );
