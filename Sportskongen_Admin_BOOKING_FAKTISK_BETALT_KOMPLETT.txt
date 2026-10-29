@@ -4222,7 +4222,7 @@
       status.textContent="Aktive manuelle Vipps-registreringer: "+active.length;
       clear(list);active.forEach(function(r){
         var item=el("div");item.style.display="flex";item.style.flexWrap="wrap";item.style.alignItems="center";item.style.gap="8px";item.style.borderBottom="1px solid #e2e8f0";item.style.padding="9px 0";
-        var a=r.area==="dart"?"Dart":r.area==="simulator"?"Simulator":"Kaffe";
+        var a=r.area==="dart"?"Dart":r.area==="simulator"?"Simulator":"Kaffe og diverse";
         var label=el("div",r.sale_date+" · "+a+" · "+skBookingMoney(r.amount_inc_vat)+" inkl. mva"+(r.notes?" · "+r.notes:""));label.style.flex="1 1 260px";item.appendChild(label);
         var edit=createButton("Endre");edit.onclick=function(){editing=r.id;date.value=r.sale_date;area.value=r.area;amount.value=r.amount_inc_vat;notes.value=r.notes||"";save.textContent="Lagre endring";section.wrap.scrollIntoView({behavior:"smooth",block:"start"});};
         var del=createButton("Arkiver");del.onclick=function(){if(!window.confirm("Arkivere denne Vipps-registreringen?"))return;del.disabled=true;sb.rpc("internal_booking_manual_vipps_archive",{p_id:r.id}).then(function(resp){del.disabled=false;if(resp.error){alert(resp.error.message);return;}load();skBookingNotifyOverviewChanged();});};
@@ -4286,7 +4286,7 @@
           ["Dart", skBookingMoney(view.dart)],
           ["Simulator", skBookingMoney(view.simulator)],
           ["Vipps direkte", skBookingMoney(view.vipps)],
-          ["Kaffe", skBookingMoney(view.coffee)]
+          ["Kaffe og diverse", skBookingMoney(view.coffee)]
         ].forEach(function(row){
           var box=el("div");
           var small=el("div",row[0]);small.className="sk-focus-economy-small";small.style.fontSize="12px";small.style.fontWeight="800";small.style.color="#64748b";
