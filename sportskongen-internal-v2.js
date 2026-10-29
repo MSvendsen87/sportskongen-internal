@@ -14442,7 +14442,7 @@ createBtn.onclick = function () {
        * alts\u00e5 eks. MVA. Tekstlinjen under tall-linjen h\u00f8rer til samme vare.
        */
       var numberTailPattern =
-        /^(.+?)\s+([\u2212\u2013\u2014-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([\u2212\u2013\u2014-]?\d[\d\s.]*,\d{2})$/i;
+        /^(.+?)\s+([\u2212\u2013\u2014-]?(?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([\u2212\u2013\u2014-]?(?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})$/i;
 
       function isTableHeader(
         line
@@ -14613,6 +14613,14 @@ createBtn.onclick = function () {
         var netLineTotal =
           unitPrice *
           quantity;
+
+        // Validate the PDF line total to prevent a year in the name joining the unit price.
+        var vatFactor = 1 + Number(pending.vat_percent || 0) / 100;
+        var expectedGross = Math.round(netLineTotal * vatFactor * 100) / 100;
+        if (Number.isFinite(pending.gross_line_total) &&
+            Math.abs(expectedGross - pending.gross_line_total) > 0.05) {
+          return;
+        }
 
         if (
           isShipping ||
@@ -14845,7 +14853,7 @@ createBtn.onclick = function () {
           fullLines.join(" ");
 
         var flatPattern =
-          /(.+?)\s+([\u2212\u2013\u2014-]?\d[\d\s.]*,\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([\u2212\u2013\u2014-]?\d[\d\s.]*,\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|\u00d8reavrunding\b|Netto\b|Mva\b|\u00c5 betale\b|$))/gi;
+          /(.+?)\s+([\u2212\u2013\u2014-]?(?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s*%\s+([\u2212\u2013\u2014-]?(?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})(?=\s+(?:MVP\/Axiom|Frakt\b|\u00d8reavrunding\b|Netto\b|Mva\b|\u00c5 betale\b|$))/gi;
 
         var flatMatch;
 
@@ -14895,17 +14903,17 @@ createBtn.onclick = function () {
 
       var netMatch =
         fullText.match(
-          /(?:^|\n)\s*Netto\s+(\d[\d\s.]*,\d{2})(?:\s|$)/im
+          /(?:^|\n)\s*Netto\s+((?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})(?:\s|$)/im
         );
 
       var vatMatch =
         fullText.match(
-          /(?:^|\n)\s*Mva\s+(\d[\d\s.]*,\d{2})(?:\s|$)/im
+          /(?:^|\n)\s*Mva\s+((?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})(?:\s|$)/im
         );
 
       var grossMatch =
         fullText.match(
-          /\u00c5 betale\s+(\d[\d\s.]*,\d{2})/i
+          /\u00c5 betale\s+((?:\d{1,3}(?:[ .]\d{3})+|\d+),\d{2})/i
         );
 
       var goodsTotal =
@@ -59773,4 +59781,3 @@ function renderPortal(sb, user, data) {
 
   document.head.appendChild(script);
 })();
-
