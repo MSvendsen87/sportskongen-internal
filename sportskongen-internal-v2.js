@@ -3917,37 +3917,25 @@
 
   function skBookingDisplaySummary(v) {
     v = v || {};
-    var rawRevenue = Number(v.revenue) || 0;
-    var rawDart = Number(v.revenue_dart) || 0;
-    var rawSimulator = Number(v.revenue_simulator) || 0;
-    var rawCoffee = Number(v.revenue_coffee) || 0;
-    var rawVipps = Number(v.revenue_vipps) || 0;
-    var rawMonth = Number(v.revenue_this_month) || 0;
-    var rawVippsDart = Number(v.revenue_vipps_dart) || 0;
-    var rawVippsSimulator = Number(v.revenue_vipps_simulator) || 0;
-    var rawVippsCoffee = Number(v.revenue_vipps_coffee) || 0;
+    // RPC values are amounts actually paid, INCLUDING VAT where applicable.
+    // Never reverse VAT or apply estimated 25% uplift to zero-rated bookings.
+    var revenue = Number(v.revenue) || 0;
     var cost = Number(v.cost_total) || 0;
-    var zeroRatedRevenue = rawDart + rawSimulator;
-    var zeroShare = rawRevenue > 0 ? Math.max(0, Math.min(1, zeroRatedRevenue / rawRevenue)) : 1;
-    var correctedRevenue = rawRevenue + (zeroRatedRevenue * 0.25);
-    var correctedDart = rawDart * 1.25;
-    var correctedSimulator = rawSimulator * 1.25;
-    var correctedVipps = rawVipps + ((rawVippsDart + rawVippsSimulator) * 0.25);
-    var correctedMonth = rawMonth * (1 + (zeroShare * 0.25));
     return {
       asOf: v.as_of || "i dag",
-      revenue: correctedRevenue,
-      revenueThisMonth: correctedMonth,
-      coffee: rawCoffee,
-      vipps: correctedVipps,
+      revenue: revenue,
+      revenueThisMonth: Number(v.revenue_this_month) || 0,
+      coffee: Number(v.revenue_coffee) || 0,
+      vipps: Number(v.revenue_vipps) || 0,
       cost: cost,
-      net: correctedRevenue - cost,
-      dart: correctedDart,
-      simulator: correctedSimulator,
-      vippsDart: rawVippsDart * 1.25,
-      vippsSimulator: rawVippsSimulator * 1.25,
-      vippsCoffee: rawVippsCoffee,
-      coverage: cost > 0 ? correctedRevenue / cost : 1,
+      net: revenue - cost,
+      dart: Number(v.revenue_dart) || 0,
+      simulator: Number(v.revenue_simulator) || 0,
+      venue: Number(v.revenue_venue) || 0,
+      vippsDart: Number(v.revenue_vipps_dart) || 0,
+      vippsSimulator: Number(v.revenue_vipps_simulator) || 0,
+      vippsCoffee: Number(v.revenue_vipps_coffee) || 0,
+      coverage: cost > 0 ? revenue / cost : 1,
       oneTimeCost: Number(v.cost_one_time) || 0,
       monthlyCost: Number(v.cost_monthly_accrued) || 0,
       sharedCost: Number(v.cost_shared) || 0
@@ -4234,7 +4222,7 @@
       status.textContent="Aktive manuelle Vipps-registreringer: "+active.length;
       clear(list);active.forEach(function(r){
         var item=el("div");item.style.display="flex";item.style.flexWrap="wrap";item.style.alignItems="center";item.style.gap="8px";item.style.borderBottom="1px solid #e2e8f0";item.style.padding="9px 0";
-        var a=r.area==="dart"?"Dart":r.area==="simulator"?"Simulator":"Kaffe";
+        var a=r.area==="dart"?"Dart":r.area==="simulator"?"Simulator":"Kaffe og diverse";
         var label=el("div",r.sale_date+" · "+a+" · "+skBookingMoney(r.amount_inc_vat)+" inkl. mva"+(r.notes?" · "+r.notes:""));label.style.flex="1 1 260px";item.appendChild(label);
         var edit=createButton("Endre");edit.onclick=function(){editing=r.id;date.value=r.sale_date;area.value=r.area;amount.value=r.amount_inc_vat;notes.value=r.notes||"";save.textContent="Lagre endring";section.wrap.scrollIntoView({behavior:"smooth",block:"start"});};
         var del=createButton("Arkiver");del.onclick=function(){if(!window.confirm("Arkivere denne Vipps-registreringen?"))return;del.disabled=true;sb.rpc("internal_booking_manual_vipps_archive",{p_id:r.id}).then(function(resp){del.disabled=false;if(resp.error){alert(resp.error.message);return;}load();skBookingNotifyOverviewChanged();});};
@@ -4298,7 +4286,7 @@
           ["Dart", skBookingMoney(view.dart)],
           ["Simulator", skBookingMoney(view.simulator)],
           ["Vipps direkte", skBookingMoney(view.vipps)],
-          ["Kaffe", skBookingMoney(view.coffee)]
+          ["Kaffe og diverse", skBookingMoney(view.coffee)]
         ].forEach(function(row){
           var box=el("div");
           var small=el("div",row[0]);small.className="sk-focus-economy-small";small.style.fontSize="12px";small.style.fontWeight="800";small.style.color="#64748b";
