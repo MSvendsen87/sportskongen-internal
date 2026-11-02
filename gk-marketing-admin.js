@@ -39,7 +39,7 @@
     var title = node("h2", "Markedsføring");
     title.style.margin = "0 0 5px";
     parent.appendChild(title);
-    var intro = node("p", "Planlegg innlegg med ekte produktbilder fra Quickbutik. Utkast lages automatisk mandag, onsdag og fredag. Godkjenning sender ikke noe til Meta ennå.");
+    var intro = node("p", "Foreslå innlegg om produkter, turneringer, norske resultater og lokalmiljø. Utkast lages tre dager i uken. Ingenting publiseres til Meta uten egen tilkobling.");
     intro.style.color = "#64748b";
     parent.appendChild(intro);
     var radarHost = node("div");
@@ -177,8 +177,8 @@
           " · " + p.channel + " · " + (p.source === "auto" ? "Automatisk" : "Manuelt") +
           " · " + stamp(p.created_at)));
         if (p.price_nok != null) details.appendChild(node("div","Pris ved opprettelse: " + money(p.price_nok)));
-        if (p.product_url && /^https:\/\/golfkongen\.no\//.test(p.product_url)) {
-          var link = node("a","Se produktet i nettbutikken");
+        if (p.product_url && /^https:\/\//.test(p.product_url)) {
+          var link = node("a",p.topic && p.topic !== "produkt" ? "Se originalkilden" : "Se produktet i nettbutikken");
           link.href=p.product_url;link.target="_blank";link.rel="noopener noreferrer";
           details.appendChild(link);
         }
