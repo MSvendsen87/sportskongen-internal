@@ -58784,6 +58784,35 @@ function renderPortal(sb, user, data) {
     }
 
     createTabs(app, {
+      marketing: {
+        label: "Markedsføring",
+        icon: "📣",
+        group: "Salg og pris",
+        fullOnly: true,
+        description: "Produktinnlegg, utkast og godkjenning. Ingen publisering uten koblet kanal.",
+        render: function (parent) {
+          if (window.GKMarketingAdmin && window.GKMarketingAdmin.render) {
+            window.GKMarketingAdmin.render(parent, sb);
+            return;
+          }
+          var notice = el("p", "Laster markedsføring …");
+          parent.appendChild(notice);
+          var js = document.createElement("script");
+          js.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@bdc1949/gk-marketing-admin.js";
+          js.onload = function () {
+            if (!parent.isConnected) return;
+            if (window.GKMarketingAdmin && window.GKMarketingAdmin.render) {
+              window.GKMarketingAdmin.render(parent, sb);
+            } else {
+              notice.textContent = "Markedsføringsmodulen ble ikke startet.";
+            }
+          };
+          js.onerror = function () {
+            notice.textContent = "Kunne ikke laste markedsføringsmodulen. Prøv igjen.";
+          };
+          document.head.appendChild(js);
+        }
+      },
       overview: {
         label: "Oversikt",
         icon: "\ud83c\udfe0",
