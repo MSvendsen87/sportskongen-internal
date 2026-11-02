@@ -42,6 +42,24 @@
     var intro = node("p", "Planlegg innlegg med ekte produktbilder fra Quickbutik. Utkast lages automatisk mandag, onsdag og fredag. Godkjenning sender ikke noe til Meta ennå.");
     intro.style.color = "#64748b";
     parent.appendChild(intro);
+    var radarHost = node("div");
+    parent.appendChild(radarHost);
+    function loadRadar() {
+      if (window.GKMarketingRadar && window.GKMarketingRadar.render) {
+        window.GKMarketingRadar.render(radarHost, sb);
+        return;
+      }
+      var radarScript = document.createElement("script");
+      radarScript.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@8aaf04d/gk-marketing-radar.js";
+      radarScript.onload = function () {
+        if (radarHost.isConnected && window.GKMarketingRadar) window.GKMarketingRadar.render(radarHost, sb);
+      };
+      radarScript.onerror = function () {
+        radarHost.textContent = "Kunne ikke laste innholdsradaren. Prøv å oppdatere siden.";
+      };
+      document.head.appendChild(radarScript);
+    }
+    loadRadar();
     var bar = style(node("div"), "display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:18px 0");
     var notice = node("div", "Henter innlegg …");
     style(notice, "font-size:13px;color:#475569;margin:5px 0 14px");
