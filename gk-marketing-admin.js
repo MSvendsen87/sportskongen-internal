@@ -50,7 +50,7 @@
         return;
       }
       var radarScript = document.createElement("script");
-      radarScript.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@fa92acf/gk-marketing-radar.js";
+      radarScript.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@f7d8616/gk-marketing-radar.js";
       radarScript.onload = function () {
         if (radarHost.isConnected && window.GKMarketingRadar) window.GKMarketingRadar.render(radarHost, sb);
       };
