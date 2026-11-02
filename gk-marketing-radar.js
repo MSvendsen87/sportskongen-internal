@@ -36,6 +36,20 @@
     top.appendChild(add);
     var sourcesArea=el("details");sourcesArea.appendChild(el("summary","Kilder radaren følger / skal kobles til"));
     var sourcesList=el("div");sourcesArea.appendChild(sourcesList);top.appendChild(sourcesArea);
+    var teamArea=el("details");css(teamArea,"margin:12px 0");teamArea.appendChild(el("summary","Team GolfKongen · utøvere som skal følges"));
+    var teamHelp=el("p","Legg inn bekreftede teammedlemmer og gjerne PDGA-nummer. Vi bruker ikke bare navnelikhet for å tilskrive noen et resultat eller medlemskap.");
+    teamHelp.style.color="#475569";teamArea.appendChild(teamHelp);
+    var teamName=field("input","Navn på bekreftet teammedlem");
+    var teamPdga=field("input","PDGA-nummer (valgfritt)");
+    var teamList=el("div");
+    teamArea.appendChild(teamName);teamArea.appendChild(teamPdga);
+    teamArea.appendChild(b("Legg til i teamlisten",function(){
+      var nm=teamName.value.trim();var pd=teamPdga.value.trim();
+      if(nm.length<3||pd&&!/^[0-9]+$/.test(pd)){info("Skriv fullt navn og eventuelt et gyldig PDGA-nummer.",true);return;}
+      if(!window.confirm("Bekrefter du at personen tilhører Team GolfKongen, og at vi kan følge offentlige konkurranseresultater?"))return;
+      sb.from("gk_marketing_team_watchlist").insert({person_name:nm,pdga_number:pd||null,team_verified:true,active:true}).then(function(r){if(r.error)throw r.error;teamName.value="";teamPdga.value="";info("Bekreftet teammedlem lagt til.");reload();}).catch(function(e){info("Kunne ikke lagre teammedlem: "+err(e),true)});
+    },true));
+    teamArea.appendChild(teamList);top.appendChild(teamArea);
     var historyDetails=el("details");css(historyDetails,"margin-top:14px");historyDetails.appendChild(el("summary","Tidligere publiserte innlegg og læring"));
     var historyInfo=el("p","Historiske innlegg hentes ikke automatisk fra Facebook ennå. Registrer innlegg manuelt, eller koble Meta/Metricool senere for faktiske reaksjoner, kommentarer, rekkevidde og klikk.");historyInfo.style.color="#475569";historyDetails.appendChild(historyInfo);
     var learning=el("div");historyDetails.appendChild(learning);
@@ -64,13 +78,20 @@
         sb.from("gk_marketing_sources").select("*").order("id",{ascending:true}),
         sb.from("gk_marketing_history").select("channel,post_text,posted_at,reactions,comments,shares,reach,clicks,permalink,topic").order("posted_at",{ascending:false}).limit(60),
         sb.from("gk_marketing_posts").select("source_story_id").not("source_story_id","is",null).limit(100),
-        sb.from("gk_marketing_topic_performance").select("*").order("weighted_interactions",{ascending:false,nullsFirst:false})
+        sb.from("gk_marketing_topic_performance").select("*").order("weighted_interactions",{ascending:false,nullsFirst:false}),
+        sb.from("gk_marketing_team_watchlist").select("person_name,pdga_number,active,team_verified").order("person_name",{ascending:true})
       ]).then(function(rs){
         if(rs[0].error)throw rs[0].error;
         var stories=rs[0].data||[],sources=rs[1].data||[],history=rs[2].data||[];
         var usedIds=new Set((rs[3].data||[]).map(function(x){return x.source_story_id}));
         while(list.firstChild)list.removeChild(list.firstChild);
         while(sourcesList.firstChild)sourcesList.removeChild(sourcesList.firstChild);
+        while(teamList.firstChild)teamList.removeChild(teamList.firstChild);
+        (rs[5].data||[]).forEach(function(member){
+          var txt=member.person_name+(member.pdga_number?" · PDGA #"+member.pdga_number:"");
+          var line=el("div",txt);line.style.margin="5px 0";teamList.appendChild(line);
+        });
+        if(!(rs[5].data||[]).length)teamList.appendChild(el("p","Ingen teammedlemmer registrert ennå."));
         while(histList.firstChild)histList.removeChild(histList.firstChild);
         while(learning.firstChild)learning.removeChild(learning.firstChild);
         var performances=(rs[4].data||[]).filter(function(x){return x.posts_with_metrics>=2;});
