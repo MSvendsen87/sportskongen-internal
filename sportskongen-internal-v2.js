@@ -59410,7 +59410,7 @@ function renderPortal(sb, user, data) {
  function loadPortalData(sb, user) {
   Promise.all([
     sb.from("internal_supplier_addons_view").select("*").order("supplier_name", { ascending: true }),
-    sb.from("internal_products_view").select("*").order("brand", { ascending: true }),
+    fetchAllRows(sb, "internal_products_view", "id", true),
     sb.from("internal_quotes_view").select("*").order("created_at", { ascending: false }),
     sb.from("internal_customer_quote_view").select("*").order("created_at", { ascending: false }),
     Promise.resolve({ data: [], error: null }),
