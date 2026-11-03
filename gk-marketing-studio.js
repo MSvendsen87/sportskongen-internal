@@ -177,6 +177,12 @@ function render(parent,sb){
   db.briefs.filter(function(x){return x.status==="active"}).slice(0,30).forEach(function(x){
    var c=put(body,el("div",null,"gkm-card"));put(c,el("strong",x.title));put(c,el("p",x.details.slice(0,450)));put(c,el("small",x.category+" · "+day(x.created_at)));
    if(x.source_url)put(c,a(x.source_url,"Åpne kilde"));
+   put(c,btn("Lag utkast fra denne informasjonen",function(){
+    var mapping={team:"team",nyhet:"sportnytt",lokalt:"lokal_turnering",omtale:"golfkongen_omtale",aktivitet:"aktivitet",kampanje:"kampanje",idee:"fellesskap"};
+    var content=x.title+"\n\n"+x.details+(x.source_url?"\n\nKilde: "+x.source_url:"");
+    sb.from("gk_marketing_posts").insert({channel:"facebook",source:"manual",briefing_id:x.id,topic:mapping[x.category]||"fellesskap",product_name:x.title,product_url:x.source_url||null,image_url:x.image_url||null,post_text:content,status:"draft"})
+    .then(function(r){if(r.error)throw r.error;section="forslag";load()}).catch(function(e){say(msg(e),true)});
+   },true));
    put(c,btn("Arkiver",function(){sb.from("gk_marketing_briefs").update({status:"archived"}).eq("id",x.id).then(function(){load()})}));
   });
   put(body,el("h3","Kildesjekk – nye saker fra radaren"));
