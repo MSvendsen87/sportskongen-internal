@@ -51,8 +51,13 @@
     },true));
     teamArea.appendChild(teamList);top.appendChild(teamArea);
     var historyDetails=el("details");css(historyDetails,"margin-top:14px");historyDetails.appendChild(el("summary","Tidligere publiserte innlegg og læring"));
-    var historyInfo=el("p","Historiske innlegg hentes ikke automatisk fra Facebook ennå. Registrer innlegg manuelt, eller koble Meta/Metricool senere for faktiske reaksjoner, kommentarer, rekkevidde og klikk.");historyInfo.style.color="#475569";historyDetails.appendChild(historyInfo);
+    var historyInfo=el("p","Facebook-historikk fra Windsor.ai med faktiske reaksjoner, kommentarer, delinger, visninger og klikk. Klikk betyr alle postklikk, ikke nødvendigvis besøk i nettbutikken.");historyInfo.style.color="#475569";historyDetails.appendChild(historyInfo);
     var learning=el("div");historyDetails.appendChild(learning);
+    var sortHistory=field("select");
+    [["newest","Nyeste innlegg"],["clicks","Flest postklikk"],["reactions","Flest reaksjoner"],["shares","Flest delinger"],["all","Vis alle"]].forEach(function(o){
+      var x=el("option",o[1]);x.value=o[0];sortHistory.appendChild(x);
+    });
+    historyDetails.appendChild(sortHistory);
     var histList=el("div");historyDetails.appendChild(histList);
     var histform=el("details");histform.appendChild(el("summary","Registrer et tidligere innlegg"));
     var htext=field("textarea","Lim inn original innleggstekst");htext.rows=3;
@@ -76,9 +81,9 @@
       Promise.all([
         sb.from("gk_marketing_stories").select("*").order("priority",{ascending:false}).order("discovered_at",{ascending:false}).limit(75),
         sb.from("gk_marketing_sources").select("*").order("id",{ascending:true}),
-        sb.from("gk_marketing_history").select("channel,post_text,posted_at,reactions,comments,shares,reach,clicks,permalink,topic").order("posted_at",{ascending:false}).limit(60),
+        sb.from("gk_marketing_history").select("channel,post_text,posted_at,reactions,comments,shares,reach,impressions,clicks,permalink,topic").order("posted_at",{ascending:false}).limit(250),
         sb.from("gk_marketing_posts").select("source_story_id").not("source_story_id","is",null).limit(100),
-        sb.from("gk_marketing_topic_performance").select("*").order("weighted_interactions",{ascending:false,nullsFirst:false}),
+        sb.from("gk_marketing_topic_performance").select("*").order("post_count",{ascending:false}),
         sb.from("gk_marketing_team_watchlist").select("person_name,pdga_number,active,team_verified").order("person_name",{ascending:true})
       ]).then(function(rs){
         if(rs[0].error)throw rs[0].error;
@@ -96,13 +101,14 @@
         while(learning.firstChild)learning.removeChild(learning.firstChild);
         var performances=(rs[4].data||[]).filter(function(x){return x.posts_with_metrics>=2;});
         if(performances.length){
-          learning.appendChild(el("strong","Mest respons i tidligere innlegg"));
+          learning.appendChild(el("strong","Facebook-historikk · respons per tema"));
           performances.slice(0,5).forEach(function(x){
-            var metric=x.engagement_pct!=null ? x.engagement_pct+" % engasjement / rekkevidde" :
-              x.weighted_interactions+" vektede interaksjoner i snitt";
+            var metric=x.interactions_per_1000_impressions!=null
+              ? x.interactions_per_1000_impressions+" interaksjoner per 1000 visninger"
+              : "Mangler visningstall";
             learning.appendChild(el("div",x.topic+" · "+x.post_count+" innlegg · "+metric));
           });
-          learning.appendChild(el("small","Foreløpig sammenligning, ikke en automatisk fasit: innleggstyper må vurderes mot rekkevidde, alder og kampanjetype."));
+          learning.appendChild(el("small","Dette bygger på reaksjoner, kommentarer og delinger delt på visninger, ikke unike personer. Små utvalg, betalte visninger og konkurranser påvirker sammenligningen."));
         }else{
           var learningEmpty=el("p","Læringen starter når tidligere innlegg og responstall er importert. Da kan vi vurdere hvilke temaer som faktisk fungerer best.");
           learningEmpty.style.color="#64748b";learning.appendChild(learningEmpty);
@@ -136,16 +142,33 @@
         });
         if(!stories.length)list.appendChild(el("p","Ingen nyhetssaker ennå."));
         sources.forEach(function(s){var line=el("div");line.style.margin="6px 0";line.appendChild(link(s.homepage_url,s.name));line.appendChild(el("small"," · "+(s.collection_status==="automated"?"automatisk kildesjekk":"må sjekkes/verifiseres")));sourcesList.appendChild(line)});
-        history.slice(0,8).forEach(function(h){
-          var row=el("div");css(row,"border-top:1px solid #e2e8f0;padding:9px 0");
-          row.appendChild(el("strong",date(h.posted_at)+" · "+(h.topic||h.channel)));
-          row.appendChild(el("p",h.post_text.slice(0,230)+(h.post_text.length>230?"…":"")));
-          if(h.permalink)row.appendChild(link(h.permalink,"Se opprinnelig innlegg"));
-          var stats=[h.reactions==null?null:"Reaksjoner "+h.reactions,h.comments==null?null:"Kommentarer "+h.comments,h.reach==null?null:"Rekkevidde "+h.reach].filter(Boolean);
-          if(stats.length)row.appendChild(el("small",stats.join(" · ")));
-          histList.appendChild(row);
-        });
-        if(!history.length)histList.appendChild(el("p","Ingen publiserte innlegg er importert ennå; innholdet kan ikke rangeres mot tidligere resultater før historikken er tilgjengelig."));
+        function showHistory(){
+          while(histList.firstChild)histList.removeChild(histList.firstChild);
+          var ordered=history.slice();
+          if(sortHistory.value==="clicks")ordered.sort(function(a,b){return (b.clicks||0)-(a.clicks||0);});
+          if(sortHistory.value==="reactions")ordered.sort(function(a,b){return (b.reactions||0)-(a.reactions||0);});
+          if(sortHistory.value==="shares")ordered.sort(function(a,b){return (b.shares||0)-(a.shares||0);});
+          var max=sortHistory.value==="all"?ordered.length:12;
+          histList.appendChild(el("small","Viser "+Math.min(max,ordered.length)+" av "+history.length+" registrerte innlegg."));
+          ordered.slice(0,max).forEach(function(h){
+            var row=el("div");css(row,"border-top:1px solid #e2e8f0;padding:9px 0");
+            row.appendChild(el("strong",date(h.posted_at)+" · "+(h.topic||h.channel)));
+            row.appendChild(el("p",(h.post_text||"").slice(0,230)+((h.post_text||"").length>230?"…":"")));
+            if(h.permalink)row.appendChild(link(h.permalink,"Se opprinnelig innlegg"));
+            var stats=[
+              h.reactions==null?null:"Reaksjoner "+h.reactions,
+              h.comments==null?null:"Kommentarer "+h.comments,
+              h.shares==null?null:"Delinger "+h.shares,
+              h.impressions==null?null:"Visninger "+h.impressions,
+              h.clicks==null?null:"Postklikk "+h.clicks
+            ].filter(Boolean);
+            if(stats.length){var sm=el("small",stats.join(" · "));sm.style.display="block";sm.style.color="#64748b";row.appendChild(sm);}
+            histList.appendChild(row);
+          });
+          if(!history.length)histList.appendChild(el("p","Ingen publiserte innlegg er importert ennå."));
+        }
+        sortHistory.onchange=showHistory;
+        showHistory();
       }).catch(function(e){info("Kunne ikke hente radardata: "+err(e),true)});
     }
     reload();
