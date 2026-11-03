@@ -94,23 +94,50 @@ function render(parent,sb){
   }).catch(function(e){say(msg(e),true)});
  }
  function photos(p,pick,current){
+  var suggestions=Array.isArray(p.image_options)?p.image_options.filter(good):[];
   var items=[];
-  db.media.forEach(function(m){if(good(m.image_url))items.push({url:m.image_url,name:m.title,type:m.category,src:m.source,rights:m.rights_confirmed})});
-  db.products.forEach(function(m){items.push({url:m.image_url,name:m.product_name,type:"produkt",src:"quickbutik",rights:true})});
-  items=items.filter(function(m,i){return items.findIndex(function(n){return n.url===m.url})===i});
-  items.sort(function(a,b){function score(x){return (x.url===current()?100:0)+(x.type===p.topic?35:0)+(x.src==="upload"?20:0)+(x.type==="generelt"?10:0)}return score(b)-score(a)});
-  var div=el("div");put(div,el("p","Velg bilder fra Quickbutik, bildebanken og GolfKongens Facebook-/Instagram-arkiv. Sosiale medier-lenker kan utløpe, og bruksrett må kontrolleres.","gkm-muted"));
-  var grid=put(div,el("div",null,"gkm-pics"));var shown=24;
+  db.media.forEach(function(m){
+   if(good(m.image_url))items.push({url:m.image_url,name:m.title,type:m.category,src:m.source,rights:m.rights_confirmed});
+  });
+  db.products.forEach(function(m){
+   if(good(m.image_url))items.push({url:m.image_url,name:m.product_name,type:"produkt",src:"quickbutik",rights:true});
+  });
+  suggestions.forEach(function(url){
+   if(!items.some(function(x){return x.url===url;}))
+     items.unshift({url:url,name:"Foreslått bilde til dette innlegget",type:p.topic||"generelt",src:"manual",rights:false});
+  });
+  items=items.filter(function(m,i){return items.findIndex(function(n){return n.url===m.url;})===i;});
+  items.sort(function(a,b){
+   function rank(x){
+    var match=suggestions.indexOf(x.url);
+    return (match>=0?1000-match:0)+(x.type===p.topic?50:0)+(x.src==="upload"?30:0)+(x.url===current()?15:0);
+   }
+   return rank(b)-rank(a);
+  });
+  var div=el("div");
+  put(div,el("p",suggestions.length
+    ? suggestions.length+" bildevalg som passer til akkurat dette innlegget. Du kan også velge fra hele bildebanken."
+    : "Velg et relevant bilde fra GolfKongens egne bilder og produkter.","gkm-muted"));
+  var grid=put(div,el("div",null,"gkm-pics"));
+  var shown=suggestions.length||Math.min(items.length,6);
   function show(){
    grid.replaceChildren();
    items.slice(0,shown).forEach(function(x){
-    var z=put(grid,el("button",null,"gkm-pick"+(current()===x.url?" selected":"")));z.type="button";
-    var img=put(z,el("img"));img.src=x.url;img.loading="lazy";img.alt=x.name;
-    put(z,el("small",x.name));put(z,el("small",x.type));
-    z.onclick=function(){if((x.src==="facebook"||x.src==="instagram")&&!x.rights&&!window.confirm("Bekreft at GolfKongen har rett til å gjenbruke dette sosiale medier-bildet, og at lenken fungerer."))return;pick(x.url);show()};
+    var card=put(grid,el("button",null,"gkm-pick"+(current()===x.url?" selected":"")));
+    card.type="button";
+    var img=put(card,el("img"));img.src=x.url;img.loading="lazy";img.alt=x.name;
+    img.onerror=function(){img.style.opacity=".25";var note=put(card,el("small","Bildelenken virker ikke lenger"));note.style.color="#a92824";};
+    put(card,el("small",suggestions.includes(x.url)?"Anbefalt":x.type));
+    put(card,el("small",x.name));
+    card.onclick=function(){
+     if((x.src==="facebook"||x.src==="instagram"||!x.rights) &&
+       !window.confirm("Kontroller at GolfKongen har bruksrett til bildet, og at det viser riktig motiv. Vil du velge det?"))return;
+     pick(x.url);show();
+    };
    });
-  }show();
-  put(div,btn("Vis flere bilder",function(){shown=Math.min(items.length,shown+24);show()}));
+  }
+  show();
+  put(div,btn("Vis flere bilder fra bildebanken",function(){shown=Math.min(items.length,shown+18);show()}));
   put(div,btn("Fjern bilde",function(){pick(null);show()}));
   return div;
  }
@@ -132,10 +159,10 @@ function render(parent,sb){
   var channels=put(card,el("div",null,"gkm-row"));channels.style.marginTop="8px";
   var channel=put(channels,ctl("select"));
   [["facebook","Facebook"],["instagram","Instagram"],["newsletter","Nyhetsbrev"]].forEach(function(o){var op=put(channel,el("option",o[1]));op.value=o[0]});channel.value=p.channel;
-  var picker=put(card,el("div"));picker.hidden=true;
+  var picker=put(card,el("div"));picker.hidden=false;
   function selected(url){chosen=url;im.style.display=url?"block":"none";if(url)im.src=url}
   picker.appendChild(photos(p,selected,function(){return chosen}));
-  put(channels,btn("Velg bilde",function(){picker.hidden=!picker.hidden}));
+  put(channels,btn("Vis/skjul bildevalg",function(){picker.hidden=!picker.hidden}));
   var actions=put(card,el("div",null,"gkm-row"));actions.style.marginTop="11px";
   put(actions,btn("Lagre",function(){updatePost(p,{post_text:text.value,image_url:chosen,channel:channel.value,status:"draft",approved_at:null,approved_by:null},"Utkast lagret.");}));
   put(actions,btn("Godkjenn",function(){
@@ -149,9 +176,9 @@ function render(parent,sb){
  }
  function forslag(){
   put(body,el("h3","Forslag til godkjenning"));
-  put(body,el("p","Det skal ligge minst tre forslag klare. Ved godkjenning eller avvisning fylles køen på igjen. Ingenting publiseres uten videre tilkobling.","gkm-note"));
+  put(body,el("p","Forslagene lages fra konkrete fakta og kan velges med ulike tekster og bilder. Etter godkjenning eller avvisning hentes et nytt gjennomarbeidet utkast fra reservebanken. Ingenting publiseres uten din godkjenning.","gkm-note"));
   var pending=db.posts.filter(function(p){return p.status==="draft"});
-  if(pending.length<3)put(body,el("p","Det er færre enn tre utkast – automatisk kontroll skjer hver halvtime.","gkm-note"));
+  if(pending.length<3)put(body,el("p","Det er færre enn tre ferdige utkast. Systemet venter på nye faktasjekkede forslag framfor å fylle køen med standardtekster.","gkm-note"));
   pending.forEach(draft);
   var approved=db.posts.filter(function(p){return p.status==="approved"});
   if(approved.length){put(body,el("h3","Godkjent – ikke publisert"));
