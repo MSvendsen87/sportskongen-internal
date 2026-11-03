@@ -58798,7 +58798,7 @@ function renderPortal(sb, user, data) {
           var notice = el("p", "Laster markedsføring …");
           parent.appendChild(notice);
           var js = document.createElement("script");
-          js.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@5bed9a8/gk-marketing-studio.js";
+          js.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@941aed0/gk-marketing-studio.js";
           js.onload = function () {
             if (!parent.isConnected) return;
             if (window.GKMarketingAdmin && window.GKMarketingAdmin.render) {
