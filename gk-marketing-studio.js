@@ -66,8 +66,8 @@ function render(parent,sb){
    sb.from("gk_marketing_briefs").select("*").order("created_at",{ascending:false}).limit(150),
    sb.from("gk_marketing_stories").select("*").order("priority",{ascending:false}).limit(150),
    sb.from("gk_marketing_media").select("*").order("created_at",{ascending:false}).limit(150),
-   sb.from("gk_marketing_history").select("channel,post_text,posted_at,reactions,comments,shares,impressions,clicks,permalink,topic").order("posted_at",{ascending:false}).limit(400),
-   sb.from("gk_marketing_topic_performance").select("*").order("post_count",{ascending:false}),
+   sb.from("gk_marketing_history").select("channel,post_text,posted_at,reactions,comments,shares,impressions,reach,saved_count,media_url,media_type,clicks,permalink,topic").order("posted_at",{ascending:false}).limit(400),
+   sb.from("gk_marketing_channel_topic_performance").select("*").order("post_count",{ascending:false}),
    sb.from("minbag_catalog").select("source_product_id,product_name,product_url,image_url,qb_stock_qty,qb_verified_at").eq("source","quickbutik").eq("is_active",true).eq("qb_visible",true).gte("qb_stock_qty",2).order("source_product_id",{ascending:false}).limit(400),
    sb.from("gk_marketing_post_versions").select("*").limit(350),
    sb.from("gk_marketing_team_watchlist").select("*").order("person_name",{ascending:true})
@@ -99,7 +99,7 @@ function render(parent,sb){
   db.products.forEach(function(m){items.push({url:m.image_url,name:m.product_name,type:"produkt",src:"quickbutik",rights:true})});
   items=items.filter(function(m,i){return items.findIndex(function(n){return n.url===m.url})===i});
   items.sort(function(a,b){function score(x){return (x.url===current()?100:0)+(x.type===p.topic?35:0)+(x.src==="upload"?20:0)+(x.type==="generelt"?10:0)}return score(b)-score(a)});
-  var div=el("div");put(div,el("p","Velg bilde fra GolfKongens originale bilder. Noen Facebook-bilder har lenker som kan utløpe.","gkm-muted"));
+  var div=el("div");put(div,el("p","Velg bilder fra Quickbutik, bildebanken og GolfKongens Facebook-/Instagram-arkiv. Sosiale medier-lenker kan utløpe, og bruksrett må kontrolleres.","gkm-muted"));
   var grid=put(div,el("div",null,"gkm-pics"));var shown=24;
   function show(){
    grid.replaceChildren();
@@ -107,7 +107,7 @@ function render(parent,sb){
     var z=put(grid,el("button",null,"gkm-pick"+(current()===x.url?" selected":"")));z.type="button";
     var img=put(z,el("img"));img.src=x.url;img.loading="lazy";img.alt=x.name;
     put(z,el("small",x.name));put(z,el("small",x.type));
-    z.onclick=function(){if(x.src==="facebook"&&!x.rights&&!window.confirm("Bekreft at GolfKongen kan gjenbruke dette Facebook-bildet og at lenken virker."))return;pick(x.url);show()};
+    z.onclick=function(){if((x.src==="facebook"||x.src==="instagram")&&!x.rights&&!window.confirm("Bekreft at GolfKongen har rett til å gjenbruke dette sosiale medier-bildet, og at lenken fungerer."))return;pick(x.url);show()};
    });
   }show();
   put(div,btn("Vis flere bilder",function(){shown=Math.min(items.length,shown+24);show()}));
@@ -231,27 +231,51 @@ function render(parent,sb){
   },true));
   put(body,el("h3","Bilder fra eget arkiv"));
   var grid=put(body,el("div",null,"gkm-pics"));
-  db.media.forEach(function(x){var p=put(grid,el("div",null,"gkm-pick"));var img=put(p,el("img"));img.src=x.image_url;img.loading="lazy";img.alt=x.title;put(p,el("small",x.title));put(p,el("small",x.source==="facebook"?"Facebook-foto":x.category))});
+  db.media.forEach(function(x){var p=put(grid,el("div",null,"gkm-pick"));var img=put(p,el("img"));img.src=x.image_url;img.loading="lazy";img.alt=x.title;put(p,el("small",x.title));put(p,el("small",x.source==="facebook"?"Facebook-foto":x.source==="instagram"?"Instagram-foto":x.category))});
   put(body,el("h3","Originale produktbilder fra Quickbutik"));
   var products=put(body,el("div",null,"gkm-pics"));
   db.products.slice(0,60).forEach(function(x){var p=put(products,el("div",null,"gkm-pick"));var img=put(p,el("img"));img.src=x.image_url;img.loading="lazy";img.alt=x.product_name;put(p,el("small",x.product_name))});
  }
  function history(){
-  put(body,el("h3","Læring fra publiserte innlegg"));
+  put(body,el("h3","Læring fra Facebook og Instagram"));
   var fb=db.history.filter(function(x){return x.channel==="facebook"}),ig=db.history.filter(function(x){return x.channel==="instagram"});
   var stats=put(body,el("div",null,"gkm-columns"));
-  [["Facebook",fb.length],["Instagram",ig.length],["Visninger",num(db.history.reduce(function(s,x){return s+Number(x.impressions||0)},0))],["Postklikk",num(db.history.reduce(function(s,x){return s+Number(x.clicks||0)},0))]].forEach(function(x){var c=put(stats,el("div",null,"gkm-stat"));put(c,el("strong",x[1]));put(c,el("small",x[0]))});
-  if(!ig.length)put(body,el("p","Instagram-kontoen er ennå ikke tilkoblet Windsor.ai. Facebook-innlegg er lagret.","gkm-note"));
-  put(body,el("p","Postklikk er alle klikk på et innlegg, ikke nødvendigvis butikkbesøk. Visninger er ikke unik rekkevidde.","gkm-muted"));
-  put(body,el("h3","Temaer som engasjerer"));
-  var result=put(body,el("div",null,"gkm-columns"));
-  db.performance.filter(function(x){return x.post_count>0}).slice(0,12).forEach(function(x){var c=put(result,el("div",null,"gkm-stat"));put(c,el("strong",topicNames[x.topic]||x.topic));put(c,el("p",x.post_count+" innlegg · "+num(x.total_impressions)+" visninger"));put(c,el("small",(x.interactions_per_1000_impressions||"0")+" interaksjoner per 1000 visninger"))});
+  [["Facebook-innlegg",fb.length],["Instagram-innlegg",ig.length],["Visninger, begge kanaler",num(db.history.reduce(function(s,x){return s+Number(x.impressions||0)},0))],["Instagram-lagringer",num(ig.reduce(function(s,x){return s+Number(x.saved_count||0)},0))]].forEach(function(x){var card=put(stats,el("div",null,"gkm-stat"));put(card,el("strong",x[1]));put(card,el("small",x[0]));});
+  put(body,el("p","Facebook-tall er fra sideinnlegg. Instagram viser egne likerklikk, kommentarer, lagringer, rekkevidde og visninger når tilgjengelig. Tallene er ikke direkte sammenlignbare, og postklikk er ikke nødvendigvis butikkbesøk.","gkm-muted"));
+  put(body,el("h3","Hvilke temaer gir respons?"));
+  var channelChoice=put(body,ctl("select"));[["all","Begge kanaler"],["facebook","Bare Facebook"],["instagram","Bare Instagram"]].forEach(function(x){var o=put(channelChoice,el("option",x[1]));o.value=x[0];});
+  var categories=put(body,el("div",null,"gkm-columns"));
   put(body,el("h3","Alle historiske innlegg"));
-  var sort=put(body,ctl("select"));[["clicks","Flest postklikk"],["recent","Nyeste"],["reactions","Flest reaksjoner"],["shares","Flest delinger"],["impressions","Flest visninger"]].forEach(function(o){var x=put(sort,el("option",o[1]));x.value=o[0]});
+  var sort=put(body,ctl("select"));
+  [["recent","Nyeste først"],["reactions","Flest likerklikk / reaksjoner"],["shares","Flest delinger"],["impressions","Flest visninger"],["reach","Størst rekkevidde (der tilgjengelig)"],["saved_count","Flest lagringer"],["clicks","Flest postklikk (Facebook)"]].forEach(function(o){var op=put(sort,el("option",o[1]));op.value=o[0];});
   var list=put(body,el("div"));
-  function display(){list.replaceChildren();var s=db.history.slice();if(sort.value==="recent")s.sort(function(a,b){return new Date(b.posted_at)-new Date(a.posted_at)});else s.sort(function(a,b){return Number(b[sort.value]||0)-Number(a[sort.value]||0)});
-   s.slice(0,45).forEach(function(x){var c=put(list,el("div",null,"gkm-card"));put(c,el("strong",day(x.posted_at)+" · "+(topicNames[x.topic]||x.topic||x.channel)));put(c,el("p",(x.post_text||"").slice(0,400)));put(c,el("small",["Reaksjoner "+num(x.reactions),"Kommentarer "+num(x.comments),"Delinger "+num(x.shares),"Visninger "+num(x.impressions),"Postklikk "+num(x.clicks)].join(" · ")));if(good(x.permalink))put(c,a(x.permalink,"Åpne originalinnlegget"))});
-  }sort.onchange=display;display();
+  function display(){
+   categories.replaceChildren();list.replaceChildren();
+   var ch=channelChoice.value;
+   var perfs=db.performance.filter(function(x){return x.post_count>0&&(ch==="all"||x.channel===ch);})
+     .sort(function(a,b){return Number(b.post_count||0)-Number(a.post_count||0)});
+   perfs.slice(0,15).forEach(function(x){
+    var card=put(categories,el("div",null,"gkm-stat"));
+    put(card,el("strong",(x.channel==="instagram"?"Instagram":"Facebook")+" · "+(topicNames[x.topic]||x.topic)));
+    put(card,el("p",num(x.post_count)+" innlegg · "+num(x.total_views||0)+" visninger"));
+    var metric=x.interactions_per_1000_views==null?"Manglende visningstall":x.interactions_per_1000_views+" reaksjoner, kommentarer og delinger per 1000 visninger";
+    put(card,el("small",metric));
+   });
+   var data=db.history.filter(function(x){return ch==="all"||x.channel===ch;});
+   if(sort.value==="recent")data.sort(function(a,b){return new Date(b.posted_at)-new Date(a.posted_at)});
+   else data.sort(function(a,b){return Number(b[sort.value]||0)-Number(a[sort.value]||0)});
+   put(list,el("p","Viser "+Math.min(45,data.length)+" av "+data.length+" innlegg.","gkm-muted"));
+   data.slice(0,45).forEach(function(x){
+    var card=put(list,el("div",null,"gkm-card"));
+    put(card,el("strong",(x.channel==="instagram"?"Instagram":"Facebook")+" · "+day(x.posted_at)+" · "+(topicNames[x.topic]||x.topic||"Innlegg")));
+    if(good(x.media_url)&&(!x.media_type||!["VIDEO","REEL"].includes(x.media_type))){var photo=put(card,el("img",null,"gkm-photo"));photo.src=x.media_url;photo.loading="lazy";photo.alt="Bilde fra tidligere innlegg";}
+    put(card,el("p",(x.post_text||"").slice(0,450)));
+    var m=[x.reactions==null?null:"Reaksjoner "+num(x.reactions),x.comments==null?null:"Kommentarer "+num(x.comments),x.shares==null?null:"Delinger "+num(x.shares),x.saved_count==null?null:"Lagringer "+num(x.saved_count),x.reach==null?null:"Rekkevidde "+num(x.reach),x.impressions==null?null:"Visninger "+num(x.impressions),x.clicks==null?null:"Postklikk "+num(x.clicks)].filter(Boolean);
+    put(card,el("small",m.join(" · ")));
+    if(good(x.permalink))put(card,a(x.permalink,"Åpne originalinnlegget"));
+   });
+  }
+  channelChoice.onchange=display;sort.onchange=display;display();
  }
  function team(){
   put(body,el("h3","Team GolfKongen"));var c=put(body,el("div",null,"gkm-card"));
