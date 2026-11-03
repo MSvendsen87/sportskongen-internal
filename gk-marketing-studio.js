@@ -53,7 +53,7 @@ function render(parent,sb){
  var body=put(root,el("div"));
  var section="forslag";
  var db={posts:[],briefs:[],stories:[],media:[],history:[],performance:[],products:[],versions:[],team:[]};
- var titles=[["forslag","Forslag"],["briefs","Egen informasjon / nyheter"],["bilder","Bildebank"],["historikk","Historikk og læring"],["team","Team"]];
+ var titles=[["forslag","Forslag"],["newsletter","Nyhetsbrev / Mailchimp"],["briefs","Egen informasjon / nyheter"],["bilder","Bildebank"],["historikk","Historikk og læring"],["team","Team"]];
  function say(s,bad){notice.textContent=s;notice.style.color=bad?"#a92824":"#61736b"}
  function reloadTabs(){
   tabs.replaceChildren();
@@ -335,7 +335,16 @@ function render(parent,sb){
    sb.from("gk_marketing_team_watchlist").insert({person_name:name.value.trim(),pdga_number:pdga.value.trim()||null,team_verified:true,active:true}).then(function(r){if(r.error)throw r.error;load()}).catch(function(e){say(msg(e),true)});
   },true));
  }
- function draw(){body.replaceChildren();if(section==="forslag")forslag();else if(section==="briefs")briefs();else if(section==="bilder")images();else if(section==="historikk")history();else team()}
+ function newsletter(){
+  if(window.GKMarketingNewsletter && window.GKMarketingNewsletter.render){window.GKMarketingNewsletter.render(body,sb,db);return}
+  put(body,el("p","Laster nyhetsbrevredigering …","gkm-muted"));
+  var script=document.createElement("script");
+  script.src="https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@84ec476/gk-marketing-newsletter.js";
+  script.onload=function(){if(section==="newsletter"&&window.GKMarketingNewsletter&&window.GKMarketingNewsletter.render){body.replaceChildren();window.GKMarketingNewsletter.render(body,sb,db)}else if(section==="newsletter")say("Nyhetsbrevmodulen kunne ikke startes.",true)};
+  script.onerror=function(){if(section==="newsletter")say("Kunne ikke laste nyhetsbrevmodulen.",true)};
+  document.head.appendChild(script);
+ }
+ function draw(){body.replaceChildren();if(section==="forslag")forslag();else if(section==="newsletter")newsletter();else if(section==="briefs")briefs();else if(section==="bilder")images();else if(section==="historikk")history();else team()}
  load();
 }
 window.GKMarketingAdmin={render:render};
