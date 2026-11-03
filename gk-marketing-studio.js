@@ -8,6 +8,9 @@ function btn(name,fn,primary){var x=el("button",name,"gkm-btn"+(primary?" primar
 function msg(e){return e&&e.message||e&&e.details||String(e)}
 function num(n){return Number(n||0).toLocaleString("nb-NO")}
 function day(d){return d?new Date(d).toLocaleDateString("nb-NO"):"–"}
+function dateTimeOslo(d){return d?new Date(d).toLocaleString("nb-NO",{timeZone:"Europe/Oslo",dateStyle:"medium",timeStyle:"short"}):"Ikke valgt"}
+function localDateInput(d){if(!d)return "";var n=new Date(d);return new Date(n.getTime()-n.getTimezoneOffset()*60000).toISOString().slice(0,16)}
+function plannedISO(value){if(!value)return null;var d=new Date(value);if(!Number.isFinite(d.getTime()))throw Error("Ugyldig dato eller klokkeslett.");if(d.getTime()<=Date.now()+60000)throw Error("Velg et tidspunkt senere enn nå.");return d.toISOString()}
 function good(u){return /^https:\/\//.test(u||"")}
 function a(url,label){if(!good(url))return el("span",label||"");var n=el("a",label||url);n.href=url;n.target="_blank";n.rel="noopener noreferrer";return n}
 var topicNames={produkt:"Produkter",team:"Team GolfKongen",norsk_resultat:"Norske resultater",lokal_turnering:"Lokale turneringer",lokalt:"Lokalt",sportnytt:"Diskgolfnyheter",fellesskap:"Fellesskap",aktivitet:"Aktiviteter",min_bag:"Min Bag",tips:"Tips",konkurranse:"Konkurranser",nyhet:"Nyhet",omtale:"Omtale",golfkongen_omtale:"Omtale",kampanje:"Kampanje",idee:"Egen idé",ukjent:"Ukjent"};
@@ -44,7 +47,7 @@ function render(parent,sb){
  var head=put(root,el("div",null,"gkm-head"));
  put(head,el("h2","Markedsføringsstudio"));
  put(head,btn("Oppdater",load));
- put(root,el("p","Lag innlegg, velg originale bilder og godkjenn innhold. Historikken brukes til læring. Ingen automatisk publisering.","gkm-muted"));
+ put(root,el("p","Lag innlegg, velg originale bilder, godkjenn og angi ønsket tidspunkt. Tidspunktet lagres i admin, men det publiseres ikke automatisk.","gkm-muted"));
  var tabs=put(root,el("div",null,"gkm-tabs"));
  var notice=put(root,el("p","Henter data …","gkm-muted"));
  var body=put(root,el("div"));
@@ -85,12 +88,12 @@ function render(parent,sb){
     .then(function(r){if(r.error)throw r.error;if(!(r.data||[]).length)throw Error("Manglende tillatelse.");say(success);load()})
     .catch(function(e){say(msg(e),true)});
  }
- function approve(p,text,image,channel){
+ function approve(p,text,image,channel,plannedAt){
   sb.auth.getUser().then(function(r){if(r.error||!r.data.user)throw Error("Innlogging påkrevd.");
    return sb.from("gk_marketing_posts").update({status:"approved",post_text:text,image_url:image||null,channel:channel,
-     approved_at:new Date().toISOString(),approved_by:r.data.user.id,updated_at:new Date().toISOString()}).eq("id",p.id).select("id");
+     approved_at:new Date().toISOString(),approved_by:r.data.user.id,scheduled_at:plannedAt,updated_at:new Date().toISOString()}).eq("id",p.id).select("id");
   }).then(function(r){if(r.error)throw r.error;if(!(r.data||[]).length)throw Error("Mangler admin-tilgang.");
-    say("Godkjent – ikke publisert. En egen publiseringskobling må aktiveres.");load()
+    say("Godkjent og lagret" + (plannedAt?" med ønsket tidspunkt":"") + " – ikke publisert. Bruk Meta Business Suite for faktisk planlegging.");load()
   }).catch(function(e){say(msg(e),true)});
  }
  function photos(p,pick,current){
@@ -159,16 +162,20 @@ function render(parent,sb){
   var channels=put(card,el("div",null,"gkm-row"));channels.style.marginTop="8px";
   var channel=put(channels,ctl("select"));
   [["facebook","Facebook"],["instagram","Instagram"],["newsletter","Nyhetsbrev"]].forEach(function(o){var op=put(channel,el("option",o[1]));op.value=o[0]});channel.value=p.channel;
-  var picker=put(card,el("div"));picker.hidden=false;
+  put(card,el("label","Ønsket publiseringsdato og klokkeslett (valgfritt)"));
+   var desired=put(card,ctl("input"));desired.type="datetime-local";desired.step=900;desired.value=localDateInput(p.scheduled_at);
+   put(card,el("p","Lagrer en plan i Marketing Studio. Dette setter IKKE opp automatisk publisering på Facebook eller Instagram.","gkm-muted"));
+   var picker=put(card,el("div"));picker.hidden=false;
   function selected(url){chosen=url;im.style.display=url?"block":"none";if(url)im.src=url}
   picker.appendChild(photos(p,selected,function(){return chosen}));
   put(channels,btn("Vis/skjul bildevalg",function(){picker.hidden=!picker.hidden}));
   var actions=put(card,el("div",null,"gkm-row"));actions.style.marginTop="11px";
-  put(actions,btn("Lagre",function(){updatePost(p,{post_text:text.value,image_url:chosen,channel:channel.value,status:"draft",approved_at:null,approved_by:null},"Utkast lagret.");}));
+  put(actions,btn("Lagre",function(){var when;try{when=plannedISO(desired.value)}catch(e){say(msg(e),true);return}updatePost(p,{post_text:text.value,image_url:chosen,channel:channel.value,scheduled_at:when,status:"draft",approved_at:null,approved_by:null},"Utkast lagret.");}));
   put(actions,btn("Godkjenn",function(){
    if(text.value.trim().length<8){say("Legg inn en ordentlig tekst først.",true);return}
    if(!window.confirm("Har du kontrollert fakta, bilde og bruksrett? Godkjent innhold blir ikke publisert automatisk."))return;
-   approve(p,text.value,chosen,channel.value);
+   var when;try{when=plannedISO(desired.value)}catch(e){say(msg(e),true);return}
+    approve(p,text.value,chosen,channel.value,when);
   },true));
   put(actions,btn("Avvis",function(){if(window.confirm("Avvise forslaget?"))updatePost(p,{status:"rejected",approved_at:null,approved_by:null},"Avvist – køen fylles på igjen.")}));
   put(actions,btn("Kopier tekst",function(){navigator.clipboard?.writeText(text.value)}));
@@ -182,7 +189,20 @@ function render(parent,sb){
   pending.forEach(draft);
   var approved=db.posts.filter(function(p){return p.status==="approved"});
   if(approved.length){put(body,el("h3","Godkjent – ikke publisert"));
-   approved.forEach(function(p){var c=put(body,el("div",null,"gkm-card"));put(c,el("strong",p.product_name||p.topic));put(c,el("p",p.post_text.slice(0,350)));put(c,el("small","Kanal: "+p.channel));put(c,el("p","Venter på separat publiseringsintegrasjon.","gkm-muted"));put(c,btn("Tilbake til utkast",function(){updatePost(p,{status:"draft",approved_at:null,approved_by:null},"Tilbakeført.")}));});
+   approved.forEach(function(p){
+      var c=put(body,el("div",null,"gkm-card"));
+      put(c,el("strong",p.product_name||p.topic));
+      put(c,el("p",p.post_text.slice(0,550)));
+      put(c,el("small","Kanal: "+p.channel+" · "+(p.scheduled_at?"Ønsket publisering: "+dateTimeOslo(p.scheduled_at):"Ikke tidsfestet")));
+      put(c,el("p","Godkjent, men ikke sendt til Meta. For automatisk publisering må innlegget også planlegges i Meta Business Suite.","gkm-muted"));
+      put(c,el("label","Ønsket publiseringsdato og klokkeslett (valgfritt)"));
+      var planned=put(c,ctl("input"));planned.type="datetime-local";planned.step=900;planned.value=localDateInput(p.scheduled_at);
+      var controls=put(c,el("div",null,"gkm-row"));controls.style.marginTop="10px";
+      put(controls,btn("Lagre tidspunkt",function(){var when;try{when=plannedISO(planned.value)}catch(e){say(msg(e),true);return}updatePost(p,{scheduled_at:when},"Ønsket tidspunkt lagret. Publiseres ikke automatisk.")}));
+      put(controls,btn("Kopier tekst",function(){navigator.clipboard?.writeText(p.post_text)}));
+      put(controls,a("https://business.facebook.com/","Åpne Meta Business Suite"));
+      put(controls,btn("Tilbake til utkast",function(){updatePost(p,{status:"draft",approved_at:null,approved_by:null},"Tilbakeført.")}));
+    });
   }
  }
  function briefs(){
