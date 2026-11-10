@@ -4317,10 +4317,105 @@
   }
   // ==== END GK BOOKING ECONOMY V20 ====
 
+
+  // Live HYZR extension payments: monthly Fiken reconciliation. Owner access
+  // is checked AGAIN on the separate Booking 2.0 server, never trusted here.
+  function skBookingHyzrFikenManager(parent,sb,user){
+    if(!skBookingIsOwner(user))return;
+    var section=createCollapsibleSection("HYZR – Vipps-forlengelser / Fiken (kun eier)",
+      "Månedlig oversikt, CSV-bilag og registrering av bilagsnummer når Fiken er ajour.",false);
+    var body=section.body;
+    var note=el("div","Kun direkte Vipps-forlengelser. Ikke registrer disse en gang til i 'Manuell Vipps' eller Quickbutik. Oppgjør/gebyrer avstemmes separat mot Vipps.");
+    note.className="sk-warning";body.appendChild(note);
+    var controls=el("div");controls.style.display="flex";controls.style.flexWrap="wrap";controls.style.gap="10px";controls.style.margin="12px 0";
+    var month=el("input");month.type="month";month.min="2026-11";
+    month.value=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Oslo",year:"numeric",month:"2-digit"}).format(new Date());
+    controls.appendChild(skBookingField("Måned",month));
+    var reload=createButton("Oppdater");controls.appendChild(reload);
+    var csv=createButton("Last ned CSV-bilag");csv.disabled=true;controls.appendChild(csv);body.appendChild(controls);
+    var status=el("div","Velg måned og oppdater.");status.className="sk-note";body.appendChild(status);
+    var summary=el("div");summary.style.display="flex";summary.style.flexWrap="wrap";summary.style.gap="12px";summary.style.margin="14px 0";body.appendChild(summary);
+    var table=el("div");table.style.overflowX="auto";body.appendChild(table);
+    var fiken=el("div");fiken.style.padding="12px";fiken.style.marginTop="15px";fiken.style.border="1px solid #e2e8f0";fiken.style.borderRadius="10px";
+    fiken.appendChild(el("strong","Etter at du har registrert månedens salg i Fiken"));
+    var explain=el("div","Last ned CSV-en, avstem med Vipps og opprett riktig dokumentasjon i Fiken. Skriv bilagsnummeret her for å merke uregistrerte forlengelser som ført. Knappen fører IKKE regnskap i Fiken.");
+    explain.style.fontSize="12px";explain.style.margin="8px 0";fiken.appendChild(explain);
+    var voucher=el("input");voucher.placeholder="Fiken-bilagsnummer";voucher.maxLength=120;voucher.style.padding="10px";voucher.style.marginRight="9px";fiken.appendChild(voucher);
+    var mark=createPrimaryButton("Marker som ført i Fiken");mark.disabled=true;fiken.appendChild(mark);body.appendChild(fiken);
+    var api="https://eadgdcimcmfyuicizboo.supabase.co/functions/v1/gk2-hyzr-accounting",current=null,busy=false;
+    function amount(ore){return ((Number(ore)||0)/100).toLocaleString("nb-NO",{minimumFractionDigits:2,maximumFractionDigits:2})+" kr";}
+    async function request(route,opts){
+      var session=await sb.auth.getSession(),token=session.data&&session.data.session&&session.data.session.access_token;
+      if(!token)throw Error("Logg inn på nytt.");
+      var res=await fetch(api+route,{method:opts?"POST":"GET",cache:"no-store",
+        headers:{"Authorization":"Bearer "+token,...(opts?{"Content-Type":"application/json"}:{})},
+        body:opts?JSON.stringify(opts):undefined});
+      var data=await res.json().catch(function(){return null;});
+      if(!res.ok||!data||data.ok!==true)throw Error(data&&data.code||"HTTP "+res.status);
+      return data;
+    }
+    function view(data){
+      current=data;clear(summary);clear(table);
+      [["Antall",data.count],["Vipps-forlengelser totalt",amount(data.grossOre)],
+       ["Ikke registrert i Fiken",amount(data.unpostedOre)],["Markert i Fiken",amount(data.postedOre)]].forEach(function(k){
+        var box=el("div");box.style.padding="12px";box.style.background="#f8fafc";box.style.borderRadius="9px";box.appendChild(el("div",k[0]));
+        var value=el("strong",String(k[1]));value.style.fontSize="18px";box.appendChild(value);summary.appendChild(box);
+       });
+      mark.disabled=!(Number(data.unpostedOre)>0);
+      csv.disabled=!data.lines||!data.lines.length;
+      status.textContent="HYZR-forlengelser "+data.month+" · beløp før Vipps-gebyr · 0 % MVA i bookingoppsettet.";
+      if(!data.lines||!data.lines.length){table.appendChild(el("div","Ingen Vipps-forlengelser i valgt måned."));return;}
+      var t=el("table");t.style.width="100%";t.style.borderCollapse="collapse";t.style.fontSize="12px";
+      var head=el("tr");["Dato/tid","Ekstra","Betalt","Ordre","Vipps-referanse","Fiken"].forEach(function(x){
+        var th=el("th",x);th.style.textAlign="left";th.style.padding="8px";head.appendChild(th);
+      });t.appendChild(head);
+      data.lines.forEach(function(x){
+        var tr=el("tr");[
+          x.date+" "+x.from+"–"+x.to,"+"+x.minutes+" min",amount(x.amountOre),
+          x.originalOrder||"-",x.vippsReference,
+          x.accountingStatus==="posted"?"Ført: "+(x.fikenReference||"Fiken"):"Ikke ført"
+        ].forEach(function(v){var td=el("td",String(v));td.style.padding="8px";td.style.borderTop="1px solid #e2e8f0";td.style.wordBreak="break-word";tr.appendChild(td);});
+        t.appendChild(tr);
+      });table.appendChild(t);
+    }
+    async function load(){
+      if(busy)return;busy=true;reload.disabled=true;mark.disabled=true;csv.disabled=true;
+      status.textContent="Henter Vipps-forlengelser...";
+      try{view(await request("/month?month="+encodeURIComponent(month.value)))}
+      catch(e){current=null;clear(summary);clear(table);status.textContent="Feil ved henting: "+e.message;}
+      finally{busy=false;reload.disabled=false;}
+    }
+    csv.onclick=function(){
+      if(!current||!current.lines||!current.lines.length)return;
+      var rows=[["Dato","Fra","Til","Ekstra minutter","Beløp NOK","Quickbutik-ordre","Vipps-referanse","Status","Fiken-bilag"]];
+      current.lines.forEach(function(x){rows.push([x.date,x.from,x.to,x.minutes,
+        (x.amountOre/100).toFixed(2).replace(".",","),x.originalOrder,x.vippsReference,x.accountingStatus,x.fikenReference||""]);});
+      var textData="\uFEFFsep=;\r\n"+rows.map(function(r){return r.map(function(v){var s=String(v==null?"":v);
+        if(/^[=+@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}).join(";");}).join("\r\n")+"\r\n";
+      var uri=URL.createObjectURL(new Blob([textData],{type:"text/csv;charset=utf-8;"}));
+      var a=document.createElement("a");a.href=uri;a.download="GolfKongen-HYZR-Vipps-"+current.month+".csv";
+      document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(uri);},1000);
+    };
+    mark.onclick=async function(){
+      var ref=voucher.value.trim();
+      if(busy||!current||!Number(current.unpostedOre))return;
+      if(ref.length<2){alert("Skriv inn Fiken-bilagsnummer først.");return;}
+      if(!confirm("Bekreft at "+amount(current.unpostedOre)+" er registrert i Fiken under "+ref+"? Dette oppretter ikke en postering i Fiken."))return;
+      mark.disabled=true;busy=true;
+      try{await request("/mark-month",{month:current.month,fikenReference:ref,confirmPosted:true});voucher.value="";busy=false;await load();}
+      catch(e){busy=false;mark.disabled=false;status.textContent="Kunne ikke markere Fiken: "+e.message;}
+    };
+    reload.onclick=load;month.onchange=load;
+    parent.appendChild(section.wrap);
+    var loaded=false;section.wrap.querySelector("button").addEventListener("click",function(){
+      if(!loaded){loaded=true;load();}
+    });
+  }
+
   function renderSettingsManager(parent, data, sb, user) {
     createPageHeader(parent, "Innstillinger", "Standardverdier som brukes i tilbud og kundedokumenter.", "Systemoppsett");
 
-    if (skBookingIsOwner(user)) { skBookingExpenseManager(parent, sb, user); skBookingCoffeeManager(parent, sb, user); skBookingVippsManager(parent, sb, user); }
+    if (skBookingIsOwner(user)) { skBookingExpenseManager(parent, sb, user); skBookingCoffeeManager(parent, sb, user); skBookingVippsManager(parent, sb, user); skBookingHyzrFikenManager(parent, sb, user); }
 
     var settings = settingsMap(data.settings || []);
 
