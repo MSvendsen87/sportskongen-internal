@@ -3925,19 +3925,31 @@
       asOf: v.as_of || "i dag",
       revenue: revenue,
       revenueThisMonth: Number(v.revenue_this_month) || 0,
+      simulatorThisMonth: Number(v.revenue_simulator_this_month) || 0,
+      dartThisMonth: Number(v.revenue_dart_this_month) || 0,
+      venueThisMonth: Number(v.revenue_venue_this_month) || 0,
+      clubThisMonth: Number(v.revenue_club_this_month) || 0,
+      coffeeThisMonth: Number(v.revenue_coffee_this_month) || 0,
       coffee: Number(v.revenue_coffee) || 0,
       vipps: Number(v.revenue_vipps) || 0,
       cost: cost,
+      costThisMonth: Number(v.cost_this_month) || 0,
+      costSimulatorThisMonth: Number(v.cost_simulator_this_month) || 0,
+      costDartThisMonth: Number(v.cost_dart_this_month) || 0,
+      costSharedThisMonth: Number(v.cost_shared_this_month) || 0,
+      netThisMonth: Number(v.net_this_month) || 0,
       net: revenue - cost,
       dart: Number(v.revenue_dart) || 0,
       simulator: Number(v.revenue_simulator) || 0,
       venue: Number(v.revenue_venue) || 0,
+      club: Number(v.revenue_club) || 0,
       vippsDart: Number(v.revenue_vipps_dart) || 0,
       vippsSimulator: Number(v.revenue_vipps_simulator) || 0,
       vippsCoffee: Number(v.revenue_vipps_coffee) || 0,
       coverage: cost > 0 ? revenue / cost : 1,
       oneTimeCost: Number(v.cost_one_time) || 0,
       monthlyCost: Number(v.cost_monthly_accrued) || 0,
+      weeklyCost: Number(v.cost_weekly_accrued) || 0,
       sharedCost: Number(v.cost_shared) || 0
     };
   }
@@ -4050,7 +4062,7 @@
   function skBookingExpenseManager(parent, sb, user) {
     if (!skBookingIsOwner(user)) return;
     var section = createCollapsibleSection("🎯 Dart og simulator – utgifter (kun eier)",
-      "Investering, lisens, leie og andre kostnader. Alle kostnader registreres ekskl. mva. Månedlige kostnader påløper én gang per kalendermåned fra startdato.", false);
+      "Investering, lisens, leie og andre kostnader. Alle kostnader registreres ekskl. mva. Månedlige kostnader påløper hver kalendermåned fra startdato. Ukentlige kostnader påløper hver 7. dag fra startdato til eventuell sluttdato.", false);
     var body = section.body;
     var intro = el("div", "Alle kostnader er bekreftet registrert ekskl. mva. Kostnadene bokføres ikke automatisk i Fiken.");
     intro.className = "sk-note";
@@ -4066,7 +4078,7 @@
     var area = el("select");
     [["simulator","Simulator"],["dart","Dart"],["shared","Fellesutgifter"]].forEach(function(pair){ var o=el("option",pair[1]);o.value=pair[0];area.appendChild(o); });
     var kind = el("select");
-    [["one_time","Engangskostnad"],["monthly","Månedlig kostnad"]].forEach(function(pair){var o=el("option",pair[1]);o.value=pair[0];kind.appendChild(o);});
+    [["one_time","Engangskostnad"],["weekly","Ukentlig kostnad"],["monthly","Månedlig kostnad"]].forEach(function(pair){var o=el("option",pair[1]);o.value=pair[0];kind.appendChild(o);});
     var start = el("input"); start.type="date"; start.value=skBookingDateToday();
     var end = el("input"); end.type="date";
     var notes=el("input");notes.placeholder="Valgfritt: leverandør, faktura osv.";notes.maxLength=500;
@@ -4099,7 +4111,7 @@
           var textBox=el("div");textBox.style.flex="1 1 200px";
           var areaName=r.area==="simulator"?"Simulator":r.area==="dart"?"Dart":"Felles";
           textBox.appendChild(el("strong",r.title+" – "+skBookingMoney(r.amount_inc_vat)));
-          var extra=el("div",areaName+" · "+(r.kind==="monthly"?"Månedlig":"Engangs")+" · "+r.start_date+(r.end_date?" til "+r.end_date:"")+(r.notes?" · "+r.notes:""));
+          var extra=el("div",areaName+" · "+(r.kind==="monthly"?"Månedlig":r.kind==="weekly"?"Ukentlig":"Engangs")+" · "+r.start_date+(r.end_date?" til "+r.end_date:"")+(r.notes?" · "+r.notes:""));
           extra.style.fontSize="12px";extra.style.color="#475569";extra.style.marginTop="3px";textBox.appendChild(extra);
           var edit=createButton("Endre"); edit.onclick=function(){
             currentEdit=r.id; name.value=r.title; amount.value=r.amount_inc_vat;area.value=r.area;kind.value=r.kind;
@@ -4260,14 +4272,49 @@
 
     function update(){
       refresh.disabled=true;status.textContent="Oppdaterer status…";
-      sb.rpc("internal_booking_economy_summary").then(function(res){
+      sb.rpc("internal_booking_economy_summary").then(async function(res){
         refresh.disabled=false;
         if(res.error){status.textContent="Kunne ikke hente status: "+res.error.message;return;}
-        var view=skBookingDisplaySummary(res.data||{});clear(content);
+        var view=skBookingDisplaySummary(res.data||{});
+        // Direct Vipps HYZR extensions are not Quickbutik orders.
+        // Read the existing owner-protected accounting endpoint, never duplicate them in manual Vipps.
+        var extensionWarning="";
+        try {
+          var auth=await sb.auth.getSession();
+          var token=auth.data&&auth.data.session&&auth.data.session.access_token;
+          if(!token)throw Error("Ingen aktiv innlogging");
+          var currentMonth=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Oslo",year:"numeric",month:"2-digit"}).format(new Date());
+          var monthCursor="2026-11";
+          var extTotalOre=0,extMonthOre=0;
+          while(monthCursor<=currentMonth){
+            var extensionResponse=await fetch("https://eadgdcimcmfyuicizboo.supabase.co/functions/v1/gk2-hyzr-accounting/month?month="+encodeURIComponent(monthCursor),{
+              headers:{"Authorization":"Bearer "+token},cache:"no-store"
+            });
+            var extensionData=await extensionResponse.json().catch(function(){return null;});
+            if(!extensionResponse.ok||!extensionData||extensionData.ok!==true||!Number.isFinite(Number(extensionData.grossOre)))
+              throw Error("HYZR-forlengelser er ikke tilgjengelige");
+            extTotalOre+=Number(extensionData.grossOre);
+            if(monthCursor===currentMonth)extMonthOre=Number(extensionData.grossOre);
+            var parts=monthCursor.split("-"),nextYear=Number(parts[0]),nextMonth=Number(parts[1])+1;
+            if(nextMonth>12){nextYear++;nextMonth=1;}
+            monthCursor=nextYear+"-"+String(nextMonth).padStart(2,"0");
+          }
+          view.extensions=extTotalOre/100;view.extensionsThisMonth=extMonthOre/100;
+          view.revenue+=view.extensions;
+          view.revenueThisMonth+=view.extensionsThisMonth;
+          view.simulator+=view.extensions;
+          view.simulatorThisMonth+=view.extensionsThisMonth;
+          view.net=view.revenue-view.cost;
+          view.netThisMonth=view.revenueThisMonth-view.costThisMonth;
+          view.coverage=view.cost>0?view.revenue/view.cost:1;
+        } catch(extensionError){
+          extensionWarning=" · Vipps-forlengelser ikke verifisert (totalsummen kan være ufullstendig)";
+        }
+        clear(content);
         var fetchedAt = skBookingDateTimeText(new Date());
-        status.textContent=skBookingFocusModeActive()
+        status.textContent=(skBookingFocusModeActive()
           ? "Live-visning · oppdateres hver time · sist hentet: " + fetchedAt
-          : "Sist oppdatert: " + fetchedAt;
+          : "Sist oppdatert: " + fetchedAt) + extensionWarning;
 
         var top=el("div");top.className="sk-focus-economy-grid";top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
         top.appendChild(skBookingBuildDonut(view));
@@ -4275,9 +4322,11 @@
         var side=el("div");side.className="sk-focus-economy-side";side.style.display="grid";side.style.gap="10px";
         var grid=el("div");grid.className="sk-focus-economy-metrics";grid.style.display="grid";grid.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";grid.style.gap="10px";
         renderMetric(grid,"Totalt inn hittil",skBookingMoney(view.revenue),"#166534");
-        renderMetric(grid,"Denne måneden",skBookingMoney(view.revenueThisMonth),"#0f172a");
-        renderMetric(grid,"Kostnader hittil",skBookingMoney(view.cost),"#0f172a");
-        renderMetric(grid,"Resultat hittil",skBookingMoney(view.net),view.net<0?"#b91c1c":"#166534");
+        renderMetric(grid,"Inntekter denne måneden",skBookingMoney(view.revenueThisMonth),"#166534");
+        renderMetric(grid,"Utgifter denne måneden (eks. mva)",skBookingMoney(view.costThisMonth),"#0f172a");
+        renderMetric(grid,"Differanse denne måneden*",skBookingMoney(view.netThisMonth),view.netThisMonth<0?"#b91c1c":"#166534");
+        renderMetric(grid,"Kostnader hittil (eks. mva)",skBookingMoney(view.cost),"#0f172a");
+        renderMetric(grid,"Differanse hittil*",skBookingMoney(view.net),view.net<0?"#b91c1c":"#166534");
         side.appendChild(grid);
 
         var quick=el("div");quick.className="sk-focus-economy-breakdown";quick.style.display="grid";quick.style.gridTemplateColumns="repeat(2,minmax(0,1fr))";quick.style.gap="10px";
@@ -4285,6 +4334,12 @@
         [
           ["Dart", skBookingMoney(view.dart)],
           ["Simulator", skBookingMoney(view.simulator)],
+          ["Simulator denne måneden", skBookingMoney(view.simulatorThisMonth)],
+          ["HYZR-forlengelser via Vipps", skBookingMoney(view.extensions || 0)],
+          ["Forlengelser denne måneden", skBookingMoney(view.extensionsThisMonth || 0)],
+          ["Dart denne måneden", skBookingMoney(view.dartThisMonth)],
+          ["Hele lokalet", skBookingMoney(view.venue)],
+          ["Klubbkveld", skBookingMoney(view.club)],
           ["Vipps direkte", skBookingMoney(view.vipps)],
           ["Kaffe og diverse", skBookingMoney(view.coffee)]
         ].forEach(function(row){
@@ -4294,6 +4349,9 @@
           box.appendChild(small);box.appendChild(big);quick.appendChild(box);
         });
         side.appendChild(quick);
+        var caveat=el("div","* Inntekter vises som faktisk betalt inkl. eventuell mva. Utgifter er ført eks. mva. Differansen er en driftsindikator, ikke et regnskapsmessig nettoresultat.");
+        caveat.style.fontSize="11px";caveat.style.color="#64748b";caveat.style.lineHeight="1.5";
+        side.appendChild(caveat);
         top.appendChild(side);
         content.appendChild(top);
       });
