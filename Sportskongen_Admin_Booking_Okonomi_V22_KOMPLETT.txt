@@ -4272,14 +4272,49 @@
 
     function update(){
       refresh.disabled=true;status.textContent="Oppdaterer status…";
-      sb.rpc("internal_booking_economy_summary").then(function(res){
+      sb.rpc("internal_booking_economy_summary").then(async function(res){
         refresh.disabled=false;
         if(res.error){status.textContent="Kunne ikke hente status: "+res.error.message;return;}
-        var view=skBookingDisplaySummary(res.data||{});clear(content);
+        var view=skBookingDisplaySummary(res.data||{});
+        // Direct Vipps HYZR extensions are not Quickbutik orders.
+        // Read the existing owner-protected accounting endpoint, never duplicate them in manual Vipps.
+        var extensionWarning="";
+        try {
+          var auth=await sb.auth.getSession();
+          var token=auth.data&&auth.data.session&&auth.data.session.access_token;
+          if(!token)throw Error("Ingen aktiv innlogging");
+          var currentMonth=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Oslo",year:"numeric",month:"2-digit"}).format(new Date());
+          var monthCursor="2026-11";
+          var extTotalOre=0,extMonthOre=0;
+          while(monthCursor<=currentMonth){
+            var extensionResponse=await fetch("https://eadgdcimcmfyuicizboo.supabase.co/functions/v1/gk2-hyzr-accounting/month?month="+encodeURIComponent(monthCursor),{
+              headers:{"Authorization":"Bearer "+token},cache:"no-store"
+            });
+            var extensionData=await extensionResponse.json().catch(function(){return null;});
+            if(!extensionResponse.ok||!extensionData||extensionData.ok!==true||!Number.isFinite(Number(extensionData.grossOre)))
+              throw Error("HYZR-forlengelser er ikke tilgjengelige");
+            extTotalOre+=Number(extensionData.grossOre);
+            if(monthCursor===currentMonth)extMonthOre=Number(extensionData.grossOre);
+            var parts=monthCursor.split("-"),nextYear=Number(parts[0]),nextMonth=Number(parts[1])+1;
+            if(nextMonth>12){nextYear++;nextMonth=1;}
+            monthCursor=nextYear+"-"+String(nextMonth).padStart(2,"0");
+          }
+          view.extensions=extTotalOre/100;view.extensionsThisMonth=extMonthOre/100;
+          view.revenue+=view.extensions;
+          view.revenueThisMonth+=view.extensionsThisMonth;
+          view.simulator+=view.extensions;
+          view.simulatorThisMonth+=view.extensionsThisMonth;
+          view.net=view.revenue-view.cost;
+          view.netThisMonth=view.revenueThisMonth-view.costThisMonth;
+          view.coverage=view.cost>0?view.revenue/view.cost:1;
+        } catch(extensionError){
+          extensionWarning=" · Vipps-forlengelser ikke verifisert (totalsummen kan være ufullstendig)";
+        }
+        clear(content);
         var fetchedAt = skBookingDateTimeText(new Date());
-        status.textContent=skBookingFocusModeActive()
+        status.textContent=(skBookingFocusModeActive()
           ? "Live-visning · oppdateres hver time · sist hentet: " + fetchedAt
-          : "Sist oppdatert: " + fetchedAt;
+          : "Sist oppdatert: " + fetchedAt) + extensionWarning;
 
         var top=el("div");top.className="sk-focus-economy-grid";top.style.display="grid";top.style.gridTemplateColumns=skBookingFocusModeActive()?"minmax(360px,1.2fr) minmax(260px,.8fr)":"minmax(360px,1.2fr) minmax(260px,.8fr)";top.style.gap="12px";top.style.alignItems="stretch";
         top.appendChild(skBookingBuildDonut(view));
@@ -4300,6 +4335,8 @@
           ["Dart", skBookingMoney(view.dart)],
           ["Simulator", skBookingMoney(view.simulator)],
           ["Simulator denne måneden", skBookingMoney(view.simulatorThisMonth)],
+          ["HYZR-forlengelser via Vipps", skBookingMoney(view.extensions || 0)],
+          ["Forlengelser denne måneden", skBookingMoney(view.extensionsThisMonth || 0)],
           ["Dart denne måneden", skBookingMoney(view.dartThisMonth)],
           ["Hele lokalet", skBookingMoney(view.venue)],
           ["Klubbkveld", skBookingMoney(view.club)],
