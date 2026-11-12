@@ -20749,8 +20749,12 @@ createBtn.onclick = function () {
       button.textContent =
         "Godkjenner\u2026";
 
+      var isLegacyCostedCorrection =
+        String(row.invoice_number || "") === "11663";
       sb.rpc(
-        "internal_supplier_invoice_confirm_row_variant_split",
+        isLegacyCostedCorrection
+          ? "internal_supplier_invoice_costed_variant_attribution"
+          : "internal_supplier_invoice_confirm_row_variant_split",
         {
           p_import_row_id:
             row.import_row_id,
@@ -20820,7 +20824,9 @@ createBtn.onclick = function () {
       var help =
         el(
           "div",
-          "Legg inn hvor mange av hver Quickbutik-variant som faktisk kom p\u00e5 denne fakturalinjen. Summen m\u00e5 v\u00e6re n\u00f8yaktig " +
+          (String(row.invoice_number || "") === "11663"
+            ? "Etterfordeling av tidligere kostf\u00f8rt faktura. Ingen pris, lager eller kostbevegelse endres. Oppgi de variantene som faktisk ble mottatt. Summen m\u00e5 v\u00e6re n\u00f8yaktig "
+            : "Legg inn hvor mange av hver Quickbutik-variant som faktisk kom p\u00e5 denne fakturalinjen. Summen m\u00e5 v\u00e6re n\u00f8yaktig ") +
             fmtNumber(
               row.quantity,
               0
@@ -20888,6 +20894,26 @@ createBtn.onclick = function () {
           });
         }
       );
+
+      if (String(row.invoice_number || "") === "11663") {
+        var currentStockSum = inputs.reduce(function(sum, entry) {
+          return sum + Math.max(0, Number(entry.variant.stock_quantity || 0));
+        }, 0);
+        if (inputs.length > 0 && Math.abs(currentStockSum - Number(row.quantity || 0)) < 0.000001) {
+          var useStockProposal = createButton("Bruk dagens lager som forslag");
+          useStockProposal.onclick = function () {
+            if (!window.confirm(
+              "Dagens variantlager summerer til fakturaantallet. Dette er bare et forslag: kontroller at dette faktisk var variantene som ble levert. Fylle inn forslaget?"
+            )) return;
+            inputs.forEach(function(entry) {
+              var qty = Number(entry.variant.stock_quantity || 0);
+              entry.input.value = qty > 0 ? String(qty) : "";
+            });
+            updateTotal();
+          };
+          box.appendChild(useStockProposal);
+        }
+      }
 
       var footer =
         el("div");
@@ -21062,7 +21088,10 @@ createBtn.onclick = function () {
                   stateValue.sum,
                   0
                 ) +
-                " stk? Lagerantall endres ikke."
+                " stk? " +
+              (String(row.invoice_number || "") === "11663"
+                ? "Dette er en korrigering av varianttilknytning. Tidligere kostf\u00f8ring, kostpriser og lager forblir uendret."
+                : "Lagerantall endres ikke.")
             )
           ) {
             return;
