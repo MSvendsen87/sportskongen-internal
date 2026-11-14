@@ -57,7 +57,7 @@ const CSS = `
 `;
 const style=document.createElement("style");style.textContent=CSS;document.head.appendChild(style);
 const launch=document.createElement("button");launch.id="gkm-launch";launch.textContent="📷 Mobil varetelling";if(document.body)document.body.appendChild(launch);else document.addEventListener("DOMContentLoaded",()=>document.body.appendChild(launch),{once:true});
-let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanArmed=false,scanPending=false,duplicatePending=false,activeRow=null,activeTarget=null,savingAdjust=false,saveError=null,saveChain=Promise.resolve(),lastWarning='',lastScan="",lastScanAt=0,searchTimer=null;
+let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanArmed=false,scanPending=false,duplicatePending=false,activeRow=null,activeTarget=null,savingAdjust=false,saveError=null,saveChain=Promise.resolve(),syncTimer=null,syncRunning=false,currentReportMode="summary",lastWarning='',lastScan="",lastScanAt=0,searchTimer=null;
 const $=id=>document.getElementById("gkm-"+id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const norm=s=>String(s??"").trim().replace(/\s/g,"").toLowerCase();
@@ -85,7 +85,7 @@ function base(){
  <div class="gkm-muted" style="margin-top:8px">Ny telling lager øyeblikksbilde av lageret. Ingen endringer sendes til Quickbutik.</div>
  </section>
  <section id="gkm-work" class="gkm-hidden">
- <div class="gkm-card"><div id="gkm-statistics" class="gkm-stats"></div><div class="gkm-muted" style="margin-top:8px">Ikke opptalte varer regnes ikke automatisk som null.</div></div>
+ <div class="gkm-card"><div id="gkm-statistics" class="gkm-stats"></div><div class="gkm-muted" style="margin-top:8px">Underveis er ikke opptalte varer ukontrollert. Ved avsluttet fulltelling regnes de som 0 i sluttrapporten, uten automatisk lagerjustering.</div></div>
  <div class="gkm-card" id="gkm-scanner-card"><h2>Skann strekkode</h2><div id="gkm-reader"></div><div id="gkm-lastregistered" class="gkm-muted" aria-live="polite">Klar til telling.</div>
  <div class="gkm-row"><button id="gkm-start" class="gkm-primary">Start kamera</button><button id="gkm-stop">Stopp kamera</button></div>
  <label for="gkm-barcode">Eller tast inn strekkode</label><div class="gkm-row"><input id="gkm-barcode" placeholder="EAN / strekkode" autocomplete="off" inputmode="numeric"><button id="gkm-find" class="gkm-primary">Finn</button></div>
@@ -94,8 +94,12 @@ function base(){
  <input id="gkm-search" placeholder="Søk produkt, variant, farge, SKU …" autocomplete="off">
  <div id="gkm-results"></div></div>
  <div class="gkm-card"><h2>Rapport</h2><div id="gkm-reportintro" class="gkm-muted"></div>
- <div class="gkm-row" style="margin:10px 0"><button id="gkm-export" class="gkm-primary">Last ned full CSV-rapport</button><button id="gkm-onlymissing">Vis ikke opptalt</button><button id="gkm-onlydeviation">Vis avvik</button></div>
+ <div class="gkm-row" style="margin:10px 0"><button id="gkm-export" class="gkm-primary">Full rapport CSV</button><button id="gkm-exportdiff">Kun avvik CSV</button><button id="gkm-onlymissing">Ikke telt</button><button id="gkm-onlydeviation">Alle avvik</button></div>
  <div id="gkm-report"></div></div>
+ <div class="gkm-card"><h2>Felles varetelling og sluttkontroll</h2>
+ <div class="gkm-muted">Flere telefoner kan åpne samme telling. Endringer fra andre telefoner synkroniseres automatisk. Del gjerne lageret i områder for å unngå dobbelttelling.</div>
+ <div class="gkm-row" style="margin-top:10px"><button id="gkm-sync">Synk nå</button><button id="gkm-finish" class="gkm-primary">Ferdigstill og lag sluttrapport</button><button id="gkm-reopen" class="gkm-hidden">Gjenåpne telling for retting</button></div>
+ <div id="gkm-syncstatus" class="gkm-muted" aria-live="polite">Venter på synkronisering</div></div>
  </section></div>
  <div id="gkm-dock" class="gkm-hidden" aria-label="Skanning og antall">
  <div class="gkm-dock-inner">
@@ -127,16 +131,26 @@ function base(){
  $("find").onclick=()=>findBarcode($("barcode").value);
  $("barcode").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();findBarcode(e.target.value);}};
  $("search").oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(renderSearch,150);};
- $("export").onclick=exportCSV;
+ $("export").onclick=()=>exportCSV(false);
+ $("exportdiff").onclick=()=>exportCSV(true);
+ $("sync").onclick=()=>syncNow(true);
+ $("finish").onclick=finishCount;
+ $("reopen").onclick=reopenCount;
  $("onlymissing").onclick=()=>report("missing");
  $("onlydeviation").onclick=()=>report("diff");
 }
 async function open(){
  launch.style.display="none";base();
- try{spinner(true);await client();await refreshList();}catch(e){flash(e.message,true);}finally{spinner(false);}
+ try{
+  spinner(true);await client();await refreshList();
+  const active=counts.filter(c=>c.status==="in_progress");
+  if(active.length===1)await load(active[0].id);
+  syncTimer=setInterval(()=>{if(current)syncNow(false);},15000);
+ }catch(e){flash(e.message,true);}finally{spinner(false);}
 }
 async function close(){
  if(!(await ensureSaved())){flash("Antall er ikke lagret. Prøv å lagre før du lukker.",true);return;}
+ if(syncTimer){clearInterval(syncTimer);syncTimer=null;}
  await stopCamera();modal?.remove();modal=null;launch.style.display="block";
 }
 launch.onclick=open;
@@ -168,7 +182,7 @@ async function load(id){
  $("counts").value=id;$("work").classList.remove("gkm-hidden");
  $("start").disabled=current.status!=="in_progress";$("find").disabled=current.status!=="in_progress";
  flash(`${rows.length} varelinjer klare. ${current.status==="in_progress"?"Start skanning!":"Denne tellingen er låst."}`);
- stats();report("summary");renderSearch();renderDock();
+ stats();report("summary");renderSearch();renderDock();renderFinalize();
  }catch(e){flash("Kunne ikke laste telling: "+e.message,true);}finally{spinner(false);}
 }
 function stats(){
