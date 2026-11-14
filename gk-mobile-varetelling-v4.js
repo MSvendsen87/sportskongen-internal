@@ -57,7 +57,7 @@ const CSS = `
 `;
 const style=document.createElement("style");style.textContent=CSS;document.head.appendChild(style);
 const launch=document.createElement("button");launch.id="gkm-launch";launch.textContent="📷 Mobil varetelling";if(document.body)document.body.appendChild(launch);else document.addEventListener("DOMContentLoaded",()=>document.body.appendChild(launch),{once:true});
-let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanArmed=false,scanPending=false,duplicatePending=false,lastScan="",lastScanAt=0,searchTimer=null;
+let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanArmed=false,scanPending=false,duplicatePending=false,activeRow=null,activeTarget=null,savingAdjust=false,saveError=null,saveChain=Promise.resolve(),lastWarning='',lastScan="",lastScanAt=0,searchTimer=null;
 const $=id=>document.getElementById("gkm-"+id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const norm=s=>String(s??"").trim().replace(/\s/g,"").toLowerCase();
@@ -119,7 +119,12 @@ function base(){
  $("new").onclick=create;
  $("reload").onclick=async()=>{await refreshList();if(current)await load(current.id);};
  $("counts").onchange=()=>load($("counts").value);
- $("start").onclick=()=>{if(scannerRunning&&!scanPending&&!duplicatePending){scanArmed=true;$("start").textContent="Venter på strekkode …";}else startCamera();};$("stop").onclick=stopCamera;
+ $("start").onclick=onDockScan;$("stop").onclick=stopCamera;
+ $("dock-scan").onclick=onDockScan;
+ $("dock-minus").onclick=()=>changeDock(-1);
+ $("dock-plus").onclick=()=>changeDock(1);
+ $("dock-ok").onclick=confirmDuplicate;
+ $("dock-cancel").onclick=cancelDuplicate;
  $("find").onclick=()=>findBarcode($("barcode").value);
  $("barcode").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();findBarcode(e.target.value);}};
  $("search").oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(renderSearch,150);};
@@ -131,7 +136,10 @@ async function open(){
  launch.style.display="none";base();
  try{spinner(true);await client();await refreshList();}catch(e){flash(e.message,true);}finally{spinner(false);}
 }
-async function close(){await stopCamera();modal?.remove();modal=null;launch.style.display="block";}
+async function close(){
+ if(!(await ensureSaved())){flash("Antall er ikke lagret. Prøv å lagre før du lukker.",true);return;}
+ await stopCamera();modal?.remove();modal=null;launch.style.display="block";
+}
 launch.onclick=open;
 async function refreshList(){
  const {data,error}=await sb.from("internal_stock_counts_view").select("id,count_number,title,status,created_at").order("created_at",{ascending:false}).limit(50);
@@ -150,7 +158,9 @@ async function create(){
  }catch(e){flash("Kunne ikke opprette: "+e.message,true);}finally{spinner(false);}
 }
 async function load(id){
- await stopCamera();current=counts.find(x=>x.id===id)||null;rows=[];$("work").classList.add("gkm-hidden");
+ if(!(await ensureSaved())){flash("Antall er ikke lagret. Prøv igjen før du bytter telling.",true);return;}
+ await stopCamera();activeRow=null;activeTarget=null;duplicatePending=false;saveError=null;saveChain=Promise.resolve();lastWarning="";
+ current=counts.find(x=>x.id===id)||null;rows=[];$("work").classList.add("gkm-hidden");renderDock();
  if(!current)return;
  try{spinner(true);let offset=0;while(true){
  const {data,error}=await sb.rpc("internal_mobile_stock_catalog",{p_stock_count_id:id}).range(offset,offset+999);
@@ -159,7 +169,7 @@ async function load(id){
  $("counts").value=id;$("work").classList.remove("gkm-hidden");
  $("start").disabled=current.status!=="in_progress";$("find").disabled=current.status!=="in_progress";
  flash(`${rows.length} varelinjer klare. ${current.status==="in_progress"?"Start skanning!":"Denne tellingen er låst."}`);
- stats();report("summary");renderSearch();
+ stats();report("summary");renderSearch();renderDock();
  }catch(e){flash("Kunne ikke laste telling: "+e.message,true);}finally{spinner(false);}
 }
 function stats(){
@@ -180,21 +190,108 @@ function bindButtons(scope){
  scope.querySelectorAll("[data-set]").forEach(e=>e.onclick=()=>{const r=rows.find(x=>x.item_id===e.dataset.set);const n=prompt("Sett totalt opptalt antall (0 er tillatt):",r?.counted_quantity??0);if(n!==null)setCount(e.dataset.set,Number(n));});
 }
 async function addCount(id,qty){
- if(scanPending)return;
- if(!Number.isInteger(qty)||qty<1||qty>1000){flash("Skriv inn et heltall mellom 1 og 1000.",true);return;}
- scanPending=true;
- try{const {data,error}=await sb.rpc("internal_mobile_stock_add",{p_item_id:id,p_delta:qty});if(error)throw error;const r=rows.find(x=>x.item_id===id);if(r)r.counted_quantity=Number(data?.[0]?.counted_quantity??num(r.counted_quantity)+qty);
- if($("lastregistered"))$("lastregistered").textContent="Registrert: "+(r?.product_name||"Vare")+" · "+num(r?.counted_quantity)+" stk. totalt";if(navigator.vibrate)navigator.vibrate(50);stats();renderSearch();report("summary");
- }catch(e){flash("IKKE lagret: "+e.message,true);}finally{scanPending=false;}
+ if(scanPending)return false;
+ if(!Number.isInteger(qty)||qty<1||qty>1000){flash("Antallet må være et heltall mellom 1 og 1000.",true);return false;}
+ scanPending=true;renderDock();
+ try{
+  const {data,error}=await sb.rpc("internal_mobile_stock_add",{p_item_id:id,p_delta:qty});
+  if(error)throw error;
+  const row=rows.find(x=>x.item_id===id);
+  if(row){row.counted_quantity=Number(data?.[0]?.counted_quantity??num(row.counted_quantity)+qty);activeRow=row;activeTarget=num(row.counted_quantity);}
+  lastWarning="";
+  if($("lastregistered"))$("lastregistered").textContent="Registrert: "+(row?.product_name||"Vare")+" · "+num(row?.counted_quantity)+" stk. totalt";
+  if(navigator.vibrate)navigator.vibrate(45);
+  flash("");stats();renderSearch();report("summary");renderDock();
+  return true;
+ }catch(e){flash("IKKE lagret: "+e.message,true);return false;}
+ finally{scanPending=false;renderDock();}
 }
 async function setCount(id,n){
- if(scanPending)return;
- if(!Number.isInteger(n)||n<0){flash("Antallet må være et heltall på 0 eller mer.",true);return;}
- scanPending=true;
- try{const {error}=await sb.rpc("internal_mobile_stock_set",{p_item_id:id,p_counted_quantity:n});if(error)throw error;
- const r=rows.find(x=>x.item_id===id);if(r)r.counted_quantity=n;
- flash("Totalt antall er lagret: "+n);stats();renderSearch();report("summary");
- }catch(e){flash("IKKE lagret: "+e.message,true);}finally{scanPending=false;}
+ if(scanPending)return false;
+ if(!Number.isInteger(n)||n<0||n>100000){flash("Antallet må være et heltall fra 0 til 100000.",true);return false;}
+ scanPending=true;renderDock();
+ try{
+  const {error}=await sb.rpc("internal_mobile_stock_set",{p_item_id:id,p_counted_quantity:n});if(error)throw error;
+  const row=rows.find(x=>x.item_id===id);
+  if(row){row.counted_quantity=n;activeRow=row;activeTarget=n;}
+  lastWarning="";
+  if($("lastregistered"))$("lastregistered").textContent="Registrert: "+(row?.product_name||"Vare")+" · "+n+" stk. totalt";
+  flash("");stats();renderSearch();report("summary");renderDock();
+  return true;
+ }catch(e){flash("IKKE lagret: "+e.message,true);return false;}
+ finally{scanPending=false;renderDock();}
+}
+function renderDock(){
+ const dock=$("dock");if(!dock)return;
+ const ready=!!current&&current.status==="in_progress";
+ dock.classList.toggle("gkm-hidden",!ready);if(!ready)return;
+ const hasRow=!!activeRow;
+ $("dock-stepper").classList.toggle("gkm-hidden",!hasRow);
+ $("dock-name").textContent=hasRow?(activeRow.product_name+(activeRow.variant_name?" · "+activeRow.variant_name:"")):"Klar til skanning";
+ if(hasRow)$("dock-total").textContent=String(activeTarget??num(activeRow.counted_quantity));
+ $("dock-scan").classList.toggle("gkm-hidden",duplicatePending);
+ $("dock-confirm").classList.toggle("gkm-hidden",!duplicatePending);
+ $("dock-minus").disabled=scanPending||!hasRow;
+ $("dock-plus").disabled=scanPending||!hasRow;
+ if(duplicatePending){
+   $("dock-status").textContent="Bekreft ny total";
+   $("dock-ok").textContent="OK – lagre "+String(activeTarget)+" stk.";
+   $("dock-ok").disabled=scanPending;
+   $("dock-warning").textContent="Samme variant er telt før ("+num(activeRow?.counted_quantity)+" stk.). Bekreft totalen."; 
+ }else{
+   $("dock-scan").disabled=scanPending;
+   $("dock-scan").textContent=!scannerRunning?"Start kamera":scanArmed?"Venter på kode …":"Skann neste ›";
+   $("dock-status").textContent=lastWarning|| (savingAdjust?"Lagrer antall …":scanArmed?"Hold strekkoden foran kameraet":hasRow?"Totalt lagres automatisk":"Trykk for å skanne");
+ }
+ if($("start")){$("start").disabled=scanPending||duplicatePending;$("start").textContent=!scannerRunning?"Start kamera":scanArmed?"Venter på kode …":"Skann neste vare";}
+}
+function changeDock(change){
+ if(!activeRow||scanPending)return;
+ activeTarget=Math.max(0,Math.min(100000,Math.trunc(num(activeTarget)+change)));
+ lastWarning="";renderDock();
+ if(!duplicatePending)queueDockSave();
+}
+function queueDockSave(){
+ if(!activeRow||duplicatePending)return;
+ const id=activeRow.item_id;saveError=null;
+ saveChain=saveChain.catch(()=>{}).then(async()=>{
+   if(!activeRow||activeRow.item_id!==id||duplicatePending)return;
+   const row=activeRow,goal=activeTarget;
+   if(num(row.counted_quantity)===goal)return;
+   savingAdjust=true;renderDock();
+   try{
+     const {error}=await sb.rpc("internal_mobile_stock_set",{p_item_id:id,p_counted_quantity:goal});
+     if(error)throw error;
+     row.counted_quantity=goal;
+     if($("lastregistered"))$("lastregistered").textContent="Registrert: "+row.product_name+" · "+goal+" stk. totalt";
+     stats();report("summary");renderSearch();
+   }finally{savingAdjust=false;renderDock();}
+ }).catch(e=>{saveError=e;flash("Kunne ikke lagre antall: "+e.message,true);});
+}
+async function ensureSaved(){
+ if(!activeRow||duplicatePending)return !duplicatePending;
+ await saveChain;
+ if(num(activeRow.counted_quantity)!==num(activeTarget)){queueDockSave();await saveChain;}
+ return !saveError&&num(activeRow.counted_quantity)===num(activeTarget);
+}
+async function onDockScan(){
+ if(scanPending||duplicatePending)return;
+ if(!(await ensureSaved())){flash("Antallet er ikke lagret. Kontroller forbindelsen før neste skann.",true);return;}
+ if(scannerRunning){
+   scanArmed=true;lastWarning="";renderDock();
+ }else await startCamera();
+}
+async function confirmDuplicate(){
+ if(!duplicatePending||scanPending||!activeRow)return;
+ const item=activeRow,target=activeTarget;
+ const ok=await setCount(item.item_id,target);
+ if(ok){duplicatePending=false;renderDock();}
+}
+function cancelDuplicate(){
+ if(!duplicatePending)return;
+ duplicatePending=false;
+ if(activeRow)activeTarget=num(activeRow.counted_quantity);
+ flash("Gjentatt strekkode ble ikke registrert.");renderDock();
 }
 function showDuplicateConfirm(r,code){
  scanArmed=false;
