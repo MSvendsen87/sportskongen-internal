@@ -185,6 +185,97 @@ async function load(id){
  stats();report("summary");renderSearch();renderDock();renderFinalize();
  }catch(e){flash("Kunne ikke laste telling: "+e.message,true);}finally{spinner(false);}
 }
+
+function renderFinalize(){
+ if(!current||!$("finish"))return;
+ const open=current.status==="in_progress";
+ $("finish").classList.toggle("gkm-hidden",!open);
+ $("reopen").classList.toggle("gkm-hidden",current.status!=="locked");
+ $("find").disabled=!open;
+ $("start").disabled=!open;
+ if($("uncounted-note"))$("uncounted-note").textContent=open?
+ "Underveis: Ikke opptalte varer er ukontrollert. Ved avsluttet fulltelling regnes de som 0 i sluttrapporten, uten automatisk lagerjustering.":
+ "Avsluttet fulltelling: Ikke opptalte varer med registrert beholdning regnes som 0 i sluttrapporten. Quickbutik er IKKE oppdatert.";
+ renderDock();
+}
+async function syncNow(manual=false){
+ if(!current||syncRunning||scanPending||savingAdjust||duplicatePending)return;
+ const id=current.id;syncRunning=true;
+ try{
+  const {data:meta,error:metaError}=await sb.from("internal_stock_counts_view")
+    .select("status,updated_at").eq("id",id).single();
+  if(metaError)throw metaError;
+  if(current?.id!==id)return;
+  if(meta.status!==current.status){
+   current.status=meta.status;
+   if(current.status!=="in_progress")await stopCamera();
+  }
+  const remote=[];let off=0;
+  while(true){
+   const {data,error}=await sb.rpc("internal_mobile_stock_sync",{p_stock_count_id:id}).range(off,off+999);
+   if(error)throw error;
+   remote.push(...(data||[]));
+   if(!data||data.length<1000)break;
+   off+=1000;
+  }
+  if(current?.id!==id)return;
+  const lookup=new Map(rows.map(r=>[r.item_id,r]));
+  let changed=0;
+  for(const line of remote){
+   const row=lookup.get(line.item_id);if(!row)continue;
+   // Never change a row that the local operator is actively adjusting.
+   if(activeRow?.item_id===row.item_id &&
+      (scanPending||savingAdjust||duplicatePending||num(activeTarget)!==num(activeRow.counted_quantity)))continue;
+   const incoming=num(line.counted_quantity);
+   if(row.counted_quantity===null||num(row.counted_quantity)!==incoming){
+    if(activeRow?.item_id===row.item_id)activeTarget=incoming;
+    row.counted_quantity=incoming;changed++;
+   }
+  }
+  if(changed||manual){stats();report(currentReportMode);renderSearch();}
+  renderFinalize();
+  if($("syncstatus"))$("syncstatus").textContent="Synkronisert "+new Date().toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit",second:"2-digit"})+
+    (changed?" · "+changed+" oppdaterte varianter":" · ingen nye endringer");
+ }catch(e){
+  if(manual)flash("Synkronisering feilet: "+e.message,true);
+  if($("syncstatus"))$("syncstatus").textContent="Synkronisering feilet – sjekk nettforbindelsen.";
+ }finally{syncRunning=false;}
+}
+async function finishCount(){
+ if(!current||current.status!=="in_progress")return;
+ if(!(await ensureSaved())){flash("Lagre eller avbryt pågående antall først.",true);return;}
+ await syncNow(true);
+ if(current.status!=="in_progress")return;
+ const missing=rows.filter(r=>r.counted_quantity===null&&num(r.expected_quantity)>0);
+ const units=missing.reduce((n,r)=>n+num(r.expected_quantity),0);
+ const value=missing.reduce((n,r)=>n+num(r.expected_quantity)*num(r.unit_cost_ex_vat),0);
+ if(!confirm("FERDIGSTILLE FULL VARETELLING?\n\n"+
+  missing.length+" varevarianter med registrert beholdning er ikke telt ("+units+" stk / "+money(value)+" kr eks. mva.).\n"+
+  "De blir merket som IKKE FUNNET / antatt 0 i sluttrapporten.\n\n"+
+  "Dette låser tellingen for alle telefoner, men endrer IKKE Quickbutik.\n"+
+  "Du kan gjenåpne tellingen ved behov."))return;
+ try{
+  spinner(true);
+  const {error}=await sb.rpc("internal_mobile_stock_finish",{p_stock_count_id:current.id,p_confirm_text:current.count_number});
+  if(error)throw error;
+  current.status="locked";await stopCamera();
+  await refreshList();renderFinalize();stats();report("diff");
+  flash("Fulltelling er ferdigstilt. Alle registrerte avvik og ikke-funne varer er i sluttrapporten.");
+ }catch(e){flash("Kunne ikke ferdigstille: "+e.message,true);}
+ finally{spinner(false);}
+}
+async function reopenCount(){
+ if(!current||current.status!=="locked")return;
+ if(!confirm("Gjenåpne varetellingen? Da kan alle tilkoblede telefoner igjen registrere og korrigere varer. Ingen endring i Quickbutik."))return;
+ try{
+  spinner(true);
+  const {error}=await sb.rpc("internal_mobile_stock_reopen",{p_stock_count_id:current.id,p_confirm_text:current.count_number});
+  if(error)throw error;
+  current.status="in_progress";await refreshList();renderFinalize();stats();report(currentReportMode);
+  flash("Varetellingen er gjenåpnet for justeringer.");
+ }catch(e){flash("Kunne ikke gjenåpne: "+e.message,true);}
+ finally{spinner(false);}
+}
 function stats(){
  const counted=rows.filter(r=>r.counted_quantity!==null);
  const deviations=counted.filter(r=>num(r.counted_quantity)!==num(r.expected_quantity));const countedUnits=counted.reduce((n,r)=>n+num(r.counted_quantity),0);
