@@ -64,7 +64,7 @@ function base(){
  </section>
  <section id="gkm-work" class="gkm-hidden">
  <div class="gkm-card"><div id="gkm-statistics" class="gkm-stats"></div><div class="gkm-muted" style="margin-top:8px">Ikke opptalte varer regnes ikke automatisk som null.</div></div>
- <div class="gkm-card"><h2>Skann strekkode</h2><div id="gkm-reader"></div>
+ <div class="gkm-card"><h2>Skann strekkode</h2><div id="gkm-reader"></div><div id="gkm-lastregistered" class="gkm-muted" aria-live="polite">Klar til telling.</div>
  <div class="gkm-row"><button id="gkm-start" class="gkm-primary">Start kamera</button><button id="gkm-stop">Stopp kamera</button></div>
  <label for="gkm-barcode">Eller tast inn strekkode</label><div class="gkm-row"><input id="gkm-barcode" placeholder="EAN / strekkode" autocomplete="off" inputmode="numeric"><button id="gkm-find" class="gkm-primary">Finn</button></div>
  <div id="gkm-match"></div></div>
@@ -125,8 +125,8 @@ async function load(id){
 }
 function stats(){
  const counted=rows.filter(r=>r.counted_quantity!==null);
- const deviations=counted.filter(r=>num(r.counted_quantity)!==num(r.expected_quantity));
- $("statistics").innerHTML=`<div class="gkm-stat">Varelinjer<b>${rows.length}</b></div><div class="gkm-stat">Opptalt<b>${counted.length}</b></div><div class="gkm-stat">Avvik<b>${deviations.length}</b></div>`;
+ const deviations=counted.filter(r=>num(r.counted_quantity)!==num(r.expected_quantity));const countedUnits=counted.reduce((n,r)=>n+num(r.counted_quantity),0);
+ $("statistics").innerHTML=`<div class="gkm-stat">Varelinjer<b>${rows.length}</b></div><div class="gkm-stat">Opptalt<b>${counted.length}</b></div><div class="gkm-stat">Registrert stk.<b>${countedUnits}</b></div><div class="gkm-stat">Avvik<b>${deviations.length}</b></div>`;
  $("reportintro").textContent=`${counted.length} opptalte av ${rows.length} varelinjer · ${rows.length-counted.length} gjenstår · avviksverdi ${money(deviations.reduce((sum,r)=>sum+(num(r.counted_quantity)-num(r.expected_quantity))*num(r.unit_cost_ex_vat),0))} kr eks. mva.`;
 }
 function itemText(r){return esc(r.product_name)+(r.variant_name?" · "+esc(r.variant_name):"");}
@@ -145,7 +145,7 @@ async function addCount(id,qty){
  if(!Number.isInteger(qty)||qty<1||qty>1000){flash("Skriv inn et heltall mellom 1 og 1000.",true);return;}
  scanPending=true;
  try{const {data,error}=await sb.rpc("internal_mobile_stock_add",{p_item_id:id,p_delta:qty});if(error)throw error;const r=rows.find(x=>x.item_id===id);if(r)r.counted_quantity=Number(data?.[0]?.counted_quantity??num(r.counted_quantity)+qty);
- if($("match"))$("match").dataset.lastSaved=(r?.product_name||"Vare")+" · "+num(r?.counted_quantity)+" stk.";if(navigator.vibrate)navigator.vibrate(50);stats();renderSearch();report("summary");
+ if($("lastregistered"))$("lastregistered").textContent="Registrert: "+(r?.product_name||"Vare")+" · "+num(r?.counted_quantity)+" stk. totalt";if(navigator.vibrate)navigator.vibrate(50);stats();renderSearch();report("summary");
  }catch(e){flash("IKKE lagret: "+e.message,true);}finally{scanPending=false;}
 }
 async function setCount(id,n){
