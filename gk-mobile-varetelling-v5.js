@@ -180,7 +180,7 @@ async function load(id){
  current=counts.find(x=>x.id===id)||null;rows=[];$("work").classList.add("gkm-hidden");renderDock();
  if(!current)return;
  try{spinner(true);let offset=0;while(true){
- const {data,error}=await sb.rpc("internal_mobile_stock_catalog",{p_stock_count_id:id}).range(offset,offset+999);
+ const {data,error}=await sb.rpc("internal_mobile_stock_catalog_v5",{p_stock_count_id:id}).range(offset,offset+999);
  if(error)throw error;rows.push(...(data||[]));if(!data||data.length<1000)break;offset+=1000;if(offset>30000)throw new Error("For mange varelinjer");
  }
  $("counts").value=id;$("work").classList.remove("gkm-hidden");
@@ -288,8 +288,9 @@ function assessment(r){
  const counted=unchecked?(final?0:null):num(r.counted_quantity);
  const difference=counted===null?null:counted-expected;
  const possibleDifference=unchecked&&expected>0?-expected:null;
- const status=unchecked?(expected>0?(final?"IKKE FUNNET – ANTATT 0":"IKKE TELT – MULIG MANGEL"):"IKKE TELT – FORVENTET 0")
+ const baseStatus=unchecked?(expected>0?(final?"IKKE FUNNET – ANTATT 0":"IKKE TELT – MULIG MANGEL"):"IKKE TELT – FORVENTET 0")
   :(difference<0?"MANKO":difference>0?"OVERSKUDD":"OK");
+ const status=r.is_inactive?"INAKTIV VARIANT / "+baseStatus:baseStatus;
  return {final,expected,cost,unchecked,counted,difference,possibleDifference,status,
   expectedValue:expected*cost,countedValue:counted===null?null:counted*cost,
   diffValue:difference===null?null:difference*cost,possibleValue:possibleDifference===null?null:possibleDifference*cost};
@@ -304,6 +305,7 @@ function stats(){
  const excess=rows.map(assessment).filter(a=>a.difference!==null&&a.difference>0);
  const possibleMissing=unchecked.filter(r=>num(r.expected_quantity)>0);
  const potentialValue=possibleMissing.reduce((n,r)=>n+num(r.expected_quantity)*num(r.unit_cost_ex_vat),0);
+ const inactive=rows.filter(r=>r.is_inactive&&num(r.expected_quantity)>0);
  const expectedValue=rows.reduce((n,r)=>n+num(r.expected_quantity)*num(r.unit_cost_ex_vat),0);
  const countedValue=inspected.reduce((n,r)=>n+num(r.counted_quantity)*num(r.unit_cost_ex_vat),0);
  const shortageValue=shortage.reduce((n,a)=>n+a.diffValue,0);
@@ -324,6 +326,7 @@ function stats(){
   +'<div>'+(open?"Mulige mangler, ikke telt":"Ikke funnet, regnet som 0")+'<br><b>'+possibleMissing.length+' linjer · '+money(potentialValue)+' kr</b></div>'
   +'<div>'+(open?"Netto avvik på opptalte varer":"Netto avvik, alle varer")+'<br><b>'+money((shortageValue+excessValue)-(open?0:potentialValue))+' kr</b></div>'
   +'</div>'
+  +'<div class="gkm-muted">'+inactive.length+' varianter med registrert lager er inaktive i produktregisteret og bør kontrolleres særskilt.</div>'
   +'<div class="gkm-muted">'+(open?
    'Ikke opptalte varer er ikke automatisk null. Potensielle mangler er vist separat frem til sluttkontroll.':
    'Alle varer med forventet lager men uten opptelling er inkludert som antatt 0. Ingen beholdning er endret i Quickbutik.')+'</div>';
@@ -530,7 +533,8 @@ function report(mode){
  if(mode==="missing")list=list.filter(x=>x.a.unchecked);
  if(mode==="diff")list=list.filter(x=>
    x.a.difference!==null&&x.a.difference!==0 ||
-   x.a.unchecked&&x.a.expected>0
+   x.a.unchecked&&x.a.expected>0 ||
+   x.r.is_inactive&&x.a.expected>0
  );
  const exposure=x=>Math.abs(x.a.diffValue??x.a.possibleValue??0);
  list.sort((a,b)=>exposure(b)-exposure(a)||a.r.product_name.localeCompare(b.r.product_name,"nb"));
@@ -559,7 +563,7 @@ function exportCSV(onlyDiff=false){
   return '"'+text.replace(/"/g,'""')+'"';
  };
  const candidates=rows.map(r=>({r,a:assessment(r)}))
-   .filter(x=>!onlyDiff||x.a.difference!==null&&x.a.difference!==0||x.a.unchecked&&x.a.expected>0)
+   .filter(x=>!onlyDiff||x.a.difference!==null&&x.a.difference!==0||x.a.unchecked&&x.a.expected>0||x.r.is_inactive&&x.a.expected>0)
    .sort((x,y)=>Math.abs(y.a.diffValue??y.a.possibleValue??0)-Math.abs(x.a.diffValue??x.a.possibleValue??0));
  const value=n=>n===null?"":num(n).toFixed(2);
  const data=[columns,...candidates.map(({r,a})=>[
@@ -568,7 +572,7 @@ function exportCSV(onlyDiff=false){
   a.difference===null?"":a.difference,value(a.cost),value(a.expectedValue),
   value(a.countedValue),value(a.diffValue),
   a.possibleDifference===null?"":a.possibleDifference,value(a.possibleValue),
-  a.status,a.status==="OK"?"NEI":a.unchecked&&a.expected<=0?"NEI":"JA"
+  a.status,r.is_inactive?"JA – INAKTIV":a.status==="OK"?"NEI":a.unchecked&&a.expected<=0?"NEI":"JA"
  ])];
  const csv=String.fromCharCode(65279)+data.map(row=>row.map(cell).join(";")).join(String.fromCharCode(13,10));
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
