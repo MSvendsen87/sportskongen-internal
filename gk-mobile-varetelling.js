@@ -34,7 +34,7 @@ const CSS = `
 @media(max-width:540px){#gkm-overlay .gkm-wrap{padding:12px 10px 60px}#gkm-overlay .gkm-card{padding:12px}#gkm-overlay .gkm-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#gkm-overlay .gkm-stat{font-size:11px;padding:9px 3px}}
 `;
 const style=document.createElement("style");style.textContent=CSS;document.head.appendChild(style);
-const launch=document.createElement("button");launch.id="gkm-launch";launch.textContent="📷 Mobil varetelling";document.body.appendChild(launch);
+const launch=document.createElement("button");launch.id="gkm-launch";launch.textContent="📷 Mobil varetelling";if(document.body)document.body.appendChild(launch);else document.addEventListener("DOMContentLoaded",()=>document.body.appendChild(launch),{once:true});
 let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanPending=false,lastScan="",lastScanAt=0,searchTimer=null;
 const $=id=>document.getElementById("gkm-"+id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
