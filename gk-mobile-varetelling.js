@@ -35,7 +35,7 @@ const CSS = `
 `;
 const style=document.createElement("style");style.textContent=CSS;document.head.appendChild(style);
 const launch=document.createElement("button");launch.id="gkm-launch";launch.textContent="📷 Mobil varetelling";if(document.body)document.body.appendChild(launch);else document.addEventListener("DOMContentLoaded",()=>document.body.appendChild(launch),{once:true});
-let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanPending=false,lastScan="",lastScanAt=0,searchTimer=null;
+let sb=null,modal=null,rows=[],counts=[],current=null,scanner=null,scannerRunning=false,scanArmed=false,scanPending=false,lastScan="",lastScanAt=0,searchTimer=null;
 const $=id=>document.getElementById("gkm-"+id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const norm=s=>String(s??"").trim().replace(/\s/g,"").toLowerCase();
@@ -80,7 +80,7 @@ function base(){
  $("new").onclick=create;
  $("reload").onclick=async()=>{await refreshList();if(current)await load(current.id);};
  $("counts").onchange=()=>load($("counts").value);
- $("start").onclick=startCamera;$("stop").onclick=stopCamera;
+ $("start").onclick=()=>{if(scannerRunning){scanArmed=true;$("start").textContent="Venter på strekkode …";}else startCamera();};$("stop").onclick=stopCamera;
  $("find").onclick=()=>findBarcode($("barcode").value);
  $("barcode").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();findBarcode(e.target.value);}};
  $("search").oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(renderSearch,150);};
@@ -145,7 +145,7 @@ async function addCount(id,qty){
  if(!Number.isInteger(qty)||qty<1||qty>1000){flash("Skriv inn et heltall mellom 1 og 1000.",true);return;}
  scanPending=true;
  try{const {data,error}=await sb.rpc("internal_mobile_stock_add",{p_item_id:id,p_delta:qty});if(error)throw error;const r=rows.find(x=>x.item_id===id);if(r)r.counted_quantity=Number(data?.[0]?.counted_quantity??num(r.counted_quantity)+qty);
- flash("Lagret: "+(r?.product_name||"Vare")+" +"+qty);if(navigator.vibrate)navigator.vibrate(50);stats();renderSearch();report("summary");
+ if($("match"))$("match").dataset.lastSaved=(r?.product_name||"Vare")+" · "+num(r?.counted_quantity)+" stk.";if(navigator.vibrate)navigator.vibrate(50);stats();renderSearch();report("summary");
  }catch(e){flash("IKKE lagret: "+e.message,true);}finally{scanPending=false;}
 }
 async function setCount(id,n){
@@ -199,10 +199,10 @@ async function startCamera(){
   if(!window.Html5Qrcode)await addScript("https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js");
   scanner=new Html5Qrcode("gkm-reader",{verbose:false});
   await scanner.start({facingMode:"environment"},{fps:8,qrbox:(w,h)=>({width:Math.min(w,280),height:Math.min(h,160)}),aspectRatio:1.333},
-    code=>{const now=Date.now();if(scanPending||code===lastScan&&now-lastScanAt<2500)return;lastScan=code;lastScanAt=now;findBarcode(code);stopCamera();},
+    code=>{if(!scanArmed||scanPending)return;scanArmed=false;$("start").textContent="Skann neste vare";findBarcode(code);},
     ()=>{});
-  scannerRunning=true;flash("Kamera aktivt. Hold strekkoden innenfor rammen.");
+  scannerRunning=true;$("start").textContent="Skann neste vare";flash("Kameraet forblir åpent. Trykk Skann neste vare for hver registrering.");
  }catch(e){scannerRunning=false;scanner=null;flash("Kunne ikke åpne kamera: "+e.message+". Bruk manuelt søk eller strekkodefeltet.",true);}
 }
-async function stopCamera(){if(scanner){try{if(scannerRunning)await scanner.stop();await scanner.clear();}catch(e){}scanner=null;scannerRunning=false;}}
+async function stopCamera(){scanArmed=false;if($("start"))$("start").textContent="Start kamera";if(scanner){try{if(scannerRunning)await scanner.stop();await scanner.clear();}catch(e){}scanner=null;scannerRunning=false;}}
 })();
