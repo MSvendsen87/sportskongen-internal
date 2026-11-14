@@ -2,7 +2,7 @@
 "use strict";
 if (location.pathname !== "/sider/sportskongen-admin" || window.__gkMobileStocktake) return;
 window.__gkMobileStocktake = true;
-const URL = "https://fwztrnxhfvrlceicctlv.supabase.co";
+const SB_URL = "https://fwztrnxhfvrlceicctlv.supabase.co";
 const KEY = "sb_publishable_wWv1vU6fzt6jDnAEE2g_vQ_nNUv0gnO";
 const CSS = `
 #gkm-launch{position:fixed;right:14px;bottom:16px;z-index:2147483000;background:#153d2c;color:white;border:0;border-radius:30px;padding:14px 18px;box-shadow:0 6px 28px #0005;font:bold 15px Arial;cursor:pointer}
@@ -46,7 +46,7 @@ function spinner(on){const e=$("busy");if(e)e.classList.toggle("gkm-hidden",!on)
 function addScript(src){return new Promise((resolve,reject)=>{const s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});}
 async function client(){
   if(!window.supabase?.createClient) await addScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
-  if(!sb)sb=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  if(!sb)sb=window.supabase.createClient(SB_URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   const {data:{session},error}=await sb.auth.getSession();
   if(error)throw error;if(!session)throw new Error("Du må logge inn i Sportskongen Admin først og åpne varetellingen på nytt.");
   return sb;
@@ -199,7 +199,7 @@ async function startCamera(){
   if(!window.Html5Qrcode)await addScript("https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js");
   scanner=new Html5Qrcode("gkm-reader",{verbose:false});
   await scanner.start({facingMode:"environment"},{fps:8,qrbox:(w,h)=>({width:Math.min(w,280),height:Math.min(h,160)}),aspectRatio:1.333},
-    code=>{const now=Date.now();if(scanPending||code===lastScan&&now-lastScanAt<2500)return;lastScan=code;lastScanAt=now;findBarcode(code);},
+    code=>{const now=Date.now();if(scanPending||code===lastScan&&now-lastScanAt<2500)return;lastScan=code;lastScanAt=now;findBarcode(code);stopCamera();},
     ()=>{});
   scannerRunning=true;flash("Kamera aktivt. Hold strekkoden innenfor rammen.");
  }catch(e){scannerRunning=false;scanner=null;flash("Kunne ikke åpne kamera: "+e.message+". Bruk manuelt søk eller strekkodefeltet.",true);}
