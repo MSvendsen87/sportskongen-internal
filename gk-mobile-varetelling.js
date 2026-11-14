@@ -165,7 +165,7 @@ function findBarcode(code){
  if(!found.length){node.innerHTML='<div class="gkm-result"><strong>Strekkoden finnes ikke i denne tellingen.</strong><div class="gkm-muted">Søk etter varen manuelt nedenfor, og kontroller strekkoden i produktregisteret etterpå.</div></div>';flash("Ukjent strekkode: "+code,true);return;}
  node.innerHTML=`<h2>${found.length===1?"Funnet vare":"Flere treff – velg riktig variant"}</h2>`+found.map(itemHTML).join("");
  bindButtons(node);
- if(found.length===1){addCount(found[0].item_id,1);}
+ if(found.length===1){flash("");addCount(found[0].item_id,1);}
  else flash("Flere varer bruker samme kode. Velg riktig vare – ingen antall er lagt til.");
 }
 function renderSearch(){
