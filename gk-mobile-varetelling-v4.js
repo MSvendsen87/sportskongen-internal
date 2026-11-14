@@ -49,9 +49,9 @@ const CSS = `
 #gkm-overlay .gkm-stepper-count strong{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
 #gkm-overlay #gkm-dock-scan{font-size:16px;min-height:58px;padding:8px;touch-action:manipulation}
 #gkm-overlay #gkm-dock-confirm{border-top:1px solid #f1cf78;margin-top:8px;padding-top:8px}
-#gkm-overlay #gkm-dock-warning{font-size:12px;color:#90571b;font-weight:700;margin-bottom:6px}
-#gkm-overlay .gkm-dock-actions{display:grid;grid-template-columns:35% minmax(0,1fr);gap:8px}
-#gkm-overlay .gkm-dock-actions button{min-height:47px}
+#gkm-overlay #gkm-dock-warning{font-size:12px;color:#90571b;font-weight:700;margin:0;flex:1;min-width:0;line-height:1.25}
+#gkm-overlay #gkm-dock-confirm{display:flex;justify-content:space-between;align-items:center;gap:7px}
+#gkm-overlay #gkm-dock-cancel{font-size:12px;padding:4px 10px;min-height:33px;flex-shrink:0}
 @media(max-width:540px){#gkm-overlay #gkm-scanner-card{padding:8px}#gkm-overlay #gkm-scanner-card h2{margin:2px 0 6px}#gkm-overlay #gkm-reader video{max-height:25dvh}#gkm-overlay #gkm-dock{padding:8px 9px calc(8px + env(safe-area-inset-bottom))}}
 @media(max-width:540px){#gkm-overlay .gkm-wrap{padding:12px 10px 60px}#gkm-overlay .gkm-card{padding:12px}#gkm-overlay .gkm-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#gkm-overlay .gkm-stat{font-size:11px;padding:9px 3px}}
 `;
@@ -110,7 +110,7 @@ function base(){
  </div>
  <div id="gkm-dock-confirm" class="gkm-hidden">
   <div id="gkm-dock-warning">Strekkoden er allerede telt. Bekreft nytt totalantall.</div>
-  <div class="gkm-dock-actions"><button type="button" id="gkm-dock-cancel">Avbryt</button><button type="button" id="gkm-dock-ok" class="gkm-primary">OK – lagre</button></div>
+  <button type="button" id="gkm-dock-cancel">Avbryt</button>
  </div>
  </div>
 </div>`;
@@ -120,10 +120,9 @@ function base(){
  $("reload").onclick=async()=>{await refreshList();if(current)await load(current.id);};
  $("counts").onchange=()=>load($("counts").value);
  $("start").onclick=onDockScan;$("stop").onclick=stopCamera;
- $("dock-scan").onclick=onDockScan;
+ $("dock-scan").onclick=()=>duplicatePending?confirmDuplicate():onDockScan();
  $("dock-minus").onclick=()=>changeDock(-1);
  $("dock-plus").onclick=()=>changeDock(1);
- $("dock-ok").onclick=confirmDuplicate;
  $("dock-cancel").onclick=cancelDuplicate;
  $("find").onclick=()=>findBarcode($("barcode").value);
  $("barcode").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();findBarcode(e.target.value);}};
@@ -229,14 +228,14 @@ function renderDock(){
  $("dock-stepper").classList.toggle("gkm-hidden",!hasRow);
  $("dock-name").textContent=hasRow?(activeRow.product_name+(activeRow.variant_name?" · "+activeRow.variant_name:"")):"Klar til skanning";
  if(hasRow)$("dock-total").textContent=String(activeTarget??num(activeRow.counted_quantity));
- $("dock-scan").classList.toggle("gkm-hidden",duplicatePending);
+
  $("dock-confirm").classList.toggle("gkm-hidden",!duplicatePending);
  $("dock-minus").disabled=scanPending||!hasRow;
  $("dock-plus").disabled=scanPending||!hasRow;
  if(duplicatePending){
    $("dock-status").textContent="Bekreft ny total";
-   $("dock-ok").textContent="OK – lagre "+String(activeTarget)+" stk.";
-   $("dock-ok").disabled=scanPending;
+   $("dock-scan").disabled=scanPending;
+   $("dock-scan").textContent="OK – lagre "+String(activeTarget)+" stk.";
    $("dock-warning").textContent="Samme variant er telt før ("+num(activeRow?.counted_quantity)+" stk.). Bekreft totalen."; 
  }else{
    $("dock-scan").disabled=scanPending;
