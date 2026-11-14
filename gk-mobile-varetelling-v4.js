@@ -8,7 +8,7 @@ const CSS = `
 #gkm-launch{position:fixed;right:14px;bottom:16px;z-index:2147483000;background:#153d2c;color:white;border:0;border-radius:30px;padding:14px 18px;box-shadow:0 6px 28px #0005;font:bold 15px Arial;cursor:pointer}
 #gkm-overlay{position:fixed;inset:0;z-index:2147483001;background:#f4f7f5;color:#14231b;overflow:auto;font:15px system-ui,Arial,sans-serif}
 #gkm-overlay *{box-sizing:border-box}
-#gkm-overlay .gkm-wrap{max-width:900px;margin:auto;padding:16px 14px 70px}
+#gkm-overlay .gkm-wrap{max-width:900px;margin:auto;padding:16px 14px calc(210px + env(safe-area-inset-bottom))}
 #gkm-overlay h1{font-size:23px;margin:0}#gkm-overlay h2{font-size:17px;margin:6px 0 12px}
 #gkm-overlay .gkm-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:16px}
 #gkm-overlay .gkm-card{background:white;border:1px solid #dce4de;border-radius:14px;padding:15px;margin:12px 0}
@@ -67,17 +67,34 @@ function base(){
  </section>
  <section id="gkm-work" class="gkm-hidden">
  <div class="gkm-card"><div id="gkm-statistics" class="gkm-stats"></div><div class="gkm-muted" style="margin-top:8px">Ikke opptalte varer regnes ikke automatisk som null.</div></div>
- <div class="gkm-card"><h2>Skann strekkode</h2><div id="gkm-reader"></div><div id="gkm-lastregistered" class="gkm-muted" aria-live="polite">Klar til telling.</div>
+ <div class="gkm-card" id="gkm-scanner-card"><h2>Skann strekkode</h2><div id="gkm-reader"></div><div id="gkm-lastregistered" class="gkm-muted" aria-live="polite">Klar til telling.</div>
  <div class="gkm-row"><button id="gkm-start" class="gkm-primary">Start kamera</button><button id="gkm-stop">Stopp kamera</button></div>
  <label for="gkm-barcode">Eller tast inn strekkode</label><div class="gkm-row"><input id="gkm-barcode" placeholder="EAN / strekkode" autocomplete="off" inputmode="numeric"><button id="gkm-find" class="gkm-primary">Finn</button></div>
- <div id="gkm-duplicate" class="gkm-hidden" role="alertdialog" aria-label="Bekreft gjentatt strekkode"></div><div id="gkm-match"></div></div>
+ <div id="gkm-match"></div></div>
  <div class="gkm-card"><h2>Manuelt søk / varer uten strekkode</h2>
  <input id="gkm-search" placeholder="Søk produkt, variant, farge, SKU …" autocomplete="off">
  <div id="gkm-results"></div></div>
  <div class="gkm-card"><h2>Rapport</h2><div id="gkm-reportintro" class="gkm-muted"></div>
  <div class="gkm-row" style="margin:10px 0"><button id="gkm-export" class="gkm-primary">Last ned full CSV-rapport</button><button id="gkm-onlymissing">Vis ikke opptalt</button><button id="gkm-onlydeviation">Vis avvik</button></div>
  <div id="gkm-report"></div></div>
- </section></div>`;
+ </section></div>
+ <div id="gkm-dock" class="gkm-hidden" aria-label="Skanning og antall">
+ <div class="gkm-dock-inner">
+ <div class="gkm-dock-head"><strong id="gkm-dock-name">Klar til skanning</strong><span id="gkm-dock-status" class="gkm-muted">Start kameraet</span></div>
+ <div class="gkm-dock-row">
+  <div id="gkm-dock-stepper" class="gkm-stepper gkm-hidden">
+   <button type="button" id="gkm-dock-minus" aria-label="Reduser totalt antall">−</button>
+   <div class="gkm-stepper-count"><small>Totalt</small><strong id="gkm-dock-total">0</strong></div>
+   <button type="button" id="gkm-dock-plus" aria-label="Øk totalt antall">+</button>
+  </div>
+  <button type="button" id="gkm-dock-scan" class="gkm-primary">Start kamera</button>
+ </div>
+ <div id="gkm-dock-confirm" class="gkm-hidden">
+  <div id="gkm-dock-warning">Strekkoden er allerede telt. Bekreft nytt totalantall.</div>
+  <div class="gkm-dock-actions"><button type="button" id="gkm-dock-cancel">Avbryt</button><button type="button" id="gkm-dock-ok" class="gkm-primary">OK – lagre</button></div>
+ </div>
+ </div>
+</div>`;
  document.body.appendChild(modal);
  $("close").onclick=close;
  $("new").onclick=create;
