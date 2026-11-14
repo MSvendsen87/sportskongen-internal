@@ -214,25 +214,44 @@ async function addCount(id,qty){
   lastWarning="";
   if($("lastregistered"))$("lastregistered").textContent="Registrert: "+(row?.product_name||"Vare")+" · "+num(row?.counted_quantity)+" stk. totalt";
   if(navigator.vibrate)navigator.vibrate(45);
-  flash("");stats();renderSearch();report("summary");renderDock();
+  flash("");stats();renderSearch();report(currentReportMode);renderDock();
   return true;
  }catch(e){flash("IKKE lagret: "+e.message,true);return false;}
  finally{scanPending=false;renderDock();}
 }
+
+async function syncOne(row){
+ if(!row)return false;
+ const {data,error}=await sb.rpc("internal_mobile_stock_line",{p_item_id:row.item_id});
+ if(error)throw error;
+ const line=data?.[0];
+ if(!line)throw new Error("Varelinjen er ikke tilgjengelig lenger.");
+ row.counted_quantity=line.counted_quantity===null?null:num(line.counted_quantity);
+ return true;
+}
 async function setCount(id,n){
  if(scanPending)return false;
  if(!Number.isInteger(n)||n<0||n>100000){flash("Antallet må være et heltall fra 0 til 100000.",true);return false;}
+ const row=rows.find(x=>x.item_id===id);
+ if(!row){flash("Varen finnes ikke i denne tellingen.",true);return false;}
  scanPending=true;renderDock();
  try{
-  const {error}=await sb.rpc("internal_mobile_stock_set",{p_item_id:id,p_counted_quantity:n});if(error)throw error;
-  const row=rows.find(x=>x.item_id===id);
-  if(row){row.counted_quantity=n;activeRow=row;activeTarget=n;}
+  const {data,error}=await sb.rpc("internal_mobile_stock_set_if_match",{
+   p_item_id:id,p_expected_counted:row.counted_quantity,p_counted_quantity:n
+  });
+  if(error)throw error;
+  row.counted_quantity=num(data?.[0]?.counted_quantity??n);activeRow=row;activeTarget=n;
   lastWarning="";
-  if($("lastregistered"))$("lastregistered").textContent="Registrert: "+(row?.product_name||"Vare")+" · "+n+" stk. totalt";
-  flash("");stats();renderSearch();report("summary");renderDock();
+  if($("lastregistered"))$("lastregistered").textContent="Registrert: "+row.product_name+" · "+n+" stk. totalt";
+  flash("");stats();renderSearch();report(currentReportMode);renderDock();
   return true;
- }catch(e){flash("IKKE lagret: "+e.message,true);return false;}
- finally{scanPending=false;renderDock();}
+ }catch(e){
+  if(String(e.message).includes("ANTALL_ENDRET")){
+   try{await syncOne(row);if(activeRow?.item_id===row.item_id)activeTarget=duplicatePending?num(row.counted_quantity)+1:num(row.counted_quantity);}catch(_){}
+   lastWarning="En annen telefon endret antallet.";
+  }
+  flash("IKKE lagret: "+e.message,true);renderDock();return false;
+ }finally{scanPending=false;renderDock();}
 }
 function renderDock(){
  const dock=$("dock");if(!dock)return;
@@ -264,27 +283,40 @@ function changeDock(change){
  lastWarning="";renderDock();
  if(!duplicatePending)queueDockSave();
 }
+
 function queueDockSave(){
  if(!activeRow||duplicatePending)return;
  const id=activeRow.item_id;saveError=null;
  saveChain=saveChain.catch(()=>{}).then(async()=>{
-   if(!activeRow||activeRow.item_id!==id||duplicatePending)return;
-   const row=activeRow,goal=activeTarget;
-   if(num(row.counted_quantity)===goal)return;
-   savingAdjust=true;renderDock();
-   try{
-     const {error}=await sb.rpc("internal_mobile_stock_set",{p_item_id:id,p_counted_quantity:goal});
-     if(error)throw error;
-     row.counted_quantity=goal;
-     if($("lastregistered"))$("lastregistered").textContent="Registrert: "+row.product_name+" · "+goal+" stk. totalt";
-     stats();report("summary");renderSearch();
-   }finally{savingAdjust=false;renderDock();}
- }).catch(e=>{saveError=e;flash("Kunne ikke lagre antall: "+e.message,true);});
+  if(!activeRow||activeRow.item_id!==id||duplicatePending)return;
+  const row=activeRow,goal=activeTarget;
+  if(num(row.counted_quantity)===goal)return;
+  savingAdjust=true;renderDock();
+  try{
+   const {error}=await sb.rpc("internal_mobile_stock_set_if_match",{
+     p_item_id:id,p_expected_counted:row.counted_quantity,p_counted_quantity:goal
+   });
+   if(error)throw error;
+   row.counted_quantity=goal;
+   if($("lastregistered"))$("lastregistered").textContent="Registrert: "+row.product_name+" · "+goal+" stk. totalt";
+   stats();report(currentReportMode);renderSearch();
+  }catch(e){
+   saveError=e;
+   if(String(e.message).includes("ANTALL_ENDRET")){
+    try{await syncOne(row);if(activeRow?.item_id===id)activeTarget=num(row.counted_quantity);}catch(_){}
+    lastWarning="En annen telefon oppdaterte antallet.";
+   }
+   flash("Antall ble ikke lagret: "+e.message,true);
+  }finally{savingAdjust=false;renderDock();}
+ });
 }
 async function ensureSaved(){
  if(!activeRow||duplicatePending)return !duplicatePending;
  await saveChain;
- if(num(activeRow.counted_quantity)!==num(activeTarget)){queueDockSave();await saveChain;}
+ if(saveError)return false;
+ if(num(activeRow.counted_quantity)!==num(activeTarget)){
+  queueDockSave();await saveChain;
+ }
  return !saveError&&num(activeRow.counted_quantity)===num(activeTarget);
 }
 async function onDockScan(){
