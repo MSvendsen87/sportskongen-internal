@@ -34,6 +34,10 @@ const CSS = `
 #gkm-overlay .gkm-stat{padding:12px;background:#edf3ee;border-radius:10px;text-align:center}
 #gkm-overlay .gkm-stat b{display:block;font-size:21px}
 #gkm-overlay .gkm-hidden{display:none!important}
+#gkm-overlay .gkm-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+#gkm-overlay .gkm-values>div{background:#edf3ee;padding:10px;border-radius:9px;font-size:12px}
+#gkm-overlay .gkm-values b{font-size:15px}
+@media(min-width:640px){#gkm-overlay .gkm-values{grid-template-columns:repeat(3,minmax(0,1fr))}}
 #gkm-overlay #gkm-scanner-card{position:sticky;top:0;z-index:5;box-shadow:0 3px 12px #0001}
 #gkm-overlay #gkm-reader video{max-height:29dvh;object-fit:contain}
 #gkm-overlay #gkm-dock{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-top:2px solid #155737;box-shadow:0 -5px 25px #0003;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
@@ -276,11 +280,53 @@ async function reopenCount(){
  }catch(e){flash("Kunne ikke gjenåpne: "+e.message,true);}
  finally{spinner(false);}
 }
+
+function assessment(r){
+ const final=current?.status==="locked";
+ const expected=num(r.expected_quantity),cost=num(r.unit_cost_ex_vat);
+ const unchecked=r.counted_quantity===null;
+ const counted=unchecked?(final?0:null):num(r.counted_quantity);
+ const difference=counted===null?null:counted-expected;
+ const possibleDifference=unchecked&&expected>0?-expected:null;
+ const status=unchecked?(expected>0?(final?"IKKE FUNNET – ANTATT 0":"IKKE TELT – MULIG MANGEL"):"IKKE TELT – FORVENTET 0")
+  :(difference<0?"MANKO":difference>0?"OVERSKUDD":"OK");
+ return {final,expected,cost,unchecked,counted,difference,possibleDifference,status,
+  expectedValue:expected*cost,countedValue:counted===null?null:counted*cost,
+  diffValue:difference===null?null:difference*cost,possibleValue:possibleDifference===null?null:possibleDifference*cost};
+}
 function stats(){
- const counted=rows.filter(r=>r.counted_quantity!==null);
- const deviations=counted.filter(r=>num(r.counted_quantity)!==num(r.expected_quantity));const countedUnits=counted.reduce((n,r)=>n+num(r.counted_quantity),0);
- $("statistics").innerHTML=`<div class="gkm-stat">Varelinjer<b>${rows.length}</b></div><div class="gkm-stat">Opptalt<b>${counted.length}</b></div><div class="gkm-stat">Registrert stk.<b>${countedUnits}</b></div><div class="gkm-stat">Avvik<b>${deviations.length}</b></div>`;
- $("reportintro").textContent=`${counted.length} opptalte av ${rows.length} varelinjer · ${rows.length-counted.length} gjenstår · avviksverdi ${money(deviations.reduce((sum,r)=>sum+(num(r.counted_quantity)-num(r.expected_quantity))*num(r.unit_cost_ex_vat),0))} kr eks. mva.`;
+ const inspected=rows.filter(r=>r.counted_quantity!==null);
+ const unchecked=rows.filter(r=>r.counted_quantity===null);
+ const open=current?.status==="in_progress";
+ const countedUnits=inspected.reduce((n,r)=>n+num(r.counted_quantity),0);
+ const confirmed=rows.map(assessment).filter(a=>!a.unchecked&&a.difference!==0);
+ const shortage=rows.map(assessment).filter(a=>a.difference!==null&&a.difference<0);
+ const excess=rows.map(assessment).filter(a=>a.difference!==null&&a.difference>0);
+ const possibleMissing=unchecked.filter(r=>num(r.expected_quantity)>0);
+ const potentialValue=possibleMissing.reduce((n,r)=>n+num(r.expected_quantity)*num(r.unit_cost_ex_vat),0);
+ const expectedValue=rows.reduce((n,r)=>n+num(r.expected_quantity)*num(r.unit_cost_ex_vat),0);
+ const countedValue=inspected.reduce((n,r)=>n+num(r.counted_quantity)*num(r.unit_cost_ex_vat),0);
+ const shortageValue=shortage.reduce((n,a)=>n+a.diffValue,0);
+ const excessValue=excess.reduce((n,a)=>n+a.diffValue,0);
+ const statsElement=$("statistics");
+ if(!statsElement)return;
+ statsElement.innerHTML='<div class="gkm-stat">Registrert stk.<b>'+countedUnits+'</b></div>'
+  +'<div class="gkm-stat">Opptalte linjer<b>'+inspected.length+' / '+rows.length+'</b></div>'
+  +'<div class="gkm-stat">Ikke telt<b>'+unchecked.length+'</b></div>'
+  +'<div class="gkm-stat">Bekreftede avvik<b>'+confirmed.length+'</b></div>';
+ const intro=$("reportintro");
+ intro.innerHTML='<div><b>'+(open?"FORELØPIG RAPPORT":"SLUTTRAPPORT – ferdigstilt")+'</b></div>'
+  +'<div class="gkm-values">'
+  +'<div>Forventet lagerverdi<br><b>'+money(expectedValue)+' kr</b></div>'
+  +'<div>'+(open?"Hittil opptalt verdi":"Opptalt verdi (inkl. ikke funnet = 0)")+'<br><b>'+money(countedValue)+' kr</b></div>'
+  +'<div>Bekreftet manko<br><b>'+money(shortageValue)+' kr</b></div>'
+  +'<div>Bekreftet overskudd<br><b>+'+money(excessValue)+' kr</b></div>'
+  +'<div>'+(open?"Mulige mangler, ikke telt":"Ikke funnet, regnet som 0")+'<br><b>'+possibleMissing.length+' linjer · '+money(potentialValue)+' kr</b></div>'
+  +'<div>'+(open?"Netto avvik på opptalte varer":"Netto avvik, alle varer")+'<br><b>'+money((shortageValue+excessValue)-(open?0:potentialValue))+' kr</b></div>'
+  +'</div>'
+  +'<div class="gkm-muted">'+(open?
+   'Ikke opptalte varer er ikke automatisk null. Potensielle mangler er vist separat frem til sluttkontroll.':
+   'Alle varer med forventet lager men uten opptelling er inkludert som antatt 0. Ingen beholdning er endret i Quickbutik.')+'</div>';
 }
 function itemText(r){return esc(r.product_name)+(r.variant_name?" · "+esc(r.variant_name):"");}
 function itemHTML(r){
@@ -466,23 +512,61 @@ function renderSearch(){
  let list=rows.filter(r=>norm([r.product_name,r.variant_name,r.brand,...(r.barcodes||[])].join(" ")).includes(q)).slice(0,30);
  node.innerHTML=list.map(itemHTML).join("")||'<p>Ingen treff. Prøv kortere søk.</p>';bindButtons(node);
 }
+
 function report(mode){
- let list=rows;
- if(mode==="missing")list=rows.filter(r=>r.counted_quantity===null);
- if(mode==="diff")list=rows.filter(r=>r.counted_quantity!==null&&num(r.counted_quantity)!==num(r.expected_quantity));
+ currentReportMode=mode;
+ const final=current?.status==="locked";
+ let list=rows.map(r=>({r,a:assessment(r)}));
+ if(mode==="missing")list=list.filter(x=>x.a.unchecked);
+ if(mode==="diff")list=list.filter(x=>
+   x.a.difference!==null&&x.a.difference!==0 ||
+   x.a.unchecked&&x.a.expected>0
+ );
+ const exposure=x=>Math.abs(x.a.diffValue??x.a.possibleValue??0);
+ list.sort((a,b)=>exposure(b)-exposure(a)||a.r.product_name.localeCompare(b.r.product_name,"nb"));
  const node=$("report");
- node.innerHTML=`<div class="gkm-muted">Viser ${Math.min(list.length,60)} av ${list.length}. CSV-rapporten inneholder alle.</div>`+list.slice(0,60).map(r=>`<div class="gkm-result"><strong>${itemText(r)}</strong><div class="gkm-muted">System: ${num(r.expected_quantity)} · Opptalt: ${r.counted_quantity===null?"ikke telt":num(r.counted_quantity)} · Avvik: ${r.counted_quantity===null?"–":num(r.counted_quantity)-num(r.expected_quantity)}</div></div>`).join("");
+ const shown=list.slice(0,100);
+ node.innerHTML='<div class="gkm-muted">Viser '+shown.length+' av '+list.length+' varelinjer. CSV-rapporten inneholder alle '+rows.length+'. Avvik er sortert etter verdi.</div>'
+  +shown.map(({r,a})=>'<div class="gkm-result">'
+   +'<strong>'+itemText(r)+'</strong>'
+   +'<div class="gkm-muted">'+esc(a.status)+' · System '+a.expected+' stk · Opptalt '+(a.unchecked?"IKKE TELT":a.counted)+' stk'
+    +' · Avvik '+(a.difference===null?"ikke fastslått":a.difference)+' stk'
+    +' · Verdi '+(a.diffValue===null?(a.possibleValue===null?"–":"mulig "+money(a.possibleValue)+" kr"):money(a.diffValue)+" kr")
+   +'</div></div>').join("");
 }
-function exportCSV(){
+function exportCSV(onlyDiff=false){
  if(!current)return;
- const cols=["Produkt","Merke","Variant","Strekkoder","Forventet lager","Opptalt","Avvik stk","Innpris eks mva","Avvik verdi eks mva","Status"];
- const cell=v=>{let s=String(v??"");if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
- const output=[cols,...rows.map(r=>{const counted=r.counted_quantity!==null;const difference=counted?num(r.counted_quantity)-num(r.expected_quantity):null;
- return [r.product_name,r.brand,r.variant_name,(r.barcodes||[]).join(" | "),r.expected_quantity,counted?r.counted_quantity:"",difference??"",r.unit_cost_ex_vat,counted?(difference*num(r.unit_cost_ex_vat)).toFixed(2):"",!counted?"IKKE TELT":difference===0?"OK":"AVVIK"];
- })];
- const csv="\ufeff"+output.map(row=>row.map(cell).join(";")).join("\r\n");
+ const columns=[
+ "Telling","Tellingstatus","Produkt","Merke","Variant","Strekkoder",
+ "Forventet antall","Opptalt faktisk","Opptalt sluttrapport","Differanse stk",
+ "Innpris eks mva","Forventet verdi eks mva","Opptalt verdi eks mva",
+ "Differanseverdi eks mva","Mulig manko stk før slutt","Mulig mankoverdi før slutt",
+ "Status","Trenger kontroll"
+ ];
+ const cell=value=>{
+  let text=String(value??"");
+  if(/^[=+@\-\t\r]/.test(text))text="'"+text;
+  return '"'+text.replace(/"/g,'""')+'"';
+ };
+ const candidates=rows.map(r=>({r,a:assessment(r)}))
+   .filter(x=>!onlyDiff||x.a.difference!==null&&x.a.difference!==0||x.a.unchecked&&x.a.expected>0)
+   .sort((x,y)=>Math.abs(y.a.diffValue??y.a.possibleValue??0)-Math.abs(x.a.diffValue??x.a.possibleValue??0));
+ const value=n=>n===null?"":num(n).toFixed(2);
+ const data=[columns,...candidates.map(({r,a})=>[
+  current.count_number,current.status,r.product_name,r.brand,r.variant_name,(r.barcodes||[]).join(" | "),
+  a.expected,a.unchecked?"":r.counted_quantity,a.counted===null?"":a.counted,
+  a.difference===null?"":a.difference,value(a.cost),value(a.expectedValue),
+  value(a.countedValue),value(a.diffValue),
+  a.possibleDifference===null?"":a.possibleDifference,value(a.possibleValue),
+  a.status,a.status==="OK"?"NEI":a.unchecked&&a.expected<=0?"NEI":"JA"
+ ])];
+ const csv=String.fromCharCode(65279)+data.map(row=>row.map(cell).join(";")).join(String.fromCharCode(13,10));
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
- const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="GolfKongen-varetelling-"+current.count_number+"-"+new Date().toISOString().slice(0,10)+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+ const el=document.createElement("a");
+ el.href=URL.createObjectURL(blob);
+ el.download="GolfKongen-"+(onlyDiff?"avvik":"full-rapport")+"-"+current.count_number+"-"+new Date().toISOString().slice(0,10)+".csv";
+ el.click();
+ setTimeout(()=>URL.revokeObjectURL(el.href),2000);
 }
 async function startCamera(){
  if(scannerRunning||!current||current.status!=="in_progress")return;
