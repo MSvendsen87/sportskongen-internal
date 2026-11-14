@@ -34,6 +34,25 @@ const CSS = `
 #gkm-overlay .gkm-stat{padding:12px;background:#edf3ee;border-radius:10px;text-align:center}
 #gkm-overlay .gkm-stat b{display:block;font-size:21px}
 #gkm-overlay .gkm-hidden{display:none!important}
+#gkm-overlay #gkm-scanner-card{position:sticky;top:0;z-index:5;box-shadow:0 3px 12px #0001}
+#gkm-overlay #gkm-reader video{max-height:29dvh;object-fit:contain}
+#gkm-overlay #gkm-dock{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-top:2px solid #155737;box-shadow:0 -5px 25px #0003;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+#gkm-overlay .gkm-dock-inner{max-width:900px;margin:0 auto}
+#gkm-overlay .gkm-dock-head{display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0}
+#gkm-overlay #gkm-dock-name{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}
+#gkm-overlay #gkm-dock-status{font-size:12px;max-width:43%;text-align:right}
+#gkm-overlay .gkm-dock-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(116px,42%);gap:8px;align-items:stretch;margin-top:8px}
+#gkm-overlay .gkm-stepper{display:grid;grid-template-columns:minmax(38px,1fr) minmax(45px,1.2fr) minmax(38px,1fr);gap:5px;align-items:stretch}
+#gkm-overlay .gkm-stepper button{font-size:29px;min-height:58px;padding:4px;touch-action:manipulation}
+#gkm-overlay .gkm-stepper-count{border:1px solid #cbd8ce;background:#f0f5f1;border-radius:9px;text-align:center;display:flex;flex-direction:column;justify-content:center;line-height:1.1}
+#gkm-overlay .gkm-stepper-count small{font-size:10px;color:#566b5e}
+#gkm-overlay .gkm-stepper-count strong{font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+#gkm-overlay #gkm-dock-scan{font-size:16px;min-height:58px;padding:8px;touch-action:manipulation}
+#gkm-overlay #gkm-dock-confirm{border-top:1px solid #f1cf78;margin-top:8px;padding-top:8px}
+#gkm-overlay #gkm-dock-warning{font-size:12px;color:#90571b;font-weight:700;margin-bottom:6px}
+#gkm-overlay .gkm-dock-actions{display:grid;grid-template-columns:35% minmax(0,1fr);gap:8px}
+#gkm-overlay .gkm-dock-actions button{min-height:47px}
+@media(max-width:540px){#gkm-overlay #gkm-scanner-card{padding:8px}#gkm-overlay #gkm-scanner-card h2{margin:2px 0 6px}#gkm-overlay #gkm-reader video{max-height:25dvh}#gkm-overlay #gkm-dock{padding:8px 9px calc(8px + env(safe-area-inset-bottom))}}
 @media(max-width:540px){#gkm-overlay .gkm-wrap{padding:12px 10px 60px}#gkm-overlay .gkm-card{padding:12px}#gkm-overlay .gkm-stats{grid-template-columns:repeat(3,minmax(0,1fr))}#gkm-overlay .gkm-stat{font-size:11px;padding:9px 3px}}
 `;
 const style=document.createElement("style");style.textContent=CSS;document.head.appendChild(style);
