@@ -263,7 +263,7 @@ async function finishCount(){
   const {error}=await sb.rpc("internal_mobile_stock_finish",{p_stock_count_id:current.id,p_confirm_text:current.count_number});
   if(error)throw error;
   current.status="locked";await stopCamera();
-  await refreshList();renderFinalize();stats();report("diff");
+  await refreshList();await syncNow(true);renderFinalize();stats();report("diff");
   flash("Fulltelling er ferdigstilt. Alle registrerte avvik og ikke-funne varer er i sluttrapporten.");
  }catch(e){flash("Kunne ikke ferdigstille: "+e.message,true);}
  finally{spinner(false);}
