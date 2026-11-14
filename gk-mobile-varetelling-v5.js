@@ -300,7 +300,7 @@ function stats(){
  const open=current?.status==="in_progress";
  const countedUnits=inspected.reduce((n,r)=>n+num(r.counted_quantity),0);
  const confirmed=rows.map(assessment).filter(a=>!a.unchecked&&a.difference!==0);
- const shortage=rows.map(assessment).filter(a=>a.difference!==null&&a.difference<0);
+ const shortage=rows.map(assessment).filter(a=>!a.unchecked&&a.difference!==null&&a.difference<0);
  const excess=rows.map(assessment).filter(a=>a.difference!==null&&a.difference>0);
  const possibleMissing=unchecked.filter(r=>num(r.expected_quantity)>0);
  const potentialValue=possibleMissing.reduce((n,r)=>n+num(r.expected_quantity)*num(r.unit_cost_ex_vat),0);
@@ -481,24 +481,34 @@ function showDuplicateConfirm(row){
  flash("");renderDock();
  if(navigator.vibrate)navigator.vibrate([75,65,75]);
 }
-function findBarcode(code){
+
+async function findBarcode(code){
  code=norm(code);if(!code||duplicatePending||scanPending)return;
  const found=rows.filter(r=>(r.barcodes||[]).some(b=>norm(b)===code));
  $("barcode").value="";
  const node=$("match");
  if(!found.length){
-   lastWarning="Ukjent strekkode";
-   node.innerHTML='<div class="gkm-result"><strong>Strekkoden finnes ikke.</strong><div class="gkm-muted">Søk opp varen manuelt nedenfor.</div></div>';
-   flash("Ukjent strekkode: "+code,true);renderDock();
-   if(navigator.vibrate)navigator.vibrate([120,80,120]);
-   return;
+  lastWarning="Ukjent strekkode";
+  node.innerHTML='<div class="gkm-result"><strong>Strekkoden finnes ikke.</strong><div class="gkm-muted">Søk opp varen manuelt nedenfor.</div></div>';
+  flash("Ukjent strekkode: "+code,true);renderDock();
+  if(navigator.vibrate)navigator.vibrate([120,80,120]);
+  return;
  }
  if(found.length===1){
-   const row=found[0];
-   node.innerHTML='<div class="gkm-muted" style="margin-top:8px">Siste vare vises i feltet nederst på skjermen.</div>';
-   if(row.counted_quantity!==null){showDuplicateConfirm(row);}
-   else {lastWarning="";flash("");addCount(row.item_id,1);}
-   return;
+  const row=found[0];
+  node.innerHTML='<div class="gkm-muted" style="margin-top:8px">Siste vare vises nederst på skjermen.</div>';
+  scanPending=true;renderDock();
+  try{
+   const {data,error}=await sb.rpc("internal_mobile_stock_line",{p_item_id:row.item_id});
+   if(error)throw error;
+   if(!data?.length)throw new Error("Varen finnes ikke lenger i denne tellingen.");
+   row.counted_quantity=data[0].counted_quantity===null?null:num(data[0].counted_quantity);
+   scanPending=false;
+   if(row.counted_quantity!==null)showDuplicateConfirm(row);
+   else {lastWarning="";flash("");await addCount(row.item_id,1);}
+  }catch(e){lastWarning="Skanningen ble ikke lagret.";flash("Kunne ikke kontrollere strekkoden: "+e.message,true);}
+  finally{scanPending=false;renderDock();}
+  return;
  }
  node.innerHTML='<h2>Flere treff – velg riktig variant</h2>'+found.map(itemHTML).join("");
  bindButtons(node);
