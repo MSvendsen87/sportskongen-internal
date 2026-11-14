@@ -105,7 +105,7 @@ async function create(){
  const title=prompt("Navn på den nye varetellingen:","Full varetelling "+new Date().toLocaleDateString("nb-NO"));
  if(!title?.trim())return;
  if(!confirm("Opprette ny FULL telling med alle aktive fysiske varer? Dette endrer ikke lageret."))return;
- try{spinner(true);let {data,error}=await sb.rpc("internal_create_stock_count",{p_title:title.trim(),p_scope_type:"all",p_scope_value:null,p_notes:"Opprettet fra mobil varetelling"});if(error)throw error;
+ try{spinner(true);let {data,error}=await sb.rpc("internal_mobile_stock_create",{p_title:title.trim()});if(error)throw error;
  const id=data?.[0]?.stock_count_id;if(!id)throw new Error("Tellingen ble opprettet, men ID ble ikke returnert.");
  await refreshList();await load(id);flash("Ny telling opprettet. Skann varene én etter én.");
  }catch(e){flash("Kunne ikke opprette: "+e.message,true);}finally{spinner(false);}
@@ -152,7 +152,7 @@ async function setCount(id,n){
  if(scanPending)return;
  if(!Number.isInteger(n)||n<0){flash("Antallet må være et heltall på 0 eller mer.",true);return;}
  scanPending=true;
- try{const {error}=await sb.rpc("internal_update_stock_count_item",{p_item_id:id,p_counted_quantity:n,p_notes:null});if(error)throw error;
+ try{const {error}=await sb.rpc("internal_mobile_stock_set",{p_item_id:id,p_counted_quantity:n});if(error)throw error;
  const r=rows.find(x=>x.item_id===id);if(r)r.counted_quantity=n;
  flash("Totalt antall er lagret: "+n);stats();renderSearch();report("summary");
  }catch(e){flash("IKKE lagret: "+e.message,true);}finally{scanPending=false;}
