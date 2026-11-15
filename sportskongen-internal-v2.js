@@ -35610,6 +35610,41 @@ function renderProductControlDashboard(
       });
     }
 
+    // Worker accepts exactly one product per request. Keep matching rules server-side.
+    function runPriceCheckProductGroup(ids) {
+      var results = [], cursor = 0, stopped = false, stopMessage = "";
+      function next() {
+        if (stopped || cursor >= ids.length) return Promise.resolve();
+        var id = ids[cursor++];
+        return callPriceCheckWorkerResilient({mode: "selected", product_ids: [id]})
+          .then(function (r) {
+            var product = (r.productResults || []).find(function (p) {
+              return String(p.productId) === String(id);
+            });
+            if (!product) throw new Error("Worker returnerte ikke produktet.");
+            results.push({product: product, suggestions: product.error ? 0 : Number(r.totalSuggestions || 0)});
+            if (r.stoppedBecauseRateLimited || /\b(401|403|429)\b|tilgangsfeil|rate.limit/i.test(String(product.error || ""))) {
+              stopped = true; stopMessage = String(product.error || "Rate limit");
+            }
+          }).catch(function (err) {
+            var message = String(err && (err.message || err) || "Ukjent feil");
+            results.push({product: {productId: id, productName: "Produkt " + id, error: message, candidates: []}, suggestions: 0});
+            if (/\b(401|403|429)\b|tilgangsfeil|rate.limit/i.test(message)) { stopped = true; stopMessage = message; }
+          }).then(next);
+      }
+      return Promise.all(Array.from({length: Math.min(3, ids.length)}, next)).then(function () {
+        return {
+          productResults: ids.map(function (id) {
+            var entry = results.find(function (x) { return String(x.product.productId) === String(id); });
+            return entry ? entry.product : {productId: id, productName: "Produkt " + id, error: "Ikke behandlet: " + stopMessage, candidates: []};
+          }),
+          checkedProducts: results.filter(function (x) { return !x.product.error; }).length,
+          totalSuggestions: results.reduce(function (sum, x) { return sum + x.suggestions; }, 0),
+          stoppedBecauseRateLimited: stopped
+        };
+      });
+    }
+
     function renderPriceCheckWorkerResult(result) {
       clear(workerResult);
       workerResult.style.display = "block";
@@ -37639,10 +37674,7 @@ function renderProductControlDashboard(
           "none";
         clear(batchResults);
 
-        callPriceCheckWorkerResilient({
-          mode: "selected",
-          product_ids: ids
-        })
+        runPriceCheckProductGroup(ids)
           .then(function (result) {
             batchStatus.textContent =
               "Ferdig. " +
@@ -37653,7 +37685,9 @@ function renderProductControlDashboard(
               String(
                 result.totalSuggestions || 0
               ) +
-              " sikre treff funnet.";
+              " sikre treff funnet. " +
+              String((result.productResults || []).filter(function (p) { return !!p.error; }).length) +
+              " feil.";
 
             renderBatchResults(result);
           })
@@ -38577,12 +38611,12 @@ function renderProductControlDashboard(
           var index = 0;
           index <
             productsToCheck.length;
-          index += 1
+          index += 3
         ) {
           batches.push(
             productsToCheck.slice(
               index,
-              index + 1
+              index + 3
             )
           );
         }
@@ -38618,16 +38652,9 @@ function renderProductControlDashboard(
               "..."
           );
 
-          return callPriceCheckWorkerResilient({
-            mode: "selected",
-
-            product_ids:
-              batch.map(
-                function (product) {
-                  return product.id;
-                }
-              )
-          })
+          return runPriceCheckProductGroup(batch.map(function (product) {
+            return product.id;
+          }))
             .then(
               function (workerResult) {
                 var productResults =
@@ -38858,7 +38885,7 @@ function renderProductControlDashboard(
               }
 
               return waitPriceCheck(
-                2500
+                1000
               ).then(
                 runNextBatch
               );
