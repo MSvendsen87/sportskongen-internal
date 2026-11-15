@@ -59211,8 +59211,9 @@ function renderPortal(sb, user, data) {
         parent.appendChild(el("p", "Budsjett krever full administratortilgang."));
         return;
       }
+      var budgetLoadingNotice = null;
       function renderBudget() {
-        if (!parent.isConnected) return;
+        if (!parent.isConnected || (budgetLoadingNotice && !budgetLoadingNotice.isConnected)) return;
         if (window.GKBudgetAdmin && window.GKBudgetAdmin.render) {
           window.GKBudgetAdmin.render(parent, sb, mode);
         } else {
@@ -59221,7 +59222,8 @@ function renderPortal(sb, user, data) {
         }
       }
       if (window.GKBudgetAdmin && window.GKBudgetAdmin.render) { renderBudget(); return; }
-      parent.appendChild(el("p", "Laster budsjett …"));
+      budgetLoadingNotice = el("p", "Laster budsjett …");
+      parent.appendChild(budgetLoadingNotice);
       if (!window.skBudgetModulePromise) {
         window.skBudgetModulePromise = new Promise(function (resolve, reject) {
           var js = document.createElement("script");
@@ -59232,7 +59234,7 @@ function renderPortal(sb, user, data) {
         }).catch(function (err) { window.skBudgetModulePromise = null; throw err; });
       }
       window.skBudgetModulePromise.then(renderBudget).catch(function (err) {
-        if (!parent.isConnected) return;
+        if (!parent.isConnected || (budgetLoadingNotice && !budgetLoadingNotice.isConnected)) return;
         clear(parent); parent.appendChild(el("p", err.message));
       });
     }
