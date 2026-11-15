@@ -59206,7 +59206,53 @@ function renderPortal(sb, user, data) {
         });
     }
 
+    function openBudgetModule(parent, mode) {
+      if (!isFullControl(user)) {
+        parent.appendChild(el("p", "Budsjett krever full administratortilgang."));
+        return;
+      }
+      function renderBudget() {
+        if (!parent.isConnected) return;
+        if (window.GKBudgetAdmin && window.GKBudgetAdmin.render) {
+          window.GKBudgetAdmin.render(parent, sb, mode);
+        } else {
+          clear(parent);
+          parent.appendChild(el("p", "Budsjettmodulen kunne ikke startes."));
+        }
+      }
+      if (window.GKBudgetAdmin && window.GKBudgetAdmin.render) { renderBudget(); return; }
+      parent.appendChild(el("p", "Laster budsjett …"));
+      if (!window.skBudgetModulePromise) {
+        window.skBudgetModulePromise = new Promise(function (resolve, reject) {
+          var js = document.createElement("script");
+          js.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@768d6d31d7a9c0ca6f379e0adfcd6e5bf23248d3/gk-budget-admin-2027.js";
+          js.onload = resolve;
+          js.onerror = function () { reject(new Error("Kunne ikke laste budsjettmodulen.")); };
+          document.head.appendChild(js);
+        }).catch(function (err) { window.skBudgetModulePromise = null; throw err; });
+      }
+      window.skBudgetModulePromise.then(renderBudget).catch(function (err) {
+        if (!parent.isConnected) return;
+        clear(parent); parent.appendChild(el("p", err.message));
+      });
+    }
     createTabs(app, {
+      budgetReport: {
+        label: "Budsjett",
+        icon: "📊",
+        group: "Drift",
+        fullOnly: true,
+        description: "Resultatbudsjett 2027, PDF, likviditet og oppfølging mot regnskap.",
+        render: function (parent) { openBudgetModule(parent, "report"); }
+      },
+      budgetWork: {
+        label: "Budsjettarbeid",
+        icon: "🧮",
+        group: "Drift",
+        fullOnly: true,
+        description: "Juster og lagre arbeidsbudsjett, og vedta eget sammenligningsgrunnlag.",
+        render: function (parent) { openBudgetModule(parent, "work"); }
+      },
       marketing: {
         label: "Markedsføring",
         icon: "📣",
