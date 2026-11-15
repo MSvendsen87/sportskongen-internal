@@ -32860,10 +32860,27 @@ function renderProductControlDashboard(
     }
 
     var rows = data.priceComparisons || [];
+    var priceProductIndex = Object.create(null);
+    (data.products || []).forEach(function(product) { priceProductIndex[String(product.id)] = product; });
+    function priceMarginInfo(productId, gross) {
+      var product = priceProductIndex[String(productId)] || {};
+      var cost = numberOrNullLocal(product.purchase_price_ex_vat);
+      var vat = numberOrNullLocal(product.vat_rate);
+      var price = numberOrNullLocal(gross);
+      if (cost === null || cost <= 0 || vat === null || vat < 0) return {margin:null, floor:null};
+      var net = price !== null && price > 0 ? price / (1 + vat / 100) : null;
+      return {margin: net === null ? null : (net - cost) / net * 100,
+        floor: Math.ceil(cost * (1 + vat / 100) / 0.70 * 100 - 1e-8) / 100};
+    }
+    function priceMarginText(info) {
+      return info.margin === null ? "Kost ukjent" : (info.margin < 30 - 1e-7 ? "\u25cf " : "") + info.margin.toLocaleString("nb-NO", {minimumFractionDigits:1,maximumFractionDigits:1}) + " %";
+    }
+    var lowMargin = rows.filter(function(row) { var m=priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin; return m !== null && m < 30 - 1e-7; }).length;
+    var marginUnknown = rows.filter(function(row) { return priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin === null; }).length;
 
     createPageHeader(
       parent,
-      "Prissjekk",
+      "Prissenter",
       "Sammenlign prisene p\u00e5 GolfKongens lagerf\u00f8rte produkter med norske konkurrenter.",
       rows.length + " produkter med lager"
     );
@@ -32889,6 +32906,16 @@ function renderProductControlDashboard(
         label: "Produkter med lager",
         value: String(rows.length),
         tone: "ok"
+      },
+      {
+        label: "DG under 30 %",
+        value: String(lowMargin),
+        tone: lowMargin ? "danger" : "ok"
+      },
+      {
+        label: "Ukjent DG",
+        value: String(marginUnknown),
+        tone: marginUnknown ? "warning" : "ok"
       },
       {
         label: "Mangler godkjent pristreff",
@@ -34287,11 +34314,18 @@ function renderProductControlDashboard(
           ? competitorPrices[0]
           : median;
 
+      var marginGuard = priceMarginInfo(row.product_id, ownPrice);
+      var rawMarketTarget = recommendationTarget;
+      recommendationTarget = marginGuard.floor === null
+        ? Math.max(ownPrice, recommendationTarget)
+        : Math.ceil(Math.max(recommendationTarget, marginGuard.floor));
       var recommendationDelta =
         recommendationTarget -
         ownPrice;
 
       return {
+        productId: row.product_id,
+        marginGuard: marginGuard,
         ownPrice: ownPrice,
         stores: stores,
         competitorCount:
@@ -34321,9 +34355,11 @@ function renderProductControlDashboard(
                     : "stay"
                 ),
           reason:
-            allSame
-              ? "Alle konkurrentene har lik varepris."
-              : "M\u00e5lprisen er medianen av de godkjente konkurrentprisene."
+            marginGuard.floor === null && rawMarketTarget < ownPrice
+              ? "Kostpris mangler; prisreduksjon anbefales ikke."
+              : recommendationTarget > rawMarketTarget
+                ? "Prisgulv for minst 30 % dekningsgrad."
+                : (allSame ? "Alle konkurrentene har lik varepris." : "Median av godkjente konkurrentpriser.")
         }
       };
     }
@@ -34476,6 +34512,15 @@ function renderProductControlDashboard(
         }
       }
 
+      var guard = analysis.marginGuard || priceMarginInfo(analysis.productId, analysis.ownPrice);
+      if (guard.floor !== null && target < guard.floor) {
+        target = Math.ceil(guard.floor);
+        delta = target - analysis.ownPrice;
+        text = "Prisgulv for 30 % DG: " + formatPriceCheckMoney(target) + ". Markedsm\u00e5let kan ikke n\u00e5s med denne kostprisen.";
+      } else if (guard.floor === null && target < analysis.ownPrice) {
+        target = analysis.ownPrice; delta = 0;
+        text = "Kostpris mangler; prisreduksjon anbefales ikke.";
+      }
       return {
         target: target,
         delta: delta,
@@ -34752,6 +34797,22 @@ function renderProductControlDashboard(
         };
     });
 
+    // Four primary sections; retain existing panes and all review/history actions.
+    var mainNav = el("div");
+    mainNav.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin:12px 0";
+    var priceNavGroups = [
+      {label:"Prisoversikt", keys:["overview","strategy"]},
+      {label:"Til behandling", keys:["suggestions","confirmed","followup"]},
+      {label:"Priskontroll", keys:["run"]},
+      {label:"Innstillinger", keys:["competitors","shipping","learning"]}
+    ];
+    priceNavGroups.forEach(function(group) {
+      group.button = createButton(group.label);
+      group.button.style.cssText = "padding:10px 16px;font-weight:800;border-radius:10px";
+      group.button.onclick = function() { activatePriceSubtab(group.keys[0]); };
+      mainNav.appendChild(group.button);
+    });
+    parent.appendChild(mainNav);
     parent.appendChild(priceTabs);
     parent.appendChild(pricePaneHost);
 
@@ -34782,6 +34843,14 @@ function renderProductControlDashboard(
         );
       });
 
+      priceNavGroups.forEach(function(group) {
+        var active = group.keys.indexOf(key) !== -1;
+        group.button.style.background = active ? "#064e3b" : "#ecfdf5";
+        group.button.style.color = active ? "#fff" : "#064e3b";
+        group.button.setAttribute("aria-pressed",String(active));
+        group.keys.forEach(function(k) { priceTabButtons[k].style.display = active && group.keys.length > 1 ? "" : "none"; });
+      });
+      priceTabs.style.display = key === "run" ? "none" : "";
       localStorage.setItem(
         "sk_pricecheck_subtab_v1",
         key
@@ -42151,7 +42220,7 @@ var competitors = priceCompetitors;
           "probable";
 
         suggestionPriorityFilter.value =
-          "first-match";
+          "all";
 
         renderPriceSuggestions();
       };
@@ -44180,6 +44249,8 @@ var competitorSection = createCollapsibleSection(
       }
     );
 
+    addOption(overviewStatus,"low-margin","R\u00f8d lampe: DG under 30 %");
+    addOption(overviewStatus,"unknown-margin","Kost / DG ukjent");
     var overviewCompetitor =
       el("select");
 
@@ -44327,11 +44398,12 @@ var competitorSection = createCollapsibleSection(
         overviewRows.filter(
           function (row) {
             if (
-              overviewStatus.value !==
-                "all" &&
-              row.price_status !==
-                overviewStatus.value
+              overviewStatus.value === "low-margin" ||
+              overviewStatus.value === "unknown-margin"
             ) {
+              var margin = priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin;
+              if (overviewStatus.value === "low-margin" ? (margin === null || margin >= 30 - 1e-7) : margin !== null) return false;
+            } else if (overviewStatus.value !== "all" && row.price_status !== overviewStatus.value) {
               return false;
             }
 
@@ -44484,10 +44556,11 @@ var competitorSection = createCollapsibleSection(
       [
         "Produkt",
         "GK vare",
+        "DG %",
         "Konkurrent",
         "Konk. vare",
         "Forskjell",
-        "Markedsr\u00e5d",
+        "Prisr\u00e5d",
         "Status",
         ""
       ].forEach(
@@ -44679,6 +44752,10 @@ var competitorSection = createCollapsibleSection(
           adviceTd.style.fontSize =
             "11px";
 
+          var dg = priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat);
+          var marginTd = el("td",priceMarginText(dg));
+          marginTd.style.cssText="font-weight:800;white-space:nowrap;text-align:right;color:"+(dg.margin===null?"#9a6700":dg.margin<30-1e-7?"#b91c1c":"#166534");
+          marginTd.title = dg.floor === null ? "Kostpris mangler" : "Minste varepris ved 30 % DG: " + formatPriceCheckMoney(Math.ceil(dg.floor));
           var statusTd =
             el(
               "td",
@@ -44705,6 +44782,7 @@ var competitorSection = createCollapsibleSection(
           [
             productTd,
             ownTd,
+            marginTd,
             competitorTd,
             competitorPriceTd,
             diffTd,
@@ -44727,7 +44805,7 @@ var competitorSection = createCollapsibleSection(
             "none";
 
           var detailTd = el("td");
-          detailTd.colSpan = 8;
+          detailTd.colSpan = 9;
 
           var detailInner =
             el("div");
@@ -44808,7 +44886,9 @@ var competitorSection = createCollapsibleSection(
               )
             );
 
-            box.appendChild(
+            var shippingDetails = el("details");
+            shippingDetails.appendChild(el("summary","Frakt og levert pris"));
+            shippingDetails.appendChild(
               el(
                 "div",
                 "Frakt: " +
@@ -44823,7 +44903,7 @@ var competitorSection = createCollapsibleSection(
               )
             );
 
-            box.appendChild(
+            shippingDetails.appendChild(
               el(
                 "div",
                 "Levert: " +
@@ -44838,6 +44918,7 @@ var competitorSection = createCollapsibleSection(
               )
             );
 
+            box.appendChild(shippingDetails);
             if (url) {
               var link =
                 el(
@@ -44897,6 +44978,13 @@ var competitorSection = createCollapsibleSection(
                 .competitor_product_url
             );
 
+          var marginBox = el("div");
+          marginBox.className = "sk-price-detail-box";
+          marginBox.style.gridColumn = "1 / -1";
+          marginBox.appendChild(el("strong","Dekningsgrad: " + priceMarginText(dg)));
+          marginBox.style.color = dg.margin !== null && dg.margin < 30-1e-7 ? "#b91c1c" : "#166534";
+          marginBox.appendChild(el("div",dg.floor === null ? "Kostpris mangler." : "Minste pris for 30 % DG: " + formatPriceCheckMoney(Math.ceil(dg.floor)) + " inkl. mva"));
+          detailInner.appendChild(marginBox);
           detailInner.appendChild(
             ownBox
           );
@@ -45071,10 +45159,11 @@ var competitorSection = createCollapsibleSection(
 
                 shippingCell.className =
                   "sk-market-rank-shipping";
-
-                rankRow.appendChild(
-                  shippingCell
-                );
+                var shipToggle = el("details");
+                shipToggle.appendChild(el("summary","Frakt"));
+                shipToggle.appendChild(shippingCell);
+                shipToggle.appendChild(el("div","Levert: " + formatPriceCheckMoney(marketRow.total)));
+                rankRow.appendChild(shipToggle);
 
                 ranking.appendChild(
                   rankRow
@@ -46099,8 +46188,9 @@ var competitorSection = createCollapsibleSection(
                   ".";
               }
 
-              previewBox.textContent =
-                text;
+              var previewMargin = priceMarginInfo(row.product_id,proposedMain);
+              previewBox.textContent = text + " DG: " + priceMarginText(previewMargin) + (previewMargin.floor === null ? "" : " | Prisgulv: " + formatPriceCheckMoney(Math.ceil(previewMargin.floor)));
+              previewBox.style.color = previewMargin.margin !== null && previewMargin.margin >= 30-1e-7 ? "#166534" : "#b91c1c";
             }
 
             targetInput.onchange =
@@ -46133,6 +46223,12 @@ var competitorSection = createCollapsibleSection(
                   return;
                 }
 
+                var proposed = calculateLocalMainPreview();
+                var protection = priceMarginInfo(row.product_id,proposed);
+                if (protection.margin === null || protection.margin < 30 - 1e-7) {
+                  alert(protection.margin === null ? "Kan ikke verifisere 30 % DG uten gyldig kostpris." : "R\u00f8d lampe: foresl\u00e5tt hovedpris gir " + priceMarginText(protection) + ". Minste pris er " + formatPriceCheckMoney(Math.ceil(protection.floor)) + ".");
+                  return;
+                }
                 applyButton.disabled =
                   true;
 
@@ -59640,13 +59736,7 @@ function renderPortal(sb, user, data) {
       .from("internal_price_competitors")
       .select("*")
       .order("name", { ascending: true }),
-    sb
-      .from("internal_price_suggestions_view")
-      .select("*")
-      .order("checked_at", {
-        ascending: false,
-        nullsFirst: false
-      }),
+    fetchAllRows(sb, "internal_price_suggestions_view", "price_match_id", true),
     sb
       .from("internal_price_review_reasons")
       .select("*")
@@ -59654,16 +59744,7 @@ function renderPortal(sb, user, data) {
       .order("sort_order", {
         ascending: true
       }),
-    sb
-      .from("internal_price_follow_up_view")
-      .select("*")
-      .order("follow_up_priority", {
-        ascending: true
-      })
-      .order("next_follow_up_at", {
-        ascending: true,
-        nullsFirst: false
-      }),
+    fetchAllRows(sb, "internal_price_follow_up_view", "price_match_id", true),
     sb
       .from("internal_price_shipping_rules")
       .select("*")
