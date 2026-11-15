@@ -59227,7 +59227,7 @@ function renderPortal(sb, user, data) {
       if (!window.skBudgetModulePromise) {
         window.skBudgetModulePromise = new Promise(function (resolve, reject) {
           var js = document.createElement("script");
-          js.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@67fffafd9cb5a2d935d3c9244933aa2ba57f7ec3/gk-budget-admin-2027.js";
+          js.src = "https://cdn.jsdelivr.net/gh/MSvendsen87/sportskongen-internal@48d0d71958799456eba703809b78d8bb2644d610/gk-budget-admin-2027.js";
           js.onload = resolve;
           js.onerror = function () { reject(new Error("Kunne ikke laste budsjettmodulen.")); };
           document.head.appendChild(js);
