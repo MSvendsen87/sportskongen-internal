@@ -32877,6 +32877,35 @@ function renderProductControlDashboard(
     }
     var lowMargin = rows.filter(function(row) { var m=priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin; return m !== null && m < 30 - 1e-7; }).length;
     var marginUnknown = rows.filter(function(row) { return priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin === null; }).length;
+    var marginReviews = Object.create(null), marginReviewsReady = false;
+    function marginReviewFor(row) {
+      var review = marginReviews[String(row.product_id)];
+      var product = priceProductIndex[String(row.product_id)] || {};
+      if (!review || Number(review.own_price_inc_vat) !== Number(row.golfkongen_price_inc_vat) ||
+          Number(review.cost_ex_vat) !== Number(product.purchase_price_ex_vat) ||
+          Number(review.vat_rate) !== Number(product.vat_rate) ||
+          numberOrNullLocal(review.competitor_price_inc_vat) !== numberOrNullLocal(row.competitor_price_inc_vat) ||
+          String(review.competitor_name || "") !== String(row.competitor_name || "")) return null;
+      return review;
+    }
+    function loadMarginReviews() {
+      return fetchAllRows(sb,"internal_price_margin_reviews","id",true).then(function(result) {
+        if (result.error) throw result.error;
+        var next = Object.create(null);
+        (result.data || []).forEach(function(review) { next[String(review.product_id)] = review; });
+        marginReviews = next;
+        marginReviewsReady = true;
+      });
+    }
+    function openPriceOverviewFilter(filter) {
+      overviewSearch.value = "";
+      overviewCompetitor.value = "all";
+      overviewStatus.value = filter;
+      overviewSort.value = filter === "low-margin" || filter === "pending-margin" ? "margin-asc" : "difference-desc";
+      activatePriceSubtab("overview");
+      renderCompactPriceOverview();
+      overviewFilterGrid.scrollIntoView({behavior:"smooth",block:"nearest"});
+    }
 
     createPageHeader(
       parent,
@@ -32901,7 +32930,9 @@ function renderProductControlDashboard(
       return row.price_status === "Samme pris";
     }).length;
 
-    addProStatGrid(parent, [
+    var priceStatHost = el("div");
+    parent.appendChild(priceStatHost);
+    addProStatGrid(priceStatHost, [
       {
         label: "Produkter med lager",
         value: String(rows.length),
@@ -32939,6 +32970,19 @@ function renderProductControlDashboard(
       }
     ]);
 
+    var statFilters = ["all","low-margin","unknown-margin","Mangler prissjekk","GolfKongen dyrere","Samme pris","GolfKongen billigst"];
+    Array.prototype.forEach.call(priceStatHost.querySelectorAll(".sk-card"),function(card,index) {
+      var filter = statFilters[index];
+      card.tabIndex = 0;
+      card.setAttribute("role","button");
+      card.style.cursor = "pointer";
+      card.title = "Vis produkter i denne gruppen";
+      card.onclick = function() { openPriceOverviewFilter(filter); };
+      card.onkeydown = function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); card.click(); } };
+      var hint = el("div","Vis produkter \u2192");
+      hint.style.cssText="font-size:10px;color:#64748b;margin-top:5px";
+      card.appendChild(hint);
+    });
     var note = el(
       "div",
       "Prissjekken s\u00f8ker hos Krokhol, DiscInStock, DGshop, Frisbeebutikken og WeAreDiscGolf. Billigst/dyrest og sorteringen bestemmes kun av varepris mot varepris. Frakt for b\u00e5de GolfKongen og konkurrent vises separat og p\u00e5virker ikke rangeringen."
@@ -44249,7 +44293,9 @@ var competitorSection = createCollapsibleSection(
       }
     );
 
-    addOption(overviewStatus,"low-margin","R\u00f8d lampe: DG under 30 %");
+    addOption(overviewStatus,"low-margin","R\u00f8d lampe: DG under 30 % (alle)");
+    addOption(overviewStatus,"pending-margin","Lav DG: ikke vurdert");
+    addOption(overviewStatus,"approved-margin","Lav DG: godkjent unntak");
     addOption(overviewStatus,"unknown-margin","Kost / DG ukjent");
     var overviewCompetitor =
       el("select");
@@ -44298,6 +44344,7 @@ var competitorSection = createCollapsibleSection(
       el("select");
 
     [
+      ["margin-asc","Laveste dekningsgrad f\u00f8rst"],
       [
         "difference-desc",
         "GolfKongen mest dyrere"
@@ -44347,6 +44394,22 @@ var competitorSection = createCollapsibleSection(
     overviewPane.appendChild(
       overviewFilterGrid
     );
+    var marginWorkStatus = el("div","Laster DG-vurderinger...");
+    marginWorkStatus.className = "sk-note";
+    marginWorkStatus.style.marginBottom = "10px";
+    var marginPendingButton = createButton("Vis lav DG som gjenst\u00e5r");
+    marginPendingButton.onclick = function() { openPriceOverviewFilter("pending-margin"); };
+    var marginWorkBar = el("div");
+    marginWorkBar.style.cssText = "display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px";
+    marginWorkBar.appendChild(marginWorkStatus);
+    marginWorkBar.appendChild(marginPendingButton);
+    overviewPane.appendChild(marginWorkBar);
+    function updateMarginWorkStatus() {
+      if (!marginReviewsReady) return;
+      var lowRows = overviewRows.filter(function(row) { var m=priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin; return m!==null && m<30-1e-7; });
+      var approved = lowRows.filter(function(row) { return !!marginReviewFor(row); }).length;
+      marginWorkStatus.textContent = lowRows.length + " produkter under 30 % DG \u00b7 " + (lowRows.length-approved) + " til vurdering \u00b7 " + approved + " godkjente unntak.";
+    }
 
     var overviewCount =
       el("div");
@@ -44398,11 +44461,15 @@ var competitorSection = createCollapsibleSection(
         overviewRows.filter(
           function (row) {
             if (
-              overviewStatus.value === "low-margin" ||
-              overviewStatus.value === "unknown-margin"
+              ["low-margin","unknown-margin","pending-margin","approved-margin"].indexOf(overviewStatus.value) !== -1
             ) {
               var margin = priceMarginInfo(row.product_id,row.golfkongen_price_inc_vat).margin;
-              if (overviewStatus.value === "low-margin" ? (margin === null || margin >= 30 - 1e-7) : margin !== null) return false;
+              if (overviewStatus.value === "unknown-margin") { if (margin !== null) return false; }
+              else {
+                if (margin === null || margin >= 30 - 1e-7) return false;
+                if (overviewStatus.value === "pending-margin" && marginReviewFor(row)) return false;
+                if (overviewStatus.value === "approved-margin" && !marginReviewFor(row)) return false;
+              }
             } else if (overviewStatus.value !== "all" && row.price_status !== overviewStatus.value) {
               return false;
             }
@@ -44448,6 +44515,11 @@ var competitorSection = createCollapsibleSection(
 
       visible.sort(
         function (a, b) {
+          if (overviewSort.value === "margin-asc") {
+            var am=priceMarginInfo(a.product_id,a.golfkongen_price_inc_vat).margin;
+            var bm=priceMarginInfo(b.product_id,b.golfkongen_price_inc_vat).margin;
+            return (am===null?Infinity:am)-(bm===null?Infinity:bm);
+          }
           if (
             overviewSort.value ===
               "difference-asc"
@@ -44768,9 +44840,17 @@ var competitorSection = createCollapsibleSection(
           statusTd.style.fontSize =
             "11px";
 
+          var isLowDG = dg.margin !== null && dg.margin < 30-1e-7;
+          var currentMarginReview = isLowDG ? marginReviewFor(row) : null;
+          if (isLowDG) {
+            var reviewLabel = el("div",currentMarginReview ? "Godkjent unntak" : "M\u00e5 vurderes");
+            reviewLabel.style.cssText = "font-size:11px;font-weight:700;color:"+(currentMarginReview?"#64748b":"#b91c1c");
+            if (currentMarginReview) reviewLabel.title=currentMarginReview.reason;
+            statusTd.appendChild(reviewLabel);
+          }
           var actionTd = el("td");
           var detailButton =
-            createButton("Vis");
+            createButton(isLowDG ? "Vurder" : "Vis");
 
           detailButton.style.padding =
             "6px 9px";
@@ -44984,6 +45064,40 @@ var competitorSection = createCollapsibleSection(
           marginBox.appendChild(el("strong","Dekningsgrad: " + priceMarginText(dg)));
           marginBox.style.color = dg.margin !== null && dg.margin < 30-1e-7 ? "#b91c1c" : "#166534";
           marginBox.appendChild(el("div",dg.floor === null ? "Kostpris mangler." : "Minste pris for 30 % DG: " + formatPriceCheckMoney(Math.ceil(dg.floor)) + " inkl. mva"));
+          if (isLowDG) {
+            var reviewInfo = el("div",currentMarginReview ? "Godkjent unntak: " + currentMarginReview.reason + " (" + new Date(currentMarginReview.reviewed_at).toLocaleDateString("nb-NO") + ")" : "Vurder vareprisene under. Behold dagens pris som et bevisst unntak, eller endre prisen.");
+            reviewInfo.style.cssText="margin-top:8px;color:#334155";
+            marginBox.appendChild(reviewInfo);
+            var reviewActions = el("div");
+            reviewActions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px";
+            var keepPrice = createButton(currentMarginReview?"Forny godkjenning":"Godkjenn og behold pris");
+            keepPrice.onclick = function() {
+              if (!marginReviewsReady) { alert("DG-vurderinger er ikke lastet. Oppdater siden og pr\u00f8v igjen."); return; }
+              var reason = window.prompt("Hvorfor skal produktet beholdes under 30 % DG?",currentMarginReview?currentMarginReview.reason:"");
+              if (reason===null || !reason.trim()) return;
+              if (reason.trim().length>1000) { alert("Begrunnelsen kan v\u00e6re maks 1000 tegn."); return; }
+              var product = priceProductIndex[String(row.product_id)] || {};
+              keepPrice.disabled=true;
+              sb.from("internal_price_margin_reviews").insert({
+                product_id:row.product_id,own_price_inc_vat:Number(row.golfkongen_price_inc_vat),
+                cost_ex_vat:Number(product.purchase_price_ex_vat),vat_rate:Number(product.vat_rate),
+                competitor_price_inc_vat:numberOrNullLocal(row.competitor_price_inc_vat),competitor_name:row.competitor_name||null,reason:reason.trim()
+              }).select("*").single().then(function(result) {
+                if(result.error) throw result.error;
+                marginReviews[String(row.product_id)] = result.data;
+                updateMarginWorkStatus();
+                renderCompactPriceOverview();
+              }).catch(function(error){keepPrice.disabled=false;alert("Kunne ikke godkjenne: "+skReadableError(error));});
+            };
+            var editMarginPrice = createPrimaryButton("Endre pris");
+            editMarginPrice.onclick = function() {
+              openPriceEditor.click();
+              priceEditBox.scrollIntoView({behavior:"smooth",block:"start"});
+            };
+            reviewActions.appendChild(keepPrice);
+            reviewActions.appendChild(editMarginPrice);
+            marginBox.appendChild(reviewActions);
+          }
           detailInner.appendChild(marginBox);
           detailInner.appendChild(
             ownBox
@@ -45640,9 +45754,7 @@ var competitorSection = createCollapsibleSection(
             }
 
             return Number(
-              row
-                .golfkongen_price_inc_vat ||
-              0
+              Math.max(Number(row.golfkongen_price_inc_vat || 0),dg.floor===null?0:Math.ceil(dg.floor))
             );
           }
 
@@ -46636,7 +46748,7 @@ var competitorSection = createCollapsibleSection(
 
               detailButton.textContent =
                 open
-                  ? "Vis"
+                  ? (isLowDG ? "Vurder" : "Vis")
                   : "Skjul";
 
               if (!open) {
@@ -46704,6 +46816,12 @@ var competitorSection = createCollapsibleSection(
     );
 
     renderCompactPriceOverview();
+    loadMarginReviews().then(function() {
+      updateMarginWorkStatus();
+      renderCompactPriceOverview();
+    }).catch(function(error) {
+      marginWorkStatus.textContent = "Kunne ikke laste DG-vurderinger: " + skReadableError(error);
+    });
 
     var savedPriceSubtab =
       localStorage.getItem(
